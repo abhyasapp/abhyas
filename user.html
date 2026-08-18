@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FAFAFA">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Offline-first Nepal Engineering & PSC exam prep — study anywhere, anytime.">
+<title>Abhyas — Your path to mastery</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="vendor/phosphor/phosphor-regular.css">
+<link rel="stylesheet" href="design-system.css">
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+/* ═══════════════════════════════════════
+   DESIGN TOKENS — ABHYAS V1
+   Palette: Blueprint Navy + Amber Flame + Teal Signal
+═══════════════════════════════════════ */
+:root{
+  /* Default theme = the Abhyas soft-neumorphic design. Old dark-navy
+     theme now lives under body.dark (see below) as an opt-in, not the
+     default — flipped in app.js's theme()/session-init default from
+     'dark' to 'light' to match. Every component rule below still reads
+     these same variable names, so nothing else in this file needed to
+     change when the palette/elevation style shifted. */
+  --c0:#F2F4F3;--c1:#EBEEEC;--c2:#FFFFFF;--c3:#FFFFFF;--c4:#E4EFE8;--c5:#E7EAE8;
+  --b0:rgba(26,26,26,.035);--b1:#E7EAE8;--b2:rgba(26,26,26,.11);--b3:rgba(26,26,26,.16);
+  --amb:#2E8B57;--amb2:#256B44;--amb-glow:rgba(46,139,87,.20);
+  --teal:#2E8B57;--teal2:#256B44;--teal-glow:rgba(46,139,87,.20);
+  --deep:#4A6A55;
+  --vio:#5B4B8A;--vio2:#473A6B;--vio-glow:rgba(91,75,138,.22);
+  --sky:#2B6CB0;--sky-glow:rgba(var(--sky-rgb),.20);
+  --grn:#2E7D4F;--grn-glow:rgba(var(--grn-rgb),.20);
+  --ros:#C1433C;--ros-glow:rgba(var(--ros-rgb),.20);
+  --amb-rgb:46,139,87;--vio-rgb:91,75,138;--sky-rgb:43,108,176;--grn-rgb:46,125,79;--ros-rgb:193,67,60;
+  --ok:var(--grn);--ok-bg:rgba(var(--grn-rgb),.09);--ok-bd:rgba(var(--grn-rgb),.28);
+  --bad:var(--ros);--bad-bg:rgba(var(--ros-rgb),.08);--bad-bd:rgba(var(--ros-rgb),.26);
+  --warn:var(--amb);--warn-bg:rgba(46,139,87,.09);--warn-bd:rgba(46,139,87,.26);
+  --neon:var(--sky);--neon2:var(--vio);--neon3:var(--grn);--neon4:var(--amb);--neon5:var(--ros);
+  --bg0:var(--c0);--bg1:var(--c1);--bg2:var(--c2);
+  --surf:var(--c3);--surf2:var(--c4);--surf3:var(--c5);
+  --bd:var(--b1);--bd2:var(--b2);
+  --ff:'Inter',system-ui,sans-serif;
+  --fd:'Inter',system-ui,sans-serif;
+  --fm:'JetBrains Mono',monospace;
+  --r1:12px;--r2:16px;--r3:20px;--r4:22px;--r5:26px;
+  /* Neumorphic dual-tone elevation — light highlight + soft dark shadow
+     on the same canvas color, so surfaces read as gently extruded
+     rather than "dropped on top." Matching inset pair for pressed/
+     active states. --sh1/2/3 kept as the general-purpose aliases so
+     every existing var(--sh1) etc. call site upgrades automatically. */
+  --ne-light:#FFFFFF;--ne-dark:rgba(74,106,85,.16);
+  --ne-sm:-3px -3px 8px var(--ne-light),3px 3px 8px var(--ne-dark);
+  --ne-md:-5px -5px 14px var(--ne-light),6px 6px 16px var(--ne-dark);
+  --ne-lg:-7px -7px 20px var(--ne-light),9px 9px 26px var(--ne-dark);
+  --ne-in-sm:inset -3px -3px 7px var(--ne-light),inset 3px 3px 7px var(--ne-dark);
+  --ne-in-md:inset -4px -4px 10px var(--ne-light),inset 4px 4px 10px var(--ne-dark);
+  --sh1:var(--ne-sm);--sh2:var(--ne-md);--sh3:var(--ne-lg);
+  --gsky:0 0 0 3px var(--sky-glow);--gvio:0 0 0 3px var(--vio-glow);
+  --ggrn:0 0 0 3px var(--grn-glow);--gros:0 0 0 3px var(--ros-glow);--gamb:0 0 0 3px var(--amb-glow);
+  --t1:var(--c-text);--t2:var(--c-text-soft);--t3:var(--c-text-faint);
+  --ease:.15s cubic-bezier(.4,0,.2,1);--spring:.22s cubic-bezier(.34,1.56,.64,1);--eout:.2s cubic-bezier(0,0,.2,1);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --sb-w:240px;--tb-h:56px;--bn-h:60px;
+}
+
+/* Opt-in dark theme (Settings → toggle) — the app's original dark-navy
+   look, preserved exactly as it was so anyone who prefers it keeps it,
+   with its own (flat, not neumorphic) shadow scale unchanged. */
+.dark{
+  --c0:#080B14;--c1:#0D1221;--c2:#121829;--c3:#18203A;--c4:#1E2847;--c5:#243055;
+  --b0:rgba(255,255,255,.04);--b1:rgba(255,255,255,.08);--b2:rgba(255,255,255,.13);--b3:rgba(255,255,255,.20);
+  --t1:#EEF2FF;--t2:#8B9CC8;--t3:#7887B8;
+  --ne-sm:0 1px 8px rgba(0,0,0,.4);--ne-md:0 4px 24px rgba(0,0,0,.55);--ne-lg:0 12px 48px rgba(0,0,0,.72);
+  --ne-in-sm:inset 0 1px 4px rgba(0,0,0,.5);--ne-in-md:inset 0 2px 8px rgba(0,0,0,.6);
+  --sh1:var(--ne-sm);--sh2:var(--ne-md);--sh3:var(--ne-lg);
+  --amb:#46C46E;--amb2:#2FA857;--amb-glow:rgba(70,196,110,.28);
+  --teal:#46C46E;--teal2:#2FA857;--teal-glow:rgba(70,196,110,.26);
+  --grn:#46C46E;--grn-glow:rgba(70,196,110,.26);
+  --ok-bg:rgba(70,196,110,.12);--ok-bd:rgba(70,196,110,.35);
+  --warn-bg:rgba(70,196,110,.11);--warn-bd:rgba(70,196,110,.35);
+  --amb-rgb:70,196,110;--vio-rgb:139,92,246;--sky-rgb:56,189,248;--grn-rgb:70,196,110;--ros-rgb:244,63,94;
+}
+.dark #tb{background:rgba(8,11,20,.92)}
+.dark #bnav{background:rgba(8,11,20,.96)}
+.dark .toast{background:rgba(18,24,41,.97);color:var(--t1)}
+
+/* ── Dark-mode visibility fixes ──
+   The neumorphic shadow model (light highlight + soft dark shadow on
+   the SAME canvas color) only reads clearly on a light canvas — on a
+   near-black background a dark-on-dark shadow is nearly invisible, so
+   surfaces that dropped their border in favor of pure shadow-elevation
+   need that border restored here. Also restores the sidebar's original
+   slightly-lighter-than-page background (lost when #sb's base rule
+   switched to var(--c0) to sit flush with the light canvas) and gives
+   hover/active nav states a visible border, since --ne-sm/--ne-in-sm
+   alone are too subtle against dark surfaces to show which item is
+   active. */
+.dark #sb{background:var(--c1)}
+.dark .card,.dark .scard,.dark .sc,.dark .qa-tile{border:1px solid var(--b1)}
+.dark .sb-item:hover{border:1px solid var(--b1)}
+.dark .sb-item.active{border:1px solid rgba(70,196,110,.35)}
+.dark .sb-ic{border:1px solid var(--b1)}
+.dark .sb-item.active .sb-ic{border-color:rgba(70,196,110,.4)}
+.dark .bn-ic{background:var(--c2);border:1px solid var(--b1)}
+.dark .bn-item.active .bn-ic{border-color:transparent}
+
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth;height:100%}
+body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;transition:background .2s,color .2s}
+:focus-visible{outline:2px solid var(--amb);outline-offset:2px;border-radius:4px}
+.btn:active:not(:disabled),.ib:active,.sb-item:active,.daily-btn:active,.eo:active{transform:scale(.97)}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:4px}
+::selection{background:rgba(var(--amb-rgb),.22);color:var(--t1)}
+button{font-family:var(--ff)}
+
+/* ═══ APP SHELL ═══ */
+#app{display:none;flex-direction:column;min-height:100vh}
+#app.on{display:flex}
+.off-bar{background:linear-gradient(90deg,#7C1D1D,#9B2323);color:#fff;text-align:center;font-size:.69rem;font-weight:700;padding:.32rem 1rem;display:none;letter-spacing:.4px;border-bottom:1px solid rgba(255,255,255,.12)}
+.off-bar.show{display:block}
+
+/* ═══ SESSION GATE ═══ */
+#sg{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--c0);flex-direction:column;gap:1rem}
+#sg .sg-spin{width:38px;height:38px;border:3px solid rgba(var(--amb-rgb),.2);border-top-color:var(--amb);border-radius:50%;animation:spin .7s linear infinite}
+#sg .sg-txt{font-size:.8rem;color:var(--t2);font-weight:600}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══ TOPBAR ═══ */
+#tb{height:var(--tb-h);background:rgba(242,244,243,.9);backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;padding:0 .9rem 0 1rem;position:sticky;top:0;z-index:500;flex-shrink:0}
+.tb-brand{display:flex;align-items:center;gap:.55rem;font-family:var(--fd);font-size:.95rem;font-weight:700;letter-spacing:-.2px;cursor:pointer;color:var(--t1);user-select:none;transition:opacity var(--ease)}
+.tb-brand:hover{opacity:.8}
+.bd-mark{width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bd-mark img{width:100%;height:100%;object-fit:contain;display:block}
+.tb-name{display:flex;flex-direction:column;line-height:1}
+.tb-name-main{font-size:.9rem;font-weight:700;color:var(--t1)}
+.tb-name-sub{font-size:.52rem;color:var(--t3);font-weight:500;letter-spacing:.8px;text-transform:uppercase;margin-top:.06rem;-webkit-text-fill-color:var(--t3)}
+@media(max-width:380px){.tb-name-sub{display:none}}
+.tb-r{display:flex;align-items:center;gap:.28rem}
+.tb-btn{background:var(--b0);border:1px solid var(--b1);color:var(--t2);border-radius:var(--r1);padding:.28rem .58rem;font-size:.68rem;font-weight:600;cursor:pointer;font-family:var(--ff);display:flex;align-items:center;gap:.22rem;transition:all var(--ease);white-space:nowrap;height:32px}
+.tb-btn:hover{background:var(--b1);color:var(--t1);border-color:var(--b2)}
+.tb-btn.danger{color:var(--ros);border-color:var(--bad-bd)}
+.tb-btn.danger:hover{background:var(--bad-bg)}
+.tb-btn.amber{color:var(--amb);border-color:var(--warn-bd)}
+.tb-btn.amber:hover{background:var(--warn-bg)}
+.uchip{background:var(--b0);border:1px solid var(--b1);border-radius:30px;padding:.26rem .68rem;font-size:.68rem;font-weight:600;color:var(--t2);display:flex;align-items:center;gap:.26rem}
+@media(max-width:600px){.uchip{display:none}}
+
+/* ═══ LAYOUT ═══ */
+#layout{display:flex;flex:1;min-height:0;overflow:hidden}
+#sb{width:var(--sb-w);flex-shrink:0;background:var(--c0);border-right:1px solid var(--b1);overflow-y:auto;padding:.85rem .6rem;transition:transform var(--eout);display:flex;flex-direction:column}
+@media(max-width:960px){
+  #sb{position:fixed;left:0;top:var(--tb-h);bottom:0;z-index:400;transform:translateX(-110%);width:260px;box-shadow:none}
+  #sb.open{transform:translateX(0);box-shadow:var(--sh3)}
+}
+#ov{display:none;position:fixed;inset:0;z-index:399;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)}
+#ov.show{display:block}
+.sb-close{display:none;align-items:center;justify-content:center;width:40px;height:40px;margin:0 0 .6rem auto;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.85rem;cursor:pointer;transition:all var(--ease)}
+.sb-close:hover{background:var(--bad-bg);color:var(--ros);border-color:var(--bad-bd)}
+@media(max-width:960px){.sb-close{display:flex}}
+.sb-sec{margin-bottom:.35rem}
+.sb-lbl{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:var(--t3);padding:.3rem .48rem .15rem;margin-bottom:.1rem}
+.sb-item{display:flex;align-items:center;gap:.55rem;padding:.42rem .5rem;border-radius:var(--r1);font-size:.78rem;font-weight:500;color:var(--t2);cursor:pointer;transition:all var(--ease);margin-bottom:.3rem;border:1px solid transparent}
+.sb-item:hover{background:var(--c2);color:var(--t1);box-shadow:var(--ne-sm)}
+.sb-item.active{background:var(--c2);color:var(--amb);font-weight:600;box-shadow:var(--ne-in-sm)}
+.sb-item.active .sb-ic{background:var(--c4);color:var(--amb)}
+.sb-ic{width:26px;height:26px;border-radius:var(--r1);background:var(--c2);display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0;box-shadow:var(--ne-sm);transition:all var(--ease)}
+.sb-badge{margin-left:auto;background:var(--vio);color:#fff;font-size:.56rem;padding:.08rem .34rem;border-radius:20px;font-weight:700}
+.sb-badge.ok{background:var(--grn)}.sb-badge.amb{background:var(--amb);color:#000}
+.sb-div{height:1px;background:var(--b1);margin:.35rem .48rem}
+.sel-c{background:var(--c0);border:none;border-radius:var(--r1);padding:.42rem .65rem;color:var(--t1);font-size:.76rem;font-family:var(--ff);outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%235B5F5D' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:calc(100% - .55rem) center;padding-right:1.75rem;transition:box-shadow var(--ease);width:100%;margin-bottom:.28rem;box-shadow:var(--ne-in-sm)}
+.sel-c:focus{box-shadow:var(--ne-in-sm),0 0 0 3px rgba(46,139,87,.16)}
+.sel-c option{background:var(--c1)}
+
+/* ═══ MAIN ═══ */
+#main{flex:1;overflow-y:auto;padding:1.1rem 1.1rem 1.8rem}
+@media(max-width:960px){#main{padding:.85rem .75rem calc(var(--bn-h) + var(--safe-b) + .75rem)}}
+
+/* ═══ VIEWS ═══ */
+.view{display:none}
+.view.on{display:block;animation:vfade .16s var(--eout)}
+@keyframes vfade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.ph{margin-bottom:1rem}
+.ph h2{font-family:var(--fd);font-size:1.15rem;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:.42rem;color:var(--t1)}
+.ph p{font-size:.74rem;color:var(--t2);margin-top:.18rem;line-height:1.5}
+
+/* ═══ CARDS ═══ */
+.card{background:var(--c2);border-radius:var(--r3);padding:1rem 1.05rem;box-shadow:var(--ne-sm);margin-bottom:.8rem}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;padding-bottom:.65rem;border-bottom:1px solid var(--b1)}
+.card-hd h3{font-family:var(--fd);font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:.38rem}
+.ctag{font-size:.59rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;padding:.14rem .5rem;border-radius:20px;display:inline-flex;align-items:center;gap:.22rem}
+.tc{background:rgba(var(--sky-rgb),.12);color:var(--sky)}.tp{background:rgba(var(--vio-rgb),.13);color:var(--vio)}
+.tg{background:rgba(var(--grn-rgb),.11);color:var(--grn)}.ta{background:rgba(var(--amb-rgb),.13);color:var(--amb)}.tr{background:rgba(var(--ros-rgb),.11);color:var(--ros)}
+
+/* ═══ BUTTONS ═══ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.28rem;padding:.44rem .88rem;border-radius:var(--r1);font-size:.76rem;font-weight:600;font-family:var(--ff);cursor:pointer;border:1.5px solid transparent;transition:all var(--ease);white-space:nowrap;user-select:none}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn-c{background:rgba(var(--sky-rgb),.1);color:var(--sky);border-color:rgba(var(--sky-rgb),.25)}
+.btn-c:hover:not(:disabled){background:var(--sky);color:#fff;box-shadow:var(--gsky)}
+.btn-p{background:rgba(var(--vio-rgb),.11);color:var(--vio);border-color:rgba(var(--vio-rgb),.26)}
+.btn-p:hover:not(:disabled){background:var(--vio);color:#fff;box-shadow:var(--gvio)}
+.btn-g{background:var(--ok-bg);color:var(--grn);border-color:var(--ok-bd)}
+.btn-g:hover:not(:disabled){background:var(--grn);color:#fff;box-shadow:var(--ggrn)}
+.btn-a{background:var(--warn-bg);color:var(--amb);border-color:var(--warn-bd)}
+.btn-a:hover:not(:disabled){background:var(--amb);color:#000;box-shadow:var(--gamb)}
+.btn-r{background:var(--bad-bg);color:var(--ros);border-color:var(--bad-bd)}
+.btn-r:hover:not(:disabled){background:var(--ros);color:#fff;box-shadow:var(--gros)}
+.btn-solid{background:linear-gradient(150deg,var(--amb),var(--amb2));color:#0F1410;border-color:transparent;box-shadow:var(--ne-sm)}
+.btn-solid:hover:not(:disabled){box-shadow:var(--ne-md)}
+.btn-solid:active:not(:disabled){box-shadow:var(--ne-in-md)}
+.btn-sm{padding:.26rem .58rem;font-size:.68rem}
+.btn-lg{padding:.6rem 1.2rem;font-size:.84rem}
+.btn-blk{width:100%;display:flex}
+.bg{display:flex;gap:.38rem;flex-wrap:wrap}
+
+/* ═══ GRIDS ═══ */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem}
+@media(max-width:560px){.g3,.g4{grid-template-columns:1fr 1fr}}
+
+/* ═══ DASHBOARD HERO ═══ */
+.hero{position:relative;overflow:hidden;border-radius:var(--r4);background:linear-gradient(135deg,rgba(30,40,71,.9) 0%,rgba(18,24,41,.95) 60%,rgba(12,17,33,.98) 100%);border:1px solid rgba(var(--amb-rgb),.18);padding:1.3rem 1.4rem;margin-bottom:.85rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.hero::before{content:'';position:absolute;right:-80px;top:-80px;width:280px;height:280px;border-radius:50%;background:transparent;border:40px solid rgba(var(--amb-rgb),.04);pointer-events:none}
+.hero::after{content:'';position:absolute;right:-30px;top:-30px;width:160px;height:160px;border-radius:50%;background:transparent;border:28px solid rgba(var(--amb-rgb),.07);pointer-events:none}
+.hero-orb{position:absolute;top:-50px;right:-50px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(var(--amb-rgb),.13),transparent 70%);pointer-events:none}
+.hero-text{flex:1;position:relative;z-index:1}
+.hero-title{font-family:var(--fd);font-size:1.25rem;font-weight:700;letter-spacing:-.4px;line-height:1.2;margin-bottom:.28rem;background:linear-gradient(90deg,var(--amb2),var(--amb));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero-sub{font-size:.74rem;color:var(--t2);line-height:1.55}
+.hero-icon{font-size:2.5rem;flex-shrink:0;line-height:1;position:relative;z-index:1;filter:drop-shadow(0 0 12px rgba(var(--amb-rgb),.4))}
+
+/* Stats */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:.55rem;margin-bottom:.85rem}
+@media(max-width:500px){.stats-row{grid-template-columns:1fr 1fr}}
+.scard{background:var(--c2);border-radius:var(--r2);padding:.8rem .55rem;text-align:center;position:relative;overflow:hidden;transition:transform var(--spring),box-shadow var(--ease);box-shadow:var(--ne-sm)}
+.scard:hover{transform:translateY(-2px);box-shadow:var(--ne-md)}
+.scard::after{content:'';position:absolute;top:0;left:0;right:0;height:2.5px;border-radius:var(--r2) var(--r2) 0 0;opacity:0;transition:opacity .3s}
+.scard.sc-c::after{background:linear-gradient(90deg,var(--vio),var(--sky));opacity:1}.scard.sc-g::after{background:var(--grn);opacity:1}.scard.sc-r::after{background:var(--ros);opacity:1}.scard.sc-a::after{background:var(--amb);opacity:1}
+.sc{background:var(--c2);border-radius:var(--r2);padding:.8rem .55rem;text-align:center;position:relative;overflow:hidden;box-shadow:var(--ne-sm)}
+.sc::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px}
+.sc:not([class*=sc-])::after,.sc.sc-c::after{background:linear-gradient(90deg,var(--vio),var(--sky))}.sc.sc-g::after{background:var(--grn)}.sc.sc-r::after{background:var(--ros)}.sc.sc-a::after{background:var(--amb)}
+.sv{font-family:var(--fm);font-size:1.45rem;font-weight:700;line-height:1}
+.sl{font-size:.58rem;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);margin-top:.24rem}
+.tcy{color:var(--sky)}.tc2{color:var(--grn)}.tb2{color:var(--ros)}.ta2{color:var(--amb)}
+
+/* Quick tiles */
+.qa-row{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-bottom:.85rem}
+.qa-tile{background:var(--c2);border:1px solid transparent;border-radius:var(--r2);padding:.72rem .35rem;display:flex;flex-direction:column;align-items:center;gap:.26rem;cursor:pointer;font-family:var(--ff);font-size:.61rem;font-weight:600;color:var(--t2);text-align:center;transition:all var(--spring);position:relative;overflow:hidden;box-shadow:var(--ne-sm)}
+.qa-tile::before{content:'';position:absolute;bottom:0;left:0;right:0;height:1.5px;opacity:0;transition:opacity var(--ease)}
+.qa-tile:hover{transform:translateY(-3px);color:var(--t1);box-shadow:var(--ne-md)}.qa-tile:hover::before{opacity:1}.qa-tile:active{transform:translateY(0);box-shadow:var(--ne-in-sm)}
+.qa-ic{font-size:1.25rem;line-height:1}
+.qt-sky{border-color:rgba(var(--sky-rgb),.14)}.qt-sky::before{background:var(--sky)}.qt-sky:hover{background:rgba(var(--sky-rgb),.07);border-color:rgba(var(--sky-rgb),.28);color:var(--sky)}
+.qt-vio{border-color:rgba(var(--vio-rgb),.14)}.qt-vio::before{background:var(--vio)}.qt-vio:hover{background:rgba(var(--vio-rgb),.08);border-color:rgba(var(--vio-rgb),.28);color:var(--vio)}
+.qt-ros{border-color:rgba(var(--ros-rgb),.13)}.qt-ros::before{background:var(--ros)}.qt-ros:hover{background:rgba(var(--ros-rgb),.07);border-color:rgba(var(--ros-rgb),.26);color:var(--ros)}
+.qt-grn{border-color:rgba(var(--grn-rgb),.13)}.qt-grn::before{background:var(--grn)}.qt-grn:hover{background:rgba(var(--grn-rgb),.07);border-color:rgba(var(--grn-rgb),.26);color:var(--grn)}
+.qt-amb{border-color:rgba(var(--amb-rgb),.14)}.qt-amb::before{background:var(--amb)}.qt-amb:hover{background:rgba(var(--amb-rgb),.08);border-color:rgba(var(--amb-rgb),.28);color:var(--amb)}
+
+/* Daily challenge */
+.daily-card{position:relative;overflow:hidden;background:linear-gradient(135deg,rgba(var(--amb-rgb),.12) 0%,rgba(18,24,41,.98) 55%);border:1.5px solid rgba(var(--amb-rgb),.25);border-radius:var(--r3);padding:1.05rem 1.1rem;margin-bottom:.85rem}
+.daily-card::after{content:'';position:absolute;top:-50px;right:-50px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(var(--amb-rgb),.1),transparent 70%);pointer-events:none}
+.daily-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem}
+.daily-top h3{font-family:var(--fd);font-size:.9rem;font-weight:700;display:flex;align-items:center;gap:.4rem;position:relative}
+.stk-tag{background:linear-gradient(90deg,rgba(var(--amb-rgb),.2),rgba(var(--ros-rgb),.12));border:1px solid rgba(var(--amb-rgb),.38);border-radius:20px;padding:.18rem .6rem;font-size:.64rem;font-weight:700;color:var(--amb);display:flex;align-items:center;gap:.2rem}
+.sk-bar{display:flex;gap:.28rem;margin-bottom:.6rem}
+.sk-d{flex:1;height:24px;border-radius:6px;background:var(--b0);border:1px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:.57rem;font-weight:700;color:var(--t3);transition:all var(--ease)}
+.sk-d.done{background:rgba(var(--grn-rgb),.14);border-color:rgba(var(--grn-rgb),.4);color:var(--grn)}.sk-d.today{background:rgba(var(--amb-rgb),.1);border-color:rgba(var(--amb-rgb),.32);color:var(--amb)}.sk-d.done.today{background:rgba(var(--grn-rgb),.22);border-color:var(--ok);color:var(--grn)}
+.daily-desc{font-size:.72rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55;position:relative}
+.daily-btn{width:100%;padding:.72rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:#0F0A00;font-family:var(--fd);font-size:.9rem;font-weight:700;cursor:pointer;transition:all var(--ease);box-shadow:0 4px 18px rgba(var(--amb-rgb),.28),inset 0 1px 0 rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;gap:.4rem;position:relative}
+.daily-btn:hover{transform:translateY(-1px);box-shadow:0 6px 26px rgba(var(--amb-rgb),.42)}.daily-btn:active{transform:none}
+
+.dash-lower{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+@media(max-width:560px){.dash-lower{grid-template-columns:1fr}}
+.sess-row{display:flex;align-items:center;padding:.44rem 0;border-bottom:1px solid var(--b0);gap:.48rem}
+.sess-row:last-child{border:none}
+.sess-ic{font-size:.9rem;flex-shrink:0}.sess-info{flex:1;min-width:0}
+.sess-ch{font-weight:600;font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sess-ts{color:var(--t3);font-size:.62rem;margin-top:.04rem}
+.home-clock{font-family:var(--fm);font-size:1.7rem;font-weight:700;color:var(--amb);text-align:center;padding:.6rem 0;letter-spacing:2.5px;text-shadow:0 0 18px var(--amb-glow)}
+.home-date{text-align:center;font-size:.68rem;color:var(--t3);margin-bottom:.5rem}
+
+/* ═══ CHAPTER / PSYCHO ═══ */
+.ch-list{max-height:260px;overflow-y:auto;margin:.4rem 0}
+.ch-item{display:flex;align-items:center;gap:.5rem;padding:.34rem .4rem;border-radius:var(--r1);margin-bottom:2px;cursor:pointer;transition:background var(--ease)}
+.ch-item:hover{background:var(--b0)}
+.ch-item input[type=checkbox]{accent-color:var(--amb);width:13px;height:13px;flex-shrink:0}
+.ch-num{width:19px;height:19px;border-radius:5px;background:var(--c1);border:1px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:.56rem;font-weight:700;color:var(--t3);flex-shrink:0}
+.ch-name{font-size:.74rem;font-weight:500;flex:1;color:var(--t2)}.ch-cnt{font-size:.58rem;color:var(--t3);font-family:var(--fm)}
+.psy-hero{background:linear-gradient(135deg,rgba(var(--vio-rgb),.18),rgba(var(--amb-rgb),.07));border:1px solid rgba(var(--vio-rgb),.28);border-radius:var(--r3);padding:.85rem .95rem;margin-bottom:.75rem;display:flex;align-items:center;gap:.8rem}
+.psy-hero-ic{font-size:1.8rem}
+.psy-hero-text h4{font-family:var(--fd);font-size:.88rem;font-weight:700;color:var(--vio)}.psy-hero-text p{font-size:.7rem;color:var(--t3);margin-top:.12rem;line-height:1.5}
+.psy-lv-hd{display:flex;align-items:center;justify-content:space-between;padding:.18rem .4rem;margin-top:.6rem;margin-bottom:.2rem}
+.psy-lv-hd span{font-size:.57rem;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:var(--t3)}.psy-lv-btns{display:flex;gap:.26rem}
+
+/* ═══ QUIZ BAR ═══ */
+.qbar{position:sticky;top:4px;z-index:100;border-radius:14px;border:1px solid var(--b2);overflow:hidden;box-shadow:var(--sh2),0 0 0 1px rgba(var(--amb-rgb),.06),inset 0 1px 0 rgba(255,255,255,.04);margin-bottom:.9rem}
+.qb-l1{display:flex;align-items:center;justify-content:center;gap:.52rem;min-height:28px;padding:.28rem .85rem;background:linear-gradient(90deg,rgba(109,40,217,.25) 0%,rgba(var(--amb-rgb),.12) 50%,rgba(109,40,217,.25) 100%);border-bottom:1px solid rgba(var(--amb-rgb),.12)}
+.qb-pill{flex-shrink:0;background:rgba(var(--amb-rgb),.14);border:1px solid rgba(var(--amb-rgb),.35);border-radius:30px;padding:.1rem .48rem;font-size:.56rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--amb);white-space:nowrap}
+.qb-topic{font-family:var(--fd);font-size:.78rem;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58vw}
+.qb-l2{display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch;background:var(--c2);min-height:56px}
+.qbz{display:flex;flex-direction:column;justify-content:center;padding:.38rem .68rem}
+.qbz+.qbz{border-left:1px solid var(--b1)}.qbz-l{align-items:flex-start}.qbz-c{align-items:center;padding:.38rem .48rem}.qbz-r{align-items:flex-end}
+.qb-ctr{font-family:var(--fm);font-size:.9rem;font-weight:700;color:var(--t1);letter-spacing:.2px;line-height:1;margin-bottom:.24rem}
+.qb-ctr em{font-style:normal;color:var(--t3);font-size:.7rem}
+.qb-btn{display:inline-flex;align-items:center;gap:.18rem;border-radius:7px;padding:.18rem .5rem;font-size:.65rem;font-weight:700;cursor:pointer;font-family:var(--ff);border:1px solid;line-height:1;white-space:nowrap;transition:all var(--ease)}
+.qb-btn.ok{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--grn)}.qb-btn.ok:hover{background:var(--grn);color:#fff;box-shadow:var(--ggrn)}
+.qb-btn.quit{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--ros)}.qb-btn.quit:hover{background:var(--ros);color:#fff;box-shadow:var(--gros)}
+.qb-tiles{display:flex;gap:.24rem;align-items:center}
+.qtile{display:flex;flex-direction:column;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;border:1px solid;gap:1px;transition:transform .12s ease;cursor:default}
+.qtile:hover{transform:scale(1.07)}
+.qt-sym{font-size:.66rem;font-weight:900;line-height:1;font-family:var(--fm)}.qt-num{font-family:var(--fm);font-size:.9rem;font-weight:800;line-height:1}.qt-lbl{font-size:.41rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;line-height:1.2;opacity:.9}
+.qt-ok{background:rgba(var(--grn-rgb),.13);border-color:rgba(var(--grn-rgb),.4)}.qt-ok .qt-sym,.qt-ok .qt-num{color:var(--grn)}.qt-ok .qt-lbl{color:var(--grn)}
+.qt-bad{background:rgba(var(--ros-rgb),.12);border-color:rgba(var(--ros-rgb),.38)}.qt-bad .qt-sym,.qt-bad .qt-num{color:var(--ros)}.qt-bad .qt-lbl{color:var(--ros)}
+.qt-skip{background:rgba(var(--amb-rgb),.11);border-color:rgba(var(--amb-rgb),.35)}.qt-skip .qt-sym,.qt-skip .qt-num{color:var(--amb)}.qt-skip .qt-lbl{color:var(--amb)}
+.qt-ans{background:rgba(var(--sky-rgb),.1);border-color:rgba(var(--sky-rgb),.32);width:52px}.qt-ans .qt-sym,.qt-ans .qt-num{color:var(--sky)}.qt-ans .qt-lbl{color:var(--sky)}
+.qb-timer{font-family:var(--fm);font-size:.9rem;font-weight:700;letter-spacing:2.5px;color:var(--sky);line-height:1;margin-bottom:.24rem;text-shadow:0 0 12px var(--sky-glow);transition:color .2s,text-shadow .2s}
+.qb-timer.urgent{color:var(--ros);text-shadow:0 0 12px var(--ros-glow);animation:urg .45s ease infinite}
+@keyframes urg{0%,100%{opacity:1}50%{opacity:.55}}
+.qb-l3{background:var(--c1);border-top:1px solid var(--b1);padding:.22rem .55rem}
+.qprog,.qbprog{height:3px;background:var(--b1);border-radius:3px;overflow:hidden}
+.qpf,.qbpf{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--amb2),var(--amb));transition:width .3s ease}
+
+/* Question card */
+.qcard{background:var(--c2);border:1px solid var(--b1);border-radius:var(--r3);padding:1rem;margin-bottom:.75rem;box-shadow:var(--sh1);transition:border-color var(--ease)}
+.qcard:hover{border-color:var(--b2)}
+.qm{display:flex;align-items:center;justify-content:space-between;margin-bottom:.55rem}
+.qn{font-size:.75rem;font-weight:700;color:var(--t3)}.qt{font-size:.88rem;font-weight:500;line-height:1.65;color:var(--t1)}
+.fc-acts{display:flex;gap:.3rem;margin:.6rem 0}
+.ib{background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:.78rem;cursor:pointer;color:var(--t2);transition:all var(--ease);flex-shrink:0}
+.ib:hover{background:var(--b1);color:var(--t1);border-color:var(--b2)}.ib.bk-on{color:var(--amb);border-color:rgba(var(--amb-rgb),.35);background:rgba(var(--amb-rgb),.1)}.ib.fl-on{color:var(--ros);border-color:var(--bad-bd);background:var(--bad-bg)}
+.fc-nav{display:flex;align-items:center;justify-content:space-between;padding:.7rem 0}
+.fc-hint{font-size:.7rem;color:var(--t3);font-weight:500}
+
+/* Answer options */
+.eo{display:flex;align-items:center;gap:.42rem;padding:.38rem .62rem;margin:.16rem 0;border-radius:var(--r1);font-size:.8rem;font-weight:500;background:var(--c1);border:1px solid var(--b1);cursor:pointer;transition:all var(--ease)}
+.eo:hover{background:var(--b0);border-color:var(--b2)}.eo.sel{background:rgba(var(--sky-rgb),.08);border-color:rgba(var(--sky-rgb),.32);color:var(--sky)}
+.eo.ok2{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--grn)}.eo.bad2{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--ros);text-decoration:line-through}.eo.shc{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--grn)}
+.expl{background:rgba(var(--amb-rgb),.07);border:1px solid rgba(var(--amb-rgb),.2);border-radius:var(--r1);padding:.5rem .7rem;font-size:.76rem;color:var(--t2);line-height:1.6;display:none;margin-top:.4rem}
+.expl.show{display:block}
+.eqc{background:var(--c2);border:1px solid var(--b1);border-radius:var(--r2);padding:.85rem;margin-bottom:.6rem;border-left:3px solid var(--b2);transition:border-color .18s}.eqc.answered{border-left-color:var(--amb)}
+
+/* Search */
+.srch-panel{margin-top:.55rem;display:none}.srch-panel.open{display:block}
+.srch-row{display:flex;gap:.35rem}
+.srch-inp{flex:1;background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r1);padding:.42rem .68rem;color:var(--t1);font-size:.78rem;font-family:var(--ff);outline:none;transition:border-color var(--ease),box-shadow var(--ease)}
+.srch-inp:focus{border-color:var(--amb);box-shadow:0 0 0 3px rgba(var(--amb-rgb),.12)}.srch-inp::placeholder{color:var(--t3)}
+.srch-go{flex-shrink:0;background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:var(--r1);padding:.42rem .68rem;color:var(--amb);font-size:.73rem;font-weight:700;cursor:pointer;font-family:var(--ff);transition:all var(--ease)}.srch-go:hover{background:var(--amb);color:#000}
+.srch-links{display:flex;gap:.32rem;flex-wrap:wrap;margin-top:.4rem}
+.sl{display:inline-flex;align-items:center;gap:.2rem;padding:.2rem .5rem;border-radius:7px;font-size:.66rem;font-weight:700;text-decoration:none;border:1px solid;transition:all var(--ease);cursor:pointer;white-space:nowrap}
+.sl-g{background:rgba(66,133,244,.1);border-color:rgba(66,133,244,.28);color:#5e9ef7}.sl-g:hover{background:#4285f4;color:#fff}
+.sl-y{background:rgba(255,70,70,.1);border-color:rgba(255,70,70,.26);color:#ff7070}.sl-y:hover{background:#f00;color:#fff}
+.sl-w{background:rgba(100,130,200,.1);border-color:rgba(100,130,200,.26);color:#90aae0}.sl-w:hover{background:#3b5fc0;color:#fff}
+.sl-n{background:rgba(var(--grn-rgb),.1);border-color:rgba(var(--grn-rgb),.28);color:var(--grn)}.sl-n:hover{background:var(--grn);color:#fff}
+
+/* Result */
+.rh{text-align:center;padding:1.5rem 1rem .85rem}
+.ring{width:108px;height:108px;border-radius:50%;background:conic-gradient(var(--amb) var(--p,0%),var(--c2) 0%);display:flex;align-items:center;justify-content:center;margin:0 auto .9rem;position:relative;box-shadow:0 0 28px var(--amb-glow)}
+.ring::before{content:'';position:absolute;inset:11px;background:var(--c3);border-radius:50%}
+.ring-v{position:relative;z-index:1;font-size:1.38rem;font-weight:800;font-family:var(--fm);color:var(--t1)}
+.rs{font-family:var(--fd);font-size:1.02rem;font-weight:700}.rg{font-size:.84rem;font-weight:500;color:var(--t3);margin-top:.28rem}
+.pb-w{margin:.42rem 0}.pb-l{display:flex;justify-content:space-between;font-size:.66rem;color:var(--t3);margin-bottom:.18rem}
+.pb{height:5px;background:var(--c1);border-radius:3px;overflow:hidden}.pb-f{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--amb2),var(--amb));transition:width .5s ease}
+.mtabs{display:flex;gap:.32rem;flex-wrap:wrap}
+.mtab{background:var(--b0);border:1px solid var(--b1);color:var(--t2);font-size:.64rem;font-weight:600;padding:.26rem .58rem;border-radius:20px;cursor:pointer;font-family:var(--ff);transition:all var(--ease);white-space:nowrap}
+.mtab:hover{background:var(--b1);color:var(--t1)}
+.mtab.active{background:var(--warn-bg);color:var(--amb);border-color:var(--warn-bd)}
+.prog-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
+@media (max-width:420px){.prog-grid{grid-template-columns:repeat(2,1fr)}}
+.fw-toggle{margin-top:.7rem;font-size:.68rem;font-weight:600;color:var(--t3);cursor:pointer;display:flex;align-items:center;gap:.35rem;user-select:none;padding:.3rem 0}
+.fw-toggle:hover{color:var(--amb)}
+#on-fw-list{margin-top:.3rem;max-height:260px;overflow-y:auto;padding-right:.15rem}
+.fw-row{padding:.3rem .4rem;border-radius:6px}
+.fw-row:hover{background:var(--b0)}
+.fw-row-right{display:inline-flex;align-items:center;gap:.35rem}
+.fw-reset{background:none;border:none;cursor:pointer;font-size:.72rem;padding:.1rem .25rem;border-radius:5px;opacity:.55;line-height:1}
+.fw-reset:hover{opacity:1;background:var(--ros2,rgba(239,68,68,.12))}
+#on-progress-card .card-hd{flex-wrap:wrap;gap:.4rem}
+#on-progress-card #on-prog-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Timetable */
+.tt-clock{text-align:center;padding:.85rem 0;font-family:var(--fm);font-size:1.8rem;font-weight:700;color:var(--amb);letter-spacing:2.5px;text-shadow:0 0 20px var(--amb-glow)}
+.tt-date{text-align:center;font-size:.68rem;color:var(--t3);margin-bottom:.65rem}
+.tt-now{background:linear-gradient(135deg,rgba(var(--amb-rgb),.07),rgba(var(--vio-rgb),.06));border:1px solid rgba(var(--amb-rgb),.16);border-radius:var(--r2);padding:.85rem;margin-bottom:.65rem;text-align:center}
+.tt-nl{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--amb);margin-bottom:.26rem}
+.tt-nn{font-family:var(--fd);font-size:.98rem;font-weight:700}.tt-nt{font-size:.68rem;color:var(--t3);margin-top:.16rem}
+.tt-row{display:flex;align-items:center;padding:.42rem .18rem;border-bottom:1px solid var(--b0);font-size:.74rem}.tt-row:last-child{border:none}
+.tt-ti{font-family:var(--fm);color:var(--amb);font-weight:700;font-size:.67rem;width:82px;flex-shrink:0}.tt-na{flex:1;font-weight:500;color:var(--t1)}
+.tt-form input[type=time],.tt-form input[type=text],.tt-form select{width:100%;background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r1);padding:.5rem .68rem;color:var(--t1);font-size:.8rem;font-family:var(--ff);outline:none;margin-bottom:.28rem}
+.tt-form input:focus,.tt-form select:focus{border-color:var(--amb);box-shadow:0 0 0 3px rgba(var(--amb-rgb),.12)}.tt-form select option{background:var(--c1)}
+
+/* Cache */
+.cpb{height:6px;background:var(--c1);border-radius:4px;overflow:hidden;margin:.42rem 0;display:none}.cpf{height:100%;background:linear-gradient(90deg,var(--amb2),var(--amb));border-radius:4px;width:0;transition:width .3s}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:.42rem}
+.ci{background:var(--c1);border:1px solid var(--b1);border-radius:var(--r1);padding:.52rem .68rem}.ci-n{font-size:.73rem;font-weight:600;margin-bottom:.26rem}.ci-s{display:flex;align-items:center;gap:.3rem;font-size:.66rem;color:var(--t3)}
+.cd{width:8px;height:8px;border-radius:50%;background:var(--ros)}.cd.y{background:var(--grn)}
+
+/* Toasts */
+#toasts{position:fixed;bottom:1.8rem;left:50%;transform:translateX(-50%);z-index:9000;display:flex;flex-direction:column;align-items:center;gap:.3rem;pointer-events:none;width:calc(100vw - 2rem);max-width:340px}
+@media(max-width:960px){#toasts{bottom:calc(var(--bn-h) + 1rem + var(--safe-b))}}
+.toast{background:rgba(18,24,41,.97);border:1px solid var(--b2);backdrop-filter:blur(20px);border-radius:var(--r2);padding:.52rem .92rem;font-size:.76rem;font-weight:600;color:var(--t1);box-shadow:var(--sh2);animation:tin .18s var(--spring);pointer-events:auto;max-width:100%}
+.toast.out{animation:tout .2s ease forwards}
+@keyframes tin{from{opacity:0;transform:translateY(10px) scale(.92)}to{opacity:1;transform:none}}
+@keyframes tout{from{opacity:1}to{opacity:0;transform:translateY(-6px)}}
+
+/* Modal */
+.mbg{position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;padding:1rem}.mbg.show{display:flex}
+.mbox{background:var(--c2);border:1px solid var(--b2);border-radius:var(--r4);width:100%;max-width:420px;max-height:88vh;overflow-y:auto;box-shadow:var(--sh3);animation:mfade .16s var(--spring)}
+@keyframes mfade{from{opacity:0;transform:scale(.93) translateY(8px)}to{opacity:1;transform:none}}
+.mhd{display:flex;align-items:center;justify-content:space-between;padding:.9rem 1rem .6rem;border-bottom:1px solid var(--b1)}.mhd h3{font-family:var(--fd);font-size:.88rem;font-weight:700}
+.mcl{background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t2);font-size:.9rem;transition:all var(--ease)}.mcl:hover{background:var(--bad-bg);color:var(--ros);border-color:var(--bad-bd)}
+.mbody{padding:.9rem 1rem}
+.empty{text-align:center;padding:2rem 1rem;color:var(--t3)}.empty-i{font-size:2rem;margin-bottom:.4rem}.empty p{font-size:.78rem}
+.mono{font-family:var(--fm)}
+hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
+input[type=file]{background:var(--c1);border:1.5px dashed var(--b2);border-radius:var(--r1);padding:.52rem .8rem;color:var(--t2);font-size:.76rem;width:100%;cursor:pointer;transition:border-color var(--ease)}
+input[type=file]:hover{border-color:var(--amb)}
+
+/* ═══ MOBILE BOTTOM NAV ═══ */
+#bnav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:500;height:var(--bn-h);background:rgba(255,255,255,.92);backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);border-top:1px solid var(--b1);padding-bottom:var(--safe-b);align-items:flex-start;justify-content:space-around;padding-top:6px}
+@media(max-width:960px){#bnav{display:flex}}
+.bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:.3rem .5rem;border-radius:var(--r1);color:var(--t3);font-size:.56rem;font-weight:600;transition:all var(--ease);border:none;background:none;font-family:var(--ff);min-width:52px}
+.bn-item.active{color:var(--amb)}
+.bn-ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:all var(--ease);background:var(--c0)}
+.bn-item.active .bn-ic{background:var(--amb);color:#fff;box-shadow:var(--ne-sm)}
+.bn-more{position:relative}
+.bn-badge{position:absolute;top:4px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--amb);border:1.5px solid var(--c0)}
+
+/* Online study banner */
+.on-card-banner{background:linear-gradient(135deg,rgba(var(--sky-rgb),.1),rgba(var(--vio-rgb),.07));border:1px solid rgba(var(--sky-rgb),.2);border-radius:var(--r2);padding:.75rem .9rem;margin-bottom:.75rem;font-size:.74rem;color:var(--t2);display:flex;align-items:center;gap:.6rem}
+.on-card-banner span{font-size:1.1rem}
+
+@media(max-width:700px){.g2{grid-template-columns:1fr}.dash-lower{grid-template-columns:1fr}}
+#net-mode-btn{transition:all var(--ease)}
+#net-mode-btn.forced{animation:netpulse 2.5s ease-in-out infinite}
+@keyframes netpulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 3px rgba(var(--ros-rgb),.2)}}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+
+<!-- SESSION GATE -->
+<div id="sg">
+  <div class="sg-spin"></div>
+  <div class="sg-txt" id="sg-txt">Checking your session…</div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="off-bar" id="offbar">📡 Offline — serving from local cache</div>
+
+  <!-- TOPBAR -->
+  <div id="tb">
+    <div class="tb-brand" onclick="UI.go('home')">
+      <div class="bd-mark"><img src="icon-192.png" alt="Abhyas"></div>
+      <div class="tb-name">
+        <span class="tb-name-main">Abhyas</span>
+        <span class="tb-name-sub">Your path to mastery</span>
+      </div>
+    </div>
+    <div class="tb-r">
+      <div class="uchip" id="uchip">👤 —</div>
+      <button class="tb-btn" id="net-mode-btn" onclick="NET.toggle()" title="Online mode — click to force offline" style="font-size:.8rem;min-width:32px;justify-content:center;color:var(--grn);border-color:rgba(var(--grn-rgb),.35);background:rgba(var(--grn-rgb),.08)">🟢</button>
+      <button class="tb-btn" onclick="UI.theme()" title="Toggle theme"><i class="ph ph-circle-half"></i></button>
+      <button class="tb-btn" onclick="PWA.toggleFullscreen()" title="Fullscreen"><i class="ph ph-corners-out"></i></button>
+      <button class="tb-btn" id="installBtn" style="display:none" onclick="PWA.install()" title="Install App"><i class="ph ph-device-mobile"></i></button>
+      <button class="tb-btn danger" onclick="AUTH.logout()" title="Log out"><i class="ph ph-power"></i></button>
+    </div>
+  </div>
+
+  <div id="layout">
+    <div id="ov" onclick="UI.sidebarClose()"></div>
+
+    <!-- SIDEBAR -->
+    <div id="sb">
+      <button class="sb-close" onclick="UI.sidebarClose()" aria-label="Close menu"><i class="ph ph-x"></i></button>
+      <div class="card" style="padding:.65rem .75rem;margin-bottom:.7rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem">
+        <div style="min-width:0">
+          <div id="sb-uname" style="font-size:.8rem;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Student</div>
+          <div id="sb-ustatus" style="font-size:.64rem;color:var(--t3)">—</div>
+        </div>
+        <button class="ib" onclick="AUTH.logout()" title="Log out" style="flex-shrink:0"><i class="ph ph-power"></i></button>
+      </div>
+      <div class="sb-sec">
+        <div class="sb-lbl">Study</div>
+        <div class="sb-item active" id="nav-home"    onclick="UI.go('home')"><div class="sb-ic"><i class="ph ph-house"></i></div>Dashboard</div>
+        <div class="sb-item"        id="nav-online"  onclick="UI.go('online')"><div class="sb-ic"><i class="ph ph-cloud"></i></div>Online Study</div>
+        <div class="sb-item"        id="nav-local"   onclick="UI.go('local')"><div class="sb-ic"><i class="ph ph-folder-open"></i></div>Local File</div>
+        <div class="sb-item"        id="nav-psycho"  onclick="UI.go('psycho')"><div class="sb-ic"><i class="ph ph-lightning"></i></div>Psycho Mode<span class="sb-badge amb">HOT</span></div>
+      </div>
+      <div class="sb-div"></div>
+      <div class="sb-sec">
+        <div class="sb-lbl">Review</div>
+        <div class="sb-item" id="nav-bookmarks" onclick="UI.go('bookmarks')"><div class="sb-ic"><i class="ph ph-star"></i></div>Bookmarks<span class="sb-badge ok" id="bkc">0</span></div>
+        <div class="sb-item" id="nav-flagged"   onclick="UI.go('flagged')"><div class="sb-ic"><i class="ph ph-flag"></i></div>Flagged<span class="sb-badge" id="flc">0</span></div>
+        <div class="sb-item" id="nav-wrong"     onclick="UI.go('wrong')"><div class="sb-ic"><i class="ph ph-x-circle"></i></div>Wrong Bank<span class="sb-badge" id="wrc">0</span></div>
+      </div>
+      <div class="sb-div"></div>
+      <div class="sb-sec">
+        <div class="sb-lbl">Tools</div>
+        <div class="sb-item" id="nav-timetable" onclick="UI.go('timetable')"><div class="sb-ic"><i class="ph ph-calendar-blank"></i></div>Timetable</div>
+        <div class="sb-item" id="nav-progress"  onclick="UI.go('progress')"><div class="sb-ic"><i class="ph ph-chart-bar"></i></div>Progress</div>
+        <div class="sb-item" id="nav-offline"   onclick="UI.go('offline')"><div class="sb-ic"><i class="ph ph-package"></i></div>Offline Cache</div>
+        <div class="sb-item" id="nav-tutorial"  onclick="TUTORIAL.open()"><div class="sb-ic"><i class="ph ph-question"></i></div>Tutorial</div>
+      </div>
+      <div style="text-align:center;font-size:.62rem;color:var(--t3);opacity:.6;padding:.6rem 0 .2rem" id="sb-version"><!-- set from app.js --></div>
+    </div>
+
+    <!-- MAIN -->
+    <div id="main">
+
+      <!-- DASHBOARD -->
+      <div class="view on" id="view-home">
+        <div class="hero">
+          <div class="hero-orb"></div>
+          <div class="hero-text">
+            <div class="hero-title" id="greeting-title">Ready to study!</div>
+            <div class="hero-sub" id="greeting">Nepal Engineering &amp; PSC — offline-first exam prep.</div>
+          </div>
+          <div class="hero-icon" id="greeting-icon">🌅</div>
+        </div>
+        <div class="daily-card">
+          <div class="daily-top"><h3><i class="ph ph-star"></i> Daily Challenge</h3><div class="stk-tag" id="stk-tag">🔥 0 day streak</div></div>
+          <div class="sk-bar" id="sk-bar"></div>
+          <p class="daily-desc">30 mixed questions every day — keep the streak alive!</p>
+          <button class="daily-btn" onclick="QUIZ.daily()"><i class="ph ph-rocket-launch"></i> Start Today's Challenge</button>
+        </div>
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-hd"><h3><i class="ph ph-target"></i> Adaptive Practice</h3><span class="ctag ta">Weak-topic focused</span></div>
+          <p style="font-size:.78rem;color:var(--t3);margin:.2rem 0 .7rem">Pulls questions you're actually struggling with first — due Wrong Bank items and anything you've tagged Confusing — then fills the rest with fresh content.</p>
+          <button class="btn btn-a btn-lg" style="width:100%" onclick="QUIZ.adaptive()"><i class="ph ph-lightning"></i> Start Adaptive Session</button>
+        </div>
+        <div class="sb-lbl" style="margin-bottom:.4rem">Today's Overview</div>
+        <div class="stats-row">
+          <div class="scard sc-c"><div class="sv tcy" id="hs-tot">0</div><div class="sl">Answered</div></div>
+          <div class="scard sc-g"><div class="sv tc2" id="hs-cor">0</div><div class="sl">Correct</div></div>
+          <div class="scard sc-r"><div class="sv tb2" id="hs-wrg">0</div><div class="sl">Wrong</div></div>
+          <div class="scard sc-a"><div class="sv ta2" id="hs-pct">0%</div><div class="sl">Accuracy</div></div>
+        </div>
+        <div class="sb-lbl" style="margin:.7rem 0 .4rem">Quick Actions</div>
+        <div class="qa-row">
+          <button class="qa-tile qt-sky" onclick="UI.go('online')"><span class="qa-ic"><i class="ph ph-cloud"></i></span>Online Study</button>
+          <button class="qa-tile qt-vio" onclick="UI.go('psycho')"><span class="qa-ic"><i class="ph ph-lightning"></i></span>Psycho Mode</button>
+          <button class="qa-tile qt-ros" onclick="UI.go('wrong')"><span class="qa-ic"><i class="ph ph-x-circle"></i></span>Wrong Bank</button>
+          <button class="qa-tile qt-grn" onclick="UI.go('bookmarks')"><span class="qa-ic"><i class="ph ph-star"></i></span>Bookmarks</button>
+          <button class="qa-tile qt-amb" onclick="UI.go('timetable')"><span class="qa-ic"><i class="ph ph-calendar-blank"></i></span>Timetable</button>
+          <button class="qa-tile qt-sky" onclick="UI.go('progress')"><span class="qa-ic"><i class="ph ph-chart-bar"></i></span>Progress</button>
+          <button class="qa-tile qt-vio" onclick="TUTORIAL.open()"><span class="qa-ic"><i class="ph ph-question"></i></span>Tutorial</button>
+        </div>
+        <div class="dash-lower">
+          <div class="card"><div class="card-hd"><h3><i class="ph ph-trend-up"></i> Recent Sessions</h3></div><div id="recent-sessions"></div></div>
+          <div class="card">
+            <div class="card-hd"><h3>⏰ Live Clock</h3><button class="btn btn-sm btn-a" onclick="UI.go('timetable')">Schedule →</button></div>
+            <div class="home-clock" id="hclock">00:00:00</div>
+            <div class="home-date" id="hdate"></div>
+            <div id="h-session"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ONLINE STUDY -->
+      <div class="view" id="view-online">
+        <div class="ph"><h2><i class="ph ph-cloud"></i> Online Study</h2><p>Level → Chapter → Book → Subtopic → Mode</p></div>
+        <div class="on-card-banner"><span><i class="ph ph-broadcast"></i></span> Questions stream from Google Drive and cache automatically for offline use.</div>
+        <div id="on-offline-warn" style="display:none;background:var(--bad-bg);border:1px solid var(--bad-bd);border-radius:var(--r2);padding:.65rem .9rem;margin-bottom:.75rem;font-size:.74rem;color:var(--ros)">
+          <i class="ph ph-broadcast"></i> <strong>You're offline.</strong> Only cached question sets will load. <a onclick="UI.go('offline')" style="color:var(--amb);cursor:pointer;text-decoration:underline">Go to Offline Cache →</a>
+        </div>
+        <div class="card">
+          <div class="card-hd"><h3>Content Selector</h3><span class="ctag tc">Google Drive</span></div>
+          <select class="sel-c" id="on-lv" onchange="ON.onLv()" aria-label="Select level"><option value="">📖 Select Level…</option><option value="level5">Level 5 — Diploma</option><option value="level7">Level 7 — Civil Engineering</option><option value="gk">General Knowledge</option><option value="old_question">Old Questions / Sets</option></select>
+          <select class="sel-c" id="on-ch" disabled onchange="ON.onCh()" aria-label="Select chapter"><option value="">📘 Select Chapter…</option></select>
+          <select class="sel-c" id="on-bk" disabled onchange="ON.onBook()" aria-label="Select book"><option value="">📚 Select Book…</option></select>
+          <select class="sel-c" id="on-to" disabled onchange="ONPROG.render()" aria-label="Select subtopic"><option value="">📑 Select Subtopic…</option></select>
+          <hr>
+          <div class="bg">
+            <button class="btn btn-g btn-lg" style="flex:1" onclick="ON.start('flashcard')"><i class="ph ph-barbell"></i> Practice / Flashcard</button>
+            <button class="btn btn-a btn-lg" style="flex:1" onclick="ON.start('exam')"><i class="ph ph-note-pencil"></i> Exam Mode</button>
+          </div>
+        </div>
+
+        <!-- Scope progress — auto-updates to whatever's selected above -->
+        <div class="card" id="on-progress-card">
+          <div class="card-hd">
+            <h3 id="on-prog-title">📊 Overall Progress</h3>
+            <div class="mtabs" id="on-prog-tabs">
+              <button type="button" class="mtab active" data-m="practised" onclick="ONPROG.setMetric('practised')">Practised</button>
+              <button type="button" class="mtab" data-m="attempted" onclick="ONPROG.setMetric('attempted')">Attempted</button>
+              <button type="button" class="mtab" data-m="correct" onclick="ONPROG.setMetric('correct')">Correct</button>
+              <button type="button" class="mtab" data-m="wrong" onclick="ONPROG.setMetric('wrong')">Wrong</button>
+            </div>
+          </div>
+          <div id="on-prog-body"></div>
+          <!-- ══════════ NEW: Cloud sync button ══════════ -->
+          <div style="margin-top:8px">
+            <button class="btn btn-a" onclick="CLOUD.backup()" style="width:100%">
+              <i class="ph ph-cloud-arrow-up"></i> Sync Progress to Cloud
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOCAL FILE -->
+      <div class="view" id="view-local">
+        <div class="ph"><h2><i class="ph ph-folder-open"></i> Local File</h2><p>Load a JSON question bank — works fully offline</p></div>
+        <div class="card">
+          <div class="card-hd"><h3>Upload File</h3><span class="ctag tp">JSON</span></div>
+          <p style="font-size:.74rem;color:var(--t3);margin-bottom:.6rem">Format: <span class="mono" style="font-size:.69rem">[{"q":"…","options":[],"correct":0,"explanation":"…"}]</span></p>
+          <input type="file" id="loc-file" accept=".json" onchange="LOC.onFile()" aria-label="Import local question file (JSON)">
+          <div id="loc-info" style="font-size:.72rem;color:var(--grn);margin:.42rem 0;display:none"></div>
+          <hr>
+          <div class="bg">
+            <button class="btn btn-g btn-lg" id="loc-pr" disabled style="flex:1" onclick="LOC.start('flashcard')"><i class="ph ph-barbell"></i> Practice</button>
+            <button class="btn btn-a btn-lg" id="loc-ex" disabled style="flex:1" onclick="LOC.start('exam')"><i class="ph ph-note-pencil"></i> Exam</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PSYCHO MODE -->
+      <div class="view" id="view-psycho">
+        <div class="ph"><h2><i class="ph ph-lightning"></i> Psycho Mode</h2><p>Mix chapters · randomise · target weak spots</p></div>
+        <div class="psy-hero"><div class="psy-hero-ic"><i class="ph ph-lightning"></i></div><div class="psy-hero-text"><h4>Multi-chapter Gauntlet</h4><p>Crunch-time training — mix levels, exam pressure, weak-area targeting.</p></div></div>
+        <div class="card">
+          <div class="card-hd"><h3>Select Chapters</h3>
+            <div class="bg"><button class="btn btn-sm btn-a" onclick="PSY.all()"><i class="ph ph-check"></i> All</button><button class="btn btn-sm btn-r" onclick="PSY.none()"><i class="ph ph-x"></i> Clear</button></div>
+          </div>
+          <div id="psy-levels"></div>
+          <div id="psy-info" style="font-size:.7rem;color:var(--t3);text-align:center;margin:.36rem 0"></div>
+          <hr>
+          <div class="g2" style="margin-bottom:.42rem">
+            <button class="btn btn-p btn-lg" onclick="PSY.start('flashcard')"><i class="ph ph-lightning"></i> Flashcard Mix</button>
+            <button class="btn btn-a btn-lg" onclick="PSY.start('exam')"><i class="ph ph-dice-five"></i> Exam 100 Qs</button>
+          </div>
+          <button class="btn btn-g btn-blk btn-lg" onclick="PSY.start('weak')"><i class="ph ph-target"></i> Focus Weak Areas Only</button>
+        </div>
+      </div>
+
+      <!-- BOOKMARKS -->
+      <div class="view" id="view-bookmarks">
+        <div class="ph"><h2><i class="ph ph-star"></i> Bookmarks</h2><p>Questions saved for focused revision</p></div>
+        <div class="card"><div class="card-hd"><h3>Saved Questions</h3>
+          <div class="bg"><button class="btn btn-sm btn-a" onclick="REV.start('bk','flashcard')"><i class="ph ph-lightning"></i> Flash</button><button class="btn btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="REV.start('bk','exam')"><i class="ph ph-note-pencil"></i> Exam</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('bk')"><i class="ph ph-trash"></i></button></div>
+        </div><div id="bk-list"></div></div>
+      </div>
+
+      <!-- FLAGGED -->
+      <div class="view" id="view-flagged">
+        <div class="ph"><h2><i class="ph ph-flag"></i> Flagged</h2><p>Questions marked for follow-up</p></div>
+        <div class="card"><div class="card-hd"><h3>Flagged Questions</h3>
+          <div class="bg"><button class="btn btn-sm btn-a" onclick="REV.start('fl','flashcard')"><i class="ph ph-lightning"></i> Flash</button><button class="btn btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="REV.start('fl','exam')"><i class="ph ph-note-pencil"></i> Exam</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('fl')"><i class="ph ph-trash"></i></button></div>
+        </div><div id="fl-list"></div></div>
+      </div>
+
+      <!-- WRONG BANK -->
+      <div class="view" id="view-wrong">
+        <div class="ph"><h2><i class="ph ph-x-circle"></i> Wrong Bank</h2><p>Spaced repetition: <span id="wrc-due">0</span> due for review right now</p></div>
+        <div class="card"><div class="card-hd"><h3>Wrong Answers</h3>
+          <div class="bg"><button class="btn btn-sm btn-r" onclick="REV.start('wr','flashcard',true)"><i class="ph ph-repeat"></i> Retry Due</button><button class="btn btn-sm btn-p" onclick="REV.start('wr','flashcard')"><i class="ph ph-lightning"></i> Retry All</button><button class="btn btn-sm btn-a" onclick="REV.start('wr','exam')"><i class="ph ph-note-pencil"></i> Exam All</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('wr')"><i class="ph ph-trash"></i></button></div>
+        </div><div id="wr-list"></div></div>
+      </div>
+
+      <!-- TIMETABLE -->
+      <div class="view" id="view-timetable">
+        <div class="ph"><h2><i class="ph ph-calendar-blank"></i> Timetable</h2><p>Plan your weekly study sessions</p></div>
+        <div class="g2" style="align-items:start">
+          <div>
+            <div class="card"><div class="tt-clock" id="tt-clock">00:00:00</div><div class="tt-date" id="tt-date"></div><div id="tt-now"></div></div>
+            <div class="card"><div class="card-hd"><h3>Today's Schedule</h3>
+              <div class="bg"><button class="btn btn-sm btn-a" onclick="TT.exportJ()"><i class="ph ph-upload"></i></button><button class="btn btn-sm btn-a" onclick="TT.importJ()"><i class="ph ph-download-simple"></i></button></div>
+            </div><div id="tt-today"></div></div>
+          </div>
+          <div>
+            <div class="card"><div class="card-hd"><h3><i class="ph ph-bell"></i> Reminders</h3></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:.2rem 0">
+                <label for="tt-remind-toggle" style="font-size:.78rem;color:var(--t2);cursor:pointer">Notify before each session</label>
+                <input type="checkbox" id="tt-remind-toggle" onchange="TT.toggleReminders(this.checked)" style="width:1.15rem;height:1.15rem;accent-color:var(--amb);cursor:pointer">
+              </div>
+              <div style="display:flex;align-items:center;gap:.5rem;padding:.2rem 0">
+                <label for="tt-remind-lead" style="font-size:.72rem;color:var(--t3);white-space:nowrap">Minutes before:</label>
+                <input type="number" id="tt-remind-lead" min="0" max="60" style="width:4.5rem" onchange="TT.setLeadMinutes(this.value)">
+              </div>
+              <p style="font-size:.65rem;color:var(--t3);margin:.4rem 0 0">Works while Abhyas is open in a tab or installed as an app. Closing the browser fully will stop reminders.</p>
+            </div>
+            <div class="card"><div class="card-hd"><h3>Add Session</h3><span class="ctag tg">New</span></div>
+              <div class="tt-form">
+                <select id="tt-day" aria-label="Day of week"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select>
+                <input type="text" id="tt-name" placeholder="Session name" aria-label="Session name">
+                <div class="g2"><input type="time" id="tt-s" aria-label="Start time"><input type="time" id="tt-e" aria-label="End time"></div>
+                <button class="btn btn-a btn-blk" style="margin-top:.38rem" onclick="TT.add()">+ Add Session</button>
+              </div>
+            </div>
+            <div class="card"><div class="card-hd"><h3>Full Week</h3></div><div id="tt-week"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROGRESS -->
+      <div class="view" id="view-progress">
+        <div class="ph"><h2><i class="ph ph-chart-bar"></i> Progress</h2><p>Overall performance &amp; chapter breakdown</p></div>
+        <div class="g4" id="prog-stats" style="margin-bottom:.85rem"></div>
+        <div id="predict-card" style="margin-bottom:.85rem"></div>
+        <div class="card"><div class="card-hd"><h3>Chapter Accuracy</h3><span class="ctag tp">Breakdown</span></div><div id="chap-acc"></div></div>
+        <div class="card"><div class="card-hd"><h3>Data Management</h3><span class="ctag tr">Backup</span></div>
+          <div class="bg">
+            <button class="btn btn-a" onclick="DATA.exp()"><i class="ph ph-upload"></i> Export</button>
+            <button class="btn btn-a" onclick="DATA.imp()"><i class="ph ph-download-simple"></i> Import</button>
+            <button class="btn btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="DATA.clearQ()"><i class="ph ph-broom"></i> Clear Q Cache</button>
+            <button class="btn btn-r" onclick="DATA.reset()"><i class="ph ph-warning"></i> Reset All</button>
+          </div>
+        </div>
+        <div class="card"><div class="card-hd"><h3>Cloud Backup</h3><span class="ctag tg">Auto</span></div>
+          <p style="font-size:.78rem;color:var(--t3);margin:0 0 .6rem">Your progress, bookmarks, flags, and wrong-answer bank are backed up to your account automatically while you're online — useful if you switch devices or clear your browser. This never overwrites what's on this device; it only fills in a brand new one.</p>
+          <div id="psync-status" style="font-size:.75rem;color:var(--t3);margin-bottom:.6rem">Not synced yet this session.</div>
+          <div class="bg">
+            <button class="btn btn-a" onclick="DATA.syncNow()"><i class="ph ph-cloud-arrow-up"></i> Back Up Now</button>
+            <button class="btn btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="DATA.restoreCloud()"><i class="ph ph-cloud-arrow-down"></i> Restore From Cloud</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- OFFLINE CACHE -->
+      <div class="view" id="view-offline">
+        <div class="ph"><h2><i class="ph ph-package"></i> Offline Cache</h2><p>Download all question sets for offline study</p></div>
+        <div class="card">
+          <div class="card-hd"><h3>Cache Status</h3><span class="ctag" id="cache-tag">Checking…</span></div>
+          <div id="cache-txt" style="font-size:.76rem;color:var(--t3);margin-bottom:.65rem"></div>
+          <div class="cpb" id="cpb"><div class="cpf" id="cpf"></div></div>
+          <div id="cptxt" style="font-size:.68rem;color:var(--t3);margin:.24rem 0"></div>
+          <div class="bg" style="margin-top:.38rem">
+            <button class="btn btn-a btn-lg" onclick="CACHE.dl()"><i class="ph ph-download-simple"></i> Cache All Data</button>
+            <button class="btn btn-r" onclick="CACHE.clr()"><i class="ph ph-trash"></i> Clear Cache</button>
+            <button class="btn btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="CACHE.purgeStale()"><i class="ph ph-broom"></i> Fix Errors</button>
+          </div>
+        </div>
+        <div class="card"><div class="card-hd"><h3>Per-Level Status</h3></div><div class="cg" id="cache-grid"></div></div>
+      </div>
+
+      <!-- QUIZ WRAPPER -->
+      <div id="quiz-wrap" style="display:none">
+
+        <!-- FLASHCARD -->
+        <div id="fc-wrap">
+          <div class="qbar">
+            <div class="qb-l1"><span class="qb-pill" id="fc-mode-pill">⚡ Flash</span><span class="qb-topic" id="fc-chip">Topic</span></div>
+            <div class="qb-l2">
+              <div class="qbz qbz-l"><div class="qb-ctr" id="fc-ctr">1<em>/0</em></div><button class="qb-btn quit" onclick="QUIZ.quit()">✕ Quit</button></div>
+              <div class="qbz qbz-c"><div class="qb-tiles">
+                <div class="qtile qt-ok"><span class="qt-sym">✓</span><span class="qt-num" id="fc-ok">0</span><span class="qt-lbl">Right</span></div>
+                <div class="qtile qt-bad"><span class="qt-sym">✗</span><span class="qt-num" id="fc-bad">0</span><span class="qt-lbl">Wrong</span></div>
+                <div class="qtile qt-skip"><span class="qt-sym">↦</span><span class="qt-num" id="fc-skip">0</span><span class="qt-lbl">Skip</span></div>
+              </div></div>
+              <div class="qbz qbz-r"><div class="qb-timer" id="fc-tmr">00:00</div><button class="qb-btn ok" onclick="QUIZ.fcFinish()">✔ Finish</button></div>
+            </div>
+            <div class="qb-l3"><div class="qprog"><div class="qpf" id="fc-pf"></div></div></div>
+          </div>
+          <div class="qcard">
+            <div class="qm">
+              <span class="qn mono" id="fc-qn">#1</span>
+              <div class="fc-acts" id="fc-acts"></div>
+            </div>
+            <div class="qt" id="fc-q">Loading question…</div>
+            <div id="fc-opts"></div>
+            <div class="expl" id="fc-expl"></div>
+            <div class="srch-panel" id="fc-srch">
+              <div class="srch-row"><input class="srch-inp" id="fc-srch-q" type="text" placeholder="Question + options pre-filled — edit or search…" onkeydown="if(event.key==='Enter')SRCH.go()"><button class="srch-go" onclick="SRCH.go()"><i class="ph ph-magnifying-glass"></i></button></div>
+              <div class="srch-links" id="fc-srch-links"></div>
+            </div>
+          </div>
+          <div class="fc-nav">
+            <button class="btn btn-a" id="fc-prev" onclick="QUIZ.fcNav(-1)">← Prev</button>
+            <span class="fc-hint" id="fc-hint">Tap an option to answer</span>
+            <button class="btn btn-a" id="fc-next" onclick="QUIZ.fcNav(1)">Next →</button>
+          </div>
+        </div>
+
+        <!-- EXAM -->
+        <div id="ex-wrap" style="display:none">
+          <div class="qbar">
+            <div class="qb-l1"><span class="qb-pill" id="ex-mode-pill">📝 Exam</span><span class="qb-topic" id="ex-chip">Exam</span></div>
+            <div class="qb-l2">
+              <div class="qbz qbz-l"><div class="qb-ctr" id="ex-ctr">0<em>/0</em></div><button class="qb-btn ok" onclick="QUIZ.submitExam()">✔ Submit</button></div>
+              <div class="qbz qbz-c"><div class="qb-tiles"><div class="qtile qt-ans"><span class="qt-sym">✓</span><span class="qt-num" id="ex-ans">0</span><span class="qt-lbl">Done</span></div></div></div>
+              <div class="qbz qbz-r"><div class="qb-timer" id="ex-tmr">00:00</div><button class="qb-btn quit" onclick="QUIZ.quit()">✕ Quit</button></div>
+            </div>
+            <div class="qb-l3"><div class="qprog"><div class="qpf" id="ex-pf"></div></div></div>
+          </div>
+          <div id="ex-qs"></div>
+          <div style="text-align:center;margin:1rem 0 2rem">
+            <button class="btn btn-solid btn-lg" onclick="QUIZ.submitExam()"><i class="ph ph-note-pencil"></i> Submit All Answers</button>
+          </div>
+        </div>
+
+        <!-- RESULT -->
+        <div id="res-wrap" style="display:none">
+          <div class="card">
+            <div class="rh">
+              <div class="ring" id="res-ring"><div class="ring-v" id="res-pct">0%</div></div>
+              <div class="rs" id="res-chap"></div><div class="rg" id="res-grade"></div>
+            </div>
+            <div class="g4" id="res-stats" style="margin:.85rem 0"></div>
+            <div class="bg" style="justify-content:center;margin:.85rem 0">
+              <button class="btn btn-p btn-lg" onclick="QUIZ.retryWrong()"><i class="ph ph-repeat"></i> Retry Wrong &amp; Skipped</button>
+              <button class="btn btn-a btn-lg" onclick="UI.go('home')"><i class="ph ph-house"></i> Home</button>
+            </div>
+            <div id="res-review"></div>
+          </div>
+        </div>
+
+      </div><!-- /quiz-wrap -->
+    </div><!-- /main -->
+  </div><!-- /layout -->
+
+  <!-- MOBILE BOTTOM NAV -->
+  <nav id="bnav">
+    <button class="bn-item active" id="bn-home"     onclick="UI.go('home');_bnav('home')"><div class="bn-ic"><i class="ph ph-house"></i></div>Home</button>
+    <button class="bn-item"        id="bn-online"   onclick="UI.go('online');_bnav('online')"><div class="bn-ic"><i class="ph ph-cloud"></i></div>Study</button>
+    <button class="bn-item"        id="bn-psycho"   onclick="UI.go('psycho');_bnav('psycho')"><div class="bn-ic"><i class="ph ph-lightning"></i></div>Psycho</button>
+    <button class="bn-item"        id="bn-progress" onclick="UI.go('progress');_bnav('progress')"><div class="bn-ic"><i class="ph ph-chart-bar"></i></div>Progress</button>
+    <button class="bn-item bn-more" onclick="_bnavMore()" aria-label="More options"><div class="bn-ic"><i class="ph ph-list"></i></div>More<div class="bn-badge" id="bn-badge" style="display:none"></div></button>
+  </nav>
+
+</div><!-- /app -->
+
+<div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+
+<div class="mbg" id="mbg" onclick="closeMod()">
+  <div class="mbox" onclick="event.stopPropagation()">
+    <div class="mhd"><h3 id="mtitle">—</h3><button class="mcl" onclick="closeMod()" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
+    <div class="mbody" id="mbody"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="shared.js"></script>
+<script src="chapters-data.js"></script>
+<!-- ══════════ NEW: split scripts loaded in order ══════════ -->
+<script src="app.js"></script>
+<script src="cloud-sync.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════════
+   PATCH LAYER v2 — ABHYAS V1
+   Contracts with app.js (IDs must NOT change):
+     fc-chip, fc-ctr, fc-ok, fc-bad, fc-skip, fc-pf, fc-tmr
+     ex-chip, ex-ctr, ex-ans, ex-pf, ex-tmr
+     rg rr rs (result bars)
+════════════════════════════════════════════════════════════ */
+(function(){
+'use strict';
+const $   = id => document.getElementById(id);
+const set = (id,v) => { const e=$(id); if(e) e.textContent=v; };
+const htm = (id,v) => { const e=$(id); if(e) e.innerHTML=v; };
+
+/* 1. Stat tiles now emit plain numbers from app.js — no stripping needed */
+function _watchTiles(){ /* no-op: app.js now emits plain numbers directly */ }
+
+/* 2. Clean emoji chip prefix */
+function _cleanChip(id){ const e=$(id); if(!e)return; e.textContent=e.textContent.replace(/^[⚡📝🌟❌⭐🚩🎯]\s*/,'').trim(); }
+
+/* 3. Styled counter */
+function _ctr(id,cur,tot){ const e=$(id); if(!e)return; e.innerHTML=cur+'<em>/'+tot+'</em>'; }
+
+/* 4. Patch _renderFlashcard */
+const _rf = QUIZ._renderFlashcard.bind(QUIZ);
+QUIZ._renderFlashcard = function(){
+  _rf(); _watchTiles(); _cleanChip('fc-chip');
+  if(S.quiz.qs) _ctr('fc-ctr', S.quiz.idx+1, S.quiz.qs.length);
+  _srchFill(); // app.js renders search as button directly now
+};
+
+/* 5. Patch _updateFcCounts */
+const _uc = QUIZ._updateFcCounts.bind(QUIZ);
+QUIZ._updateFcCounts = function(){
+  _uc(); _watchTiles();
+  if(S.quiz.qs){ const pf=$('fc-pf'); if(pf) pf.style.width=((S.quiz.idx/S.quiz.qs.length)*100)+'%'; }
+};
+
+/* 6. Patch startWith */
+const _sw = QUIZ.startWith.bind(QUIZ);
+QUIZ.startWith = function(qs,mode,ch){
+  _sw(qs,mode,ch);
+  const nm=(ch||'Quiz').replace(/^[⚡📝🌟❌⭐🚩🎯]\s*/,'').trim();
+  set('fc-chip',nm); set('ex-chip',nm);
+  set('fc-mode-pill', mode==='exam'?'📝 Exam':'⚡ Flash');
+  set('ex-mode-pill','📝 Exam');
+  _ctr('fc-ctr',1,qs.length); _ctr('ex-ctr',0,qs.length);
+  _watchTiles();
+};
+
+/* 7. Patch _renderExam */
+const _re = QUIZ._renderExam.bind(QUIZ);
+QUIZ._renderExam = function(){ _re(); _cleanChip('ex-chip'); _ctr('ex-ctr',0,S.quiz.qs.length); };
+
+/* 8. Patch exAnswer */
+const _ea = QUIZ.exAnswer.bind(QUIZ);
+QUIZ.exAnswer = function(qi,oi){
+  _ea(qi,oi); _watchTiles();
+  const ans=S.quiz.ans.filter(a=>a!==null).length, tot=S.quiz.qs.length;
+  _ctr('ex-ctr',ans,tot);
+  const pf=$('ex-pf'); if(pf) pf.style.width=((ans/tot)*100)+'%';
+  const t=$('ex-tmr'); if(t) t.classList.toggle('urgent',S.quiz.left<tot*18);
+};
+
+/* 9. Timer urgent */
+const _st = QUIZ._startTimer.bind(QUIZ);
+QUIZ._startTimer = function(){
+  _st();
+  const w=setInterval(()=>{
+    if(!S.quiz?.active){clearInterval(w);return;}
+    if(S.quiz.mode==='exam'){ const t=$('ex-tmr'); if(t) t.classList.toggle('urgent',S.quiz.left<S.quiz.qs.length*18); }
+  },1000);
+};
+
+/* 10. Search engine */
+function _srchFill(){
+  const q=S.quiz?.qs?.[S.quiz.idx]; if(!q)return;
+  const opts=(q.options||[]).map((o,i)=>String.fromCharCode(65+i)+') '+o).join('  ');
+  const inp=$('fc-srch-q'); if(inp) inp.value=(q.q+'  '+opts).trim();
+}
+window.SRCH={
+  toggle(){
+    const p=$('fc-srch'); if(!p)return;
+    const open=p.classList.toggle('open');
+    if(open) _srchFill(); else htm('fc-srch-links','');
+  },
+  go(){
+    const inp=$('fc-srch-q'); if(!inp)return;
+    const q=encodeURIComponent(inp.value.trim()); if(!q){SRCH.toggle();return;}
+    htm('fc-srch-links',
+      `<a class="sl sl-g" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener"><i class="ph ph-magnifying-glass"></i> Google</a>`
+    );
+  }
+};
+
+/* 11. Dashboard rendering now native in app.js HOME.render */
+
+/* 12. REV list rendering now native in app.js REV.renderList */
+
+/* 13. Swipe right → sidebar */
+let _tx=0,_ty=0;
+document.addEventListener('touchstart',e=>{_tx=e.touches[0].clientX;_ty=e.touches[0].clientY;},{passive:true});
+document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-_tx,dy=Math.abs(e.changedTouches[0].clientY-_ty);if(_tx<22&&dx>60&&dy<70)UI.sidebarToggle();},{passive:true});
+
+/* 14. Keyboard shortcuts */
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    UI.sidebarClose();
+    const mb=$('mbg');if(mb?.classList.contains('show'))closeMod();
+    const sp=$('fc-srch');if(sp?.classList.contains('open')){sp.classList.remove('open');}
+    return;
+  }
+  if((e.ctrlKey||e.metaKey)&&e.key==='f'&&S.quiz?.active&&S.quiz?.mode!=='exam'){e.preventDefault();SRCH.toggle();}
+});
+
+/* 15. PWA install — show a one-tap banner the moment the browser
+   offers it, instead of only a small hidden toolbar icon. */
+function _showInstallBanner(){
+  if($('pwa-install-banner')) return;
+  const bar = document.createElement('div');
+  bar.id = 'pwa-install-banner';
+  bar.style.cssText = 'position:fixed;left:.75rem;right:.75rem;bottom:calc(var(--bn-h,0px) + .75rem + var(--safe-b,0px));background:var(--c2);border:1px solid var(--bd);border-radius:var(--r2);padding:.7rem .9rem;display:flex;align-items:center;gap:.6rem;z-index:9997;box-shadow:var(--sh3)';
+  bar.innerHTML = `
+    <div style="font-size:1.3rem"><i class="ph ph-device-mobile"></i></div>
+    <div style="flex:1;font-size:.76rem;color:var(--t2);line-height:1.3">Install this app for faster, offline access</div>
+    <button id="pwa-install-go" style="padding:.4rem .75rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r1);color:#0F0A00;font-weight:700;font-size:.76rem;cursor:pointer;font-family:var(--ff)">Install</button>
+    <button id="pwa-install-x" aria-label="Dismiss install prompt" style="background:none;border:none;color:var(--t3);font-size:.9rem;cursor:pointer;padding:.2rem"><i class="ph ph-x"></i></button>
+  `;
+  document.body.appendChild(bar);
+  $('pwa-install-go').onclick = ()=>{
+    if(window._dpi){ window._dpi.prompt(); window._dpi.userChoice.then(()=>{ window._dpi=null; }); }
+    bar.remove();
+  };
+  $('pwa-install-x').onclick = ()=> bar.remove();
+}
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault(); window._dpi=e;
+  const b=$('installBtn'); if(b){b.style.display='';b.title='Install App';}
+  _showInstallBanner();
+});
+window.addEventListener('appinstalled',()=>{
+  window._dpi=null; const b=$('installBtn'); if(b) b.style.display='none';
+  const bar=$('pwa-install-banner'); if(bar) bar.remove();
+  if(typeof toast==='function') toast('📲 App installed successfully!');
+});
+const _origInstall=PWA.install.bind(PWA);
+PWA.install=function(){
+  if(window._dpi){window._dpi.prompt();window._dpi.userChoice.then(()=>{window._dpi=null;});return;}
+  _origInstall();
+};
+
+/* 16. Bottom nav helpers */
+window._bnav=function(id){
+  document.querySelectorAll('.bn-item').forEach(e=>e.classList.remove('active'));
+  const b=$('bn-'+id); if(b) b.classList.add('active');
+};
+
+/* Hook UI.go to sync bottom nav */
+const _uigo=UI.go.bind(UI);
+UI.go=function(v){
+  _uigo(v);
+  const ids=['home','online','psycho','progress'];
+  document.querySelectorAll('.bn-item').forEach(e=>e.classList.remove('active'));
+  if(ids.includes(v)){ const b=$('bn-'+v); if(b) b.classList.add('active'); }
+};
+
+window._bnavMore=function(){
+  openMod('More', `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.42rem;padding:.1rem 0">
+      ${[['<i class="ph ph-folder-open"></i>','Local File','local'],['<i class="ph ph-star"></i>','Bookmarks','bookmarks'],['<i class="ph ph-flag"></i>','Flagged','flagged'],['<i class="ph ph-x-circle"></i>','Wrong Bank','wrong'],['<i class="ph ph-calendar-blank"></i>','Timetable','timetable'],['<i class="ph ph-package"></i>','Offline Cache','offline']].map(([ic,lb,v])=>`<button class="btn btn-a btn-lg" style="justify-content:flex-start;gap:.5rem" onclick="UI.go('${v}');closeMod()">${ic} ${lb}</button>`).join('')}
+    </div>
+  `);
+};
+
+})();
+</script>
+</body>
+</html>

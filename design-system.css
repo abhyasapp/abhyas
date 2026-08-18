@@ -1,0 +1,151 @@
+/* ═══════════════════════════════════════════════════════════════
+   ABHYAS — Shared Design System (v2 — Soft Neumorphic)
+   "Abhyas: Your path to mastery"
+   Linked by index.html, user.html, and admin.html.
+
+   Direction is a soft/neumorphic hybrid: off-white canvas,
+   white cards that read as gently extruded via a dual-tone shadow
+   (soft light highlight + soft dark shadow) rather than hard drop
+   shadows, rounded icon chips for scanability, and content grouped
+   into labeled sections instead of long flat lists. Text stays
+   high-contrast (charcoal on white/off-white) — only the elevation
+   cues are neumorphic, not the text/surface contrast, so this stays
+   accessible unlike a lot of pure-neumorphic UI.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{
+  /* ── Color ── */
+  --c-primary:      #2E8B57;   /* vibrant accent green — toggles, active states, primary buttons */
+  --c-primary-dark: #256B44;   /* hover/active shade of primary */
+  --c-primary-light:#E4EFE8;   /* light green tint — icon chips, selected rows, soft badges */
+  --c-deep:         #4A6A55;   /* deep forest green — brand graphic accent, hero/nav emphasis */
+  --c-text:         #1A1A1A;   /* primary text — headings, row labels */
+  --c-text-soft:    #5B5F5D;   /* secondary text — captions, helper copy (darkened from #8E8E93 for AA contrast on white) */
+  --c-text-faint:   #6E6E74;   /* tertiary text — placeholders, disabled, inactive nav icons (darkened from #8E8E93 — that was 2.95:1 against --c-bg, failing WCAG AA even for large text; this is 4.59:1) */
+  --c-bg:           #F2F4F3;   /* page canvas */
+  --c-surface:      #FFFFFF;   /* card/panel surface */
+  --c-divider:      #E7EAE8;   /* hairline borders, separators */
+  --c-danger:       #C1433C;
+  --c-danger-bg:    #FBECEA;
+  --c-warning:      #B5790C;
+  --c-warning-bg:   #FBF3E3;
+  --c-success:      var(--c-primary);
+  --c-success-bg:   var(--c-primary-light);
+  --c-info:         #2B6CB0;
+  --c-info-bg:      #EAF1FA;
+
+  /* ── Typography ── */
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  --fs-page-title: 1.5rem;
+  --fs-section-title: 1.0625rem;
+  --fs-body: 0.9375rem;
+  --fs-label: 0.875rem;
+  --fs-caption: 0.8125rem;
+  --fs-micro: 0.6875rem;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --lh-tight: 1.25;
+  --lh-normal: 1.5;
+
+  /* ── Spacing scale (4px base) ── */
+  --sp-1: 4px;--sp-2: 8px;--sp-3: 12px;--sp-4: 16px;--sp-5: 20px;
+  --sp-6: 24px;--sp-8: 32px;--sp-10: 40px;--sp-12: 48px;--sp-16: 64px;
+
+  /* ── Radius ── */
+  --r-sm: 12px;    /* inputs, chips, small buttons */
+  --r-md: 16px;    /* buttons, badges, list rows */
+  --r-lg: 22px;    /* standard cards */
+  --r-xl: 26px;    /* hero/large cards, modals */
+  --r-full: 999px; /* pills, avatars, toggles, icon chips */
+
+  /* ── Neumorphic elevation ──
+     Two-part shadow: a soft light highlight (upper-left) plus a soft
+     dark shadow (lower-right) on the SAME off-white canvas, so raised
+     surfaces read as gently extruded rather than "dropped on top." A
+     matching inset pair (--ne-in-*) gives pressed/active states a
+     recessed feel. Kept subtle per "extremely soft shadows." */
+  --ne-light: #FFFFFF;
+  --ne-dark:  rgba(74,106,85,.16);
+  --ne-sm:  -3px -3px 8px  var(--ne-light),  3px 3px 8px  var(--ne-dark);
+  --ne-md:  -5px -5px 14px var(--ne-light),  6px 6px 16px var(--ne-dark);
+  --ne-lg:  -7px -7px 20px var(--ne-light),  9px 9px 26px var(--ne-dark);
+  --ne-in-sm: inset -3px -3px 7px var(--ne-light), inset 3px 3px 7px var(--ne-dark);
+  --ne-in-md: inset -4px -4px 10px var(--ne-light), inset 4px 4px 10px var(--ne-dark);
+
+  /* Flat/soft shadow fallback — used where a true dual-tone neumorphic
+     shadow would be too heavy (e.g. sticky bars, toasts) */
+  --sh-xs: 0 1px 2px rgba(26,26,26,.04);
+  --sh-sm: 0 2px 10px rgba(74,106,85,.07);
+  --sh-md: 0 8px 26px rgba(74,106,85,.08);
+  --sh-lg: 0 18px 44px rgba(26,26,26,.10);
+  --sh-focus: 0 0 0 3px rgba(46,139,87,.18);
+
+  /* ── Motion ── */
+  --ease: .15s cubic-bezier(.4,0,.2,1);
+  --ease-spring: .22s cubic-bezier(.34,1.56,.64,1);
+}
+
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+
+/* iOS Safari auto-zooms the viewport when a focused input's computed
+   font-size is under 16px — arguably the single most universally-hated
+   mobile text-input bug. Every input/select/textarea across all three
+   pages (login, signup, payment, admin edit forms, timetable, search
+   boxes) was set below that threshold by each page's own local styles.
+   Fixed once here rather than editing every page's form-control rules
+   individually — this only touches form controls, not the body type
+   scale, so it doesn't change how anything else looks. */
+input, select, textarea { font-size: max(16px, var(--fs-body)) !important; }
+
+/* Mobile Safari's 100vh includes the address bar, which shrinks/grows as
+   the person scrolls — causing full-height layouts to jump or clip at
+   the bottom. 100dvh (dynamic viewport height) tracks the actual visible
+   area instead. Listed after 100vh as a progressive enhancement: browsers
+   without dvh support simply ignore this line and keep the vh fallback
+   already set by each page. */
+body, #app { min-height: 100dvh; }
+
+/* Removes the ~300ms tap-response delay some mobile browsers still apply
+   to double-tap-to-zoom detection on interactive elements. */
+button, .btn, a[onclick], [role="button"] { touch-action: manipulation; }
+
+/* Phosphor renders as an icon font: size follows font-size, color follows
+   `color`, so it drops into existing button/nav/badge styles without any
+   extra markup. This just fixes the icon's own vertical alignment — icon
+   fonts sit slightly high relative to a text baseline by default.
+   Scoped to i.ph specifically — admin.html and user.html both already
+   use a bare .ph class for unrelated "page header" wrapper divs, so an
+   unscoped .ph{} rule here would collide with those. */
+i.ph{vertical-align:-0.125em;line-height:1}
+
+/* ── Cross-page resets ── */
+*,*::before,*::after{box-sizing:border-box}
+body{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+:focus-visible{
+  outline:2px solid var(--c-primary);
+  outline-offset:2px;
+  border-radius:4px;
+}
+
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--c-divider);border-radius:var(--r-full)}
+::-webkit-scrollbar-thumb:hover{background:var(--c-text-faint)}
+
+/* ── Shared brand mark — same logo everywhere (login, sidebar, admin) ──
+   Simple ascending-path glyph in a rounded square chip: reads as
+   "a path upward / a path to mastery" without depending on any
+   externally-supplied logo file. Swap the inner <svg> path later if/when
+   a final logo is provided — the .brand-mark chip wrapper and sizing
+   stay the same everywhere it's used. */
+.brand-mark{
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.brand-mark img{width:100%;height:100%;object-fit:contain;display:block}
+

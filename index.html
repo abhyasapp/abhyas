@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#F2F4F3">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Abhyas — Gateway</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="design-system.css">
+<style>
+:root{
+  /* Local aliases onto the shared token layer, so the rest of this
+     file's rules (unchanged names, so JS/markup below never has to
+     change) read from one place if the palette shifts later. */
+  --c0:var(--c-bg);--c1:var(--c-surface);--c2:var(--c-surface);--c3:var(--c-primary-light);--c4:var(--c-divider);
+  --amb:var(--c-primary);--amb2:var(--c-primary-dark);--amb-glow:rgba(46,139,87,.18);
+  --teal:var(--c-primary);--vio:var(--c-primary);--sky:var(--c-info);--grn:var(--c-primary);--ros:var(--c-danger);
+  --t1:var(--c-text);--t2:var(--c-text-soft);--t3:var(--c-text-faint);
+  --ff:var(--font-body);--fd:var(--font-body);
+  --r2:var(--r-sm);--r3:var(--r-md);--r4:var(--r-xl);
+  --ease:.15s cubic-bezier(.4,0,.2,1);--spring:.22s cubic-bezier(.34,1.56,.64,1)
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{height:100%}
+body{font-family:var(--ff);background:var(--c-bg);color:var(--t1);min-height:100vh;display:flex;align-items:center;justify-content:center;overflow-x:hidden}
+
+/* Background — calm, no blobs/grid in the fintech direction: a plain,
+   spacious off-white field lets the card carry all the visual weight. */
+.bg-blobs,.grid{display:none}
+
+/* Card */
+.card{position:relative;z-index:1;width:100%;max-width:440px;margin:1.2rem;background:var(--c-surface);border-radius:var(--r-xl);padding:2.25rem 2rem;box-shadow:var(--ne-lg);max-height:96vh;overflow-y:auto;animation:enter .35s var(--ease-spring)}
+@keyframes enter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* Logo */
+.logo{text-align:center;margin-bottom:1.5rem}
+.l-icon{width:60px;height:60px;margin:0 auto .8rem}
+.logo h1{font-size:var(--fs-page-title);font-weight:var(--fw-bold);letter-spacing:-.3px;color:var(--c-text)}
+.logo p{font-size:var(--fs-caption);color:var(--c-text-soft);margin-top:.25rem;font-weight:var(--fw-medium)}
+
+/* "Your path to mastery" made literal: a small ascending trail of
+   waypoints under the wordmark, the last one styled as the destination.
+   Kept deliberately small and quiet — this is a login form people want
+   to get through quickly, not a hero banner to admire. */
+.path-motif{display:block;width:148px;height:auto;margin:.55rem auto .05rem}
+.path-motif-peak{animation:path-peak-pulse 2.8s ease-in-out infinite}
+@keyframes path-peak-pulse{
+  0%,100%{filter:drop-shadow(0 0 0 var(--c-primary))}
+  50%{filter:drop-shadow(0 0 3px var(--c-primary))}
+}
+@media(prefers-reduced-motion:reduce){.path-motif-peak{animation:none}}
+
+/* Ambient background — two soft, low-opacity blurred blobs for quiet
+   depth. Deliberately restrained: this sits behind a login/payment form,
+   not a marketing hero, so it should be felt more than seen. */
+.bg-motif{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bg-motif::before,.bg-motif::after{content:'';position:absolute;border-radius:50%;filter:blur(70px);background:var(--c-primary)}
+.bg-motif::before{width:340px;height:340px;top:-90px;left:-110px;opacity:.06}
+.bg-motif::after{width:280px;height:280px;bottom:-70px;right:-90px;opacity:.05}
+
+/* Net */
+.net{display:flex;align-items:center;justify-content:center;gap:.45rem;font-size:var(--fs-caption);color:var(--c-text-soft);font-weight:var(--fw-medium);margin-bottom:1.25rem;background:var(--c-bg);border-radius:var(--r-full);padding:.32rem .9rem;box-shadow:var(--ne-in-sm)}
+.ndot{width:7px;height:7px;border-radius:50%;background:var(--c-primary);animation:npulse 2s ease-in-out infinite;flex-shrink:0}
+.ndot.off{background:var(--c-danger);animation:none}
+.ndot.warn{background:var(--c-warning);animation:npulse 2s ease-in-out infinite}
+@keyframes npulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+
+/* Tabs */
+.tabs{display:flex;gap:.25rem;background:var(--c-bg);border-radius:var(--r-md);padding:.3rem;margin-bottom:1.25rem;box-shadow:var(--ne-in-sm)}
+.tab{flex:1;padding:.55rem .2rem;border:none;border-radius:calc(var(--r-md) - 4px);background:transparent;color:var(--c-text-soft);font-family:var(--ff);font-size:var(--fs-caption);font-weight:var(--fw-semibold);cursor:pointer;transition:all var(--ease);text-align:center}
+.tab.active{background:var(--c-surface);color:var(--c-primary);box-shadow:var(--ne-sm)}
+.tab:hover:not(.active){color:var(--c-text)}
+
+/* Forms */
+.fld{margin-bottom:.85rem}
+.fld label{display:block;font-size:var(--fs-caption);font-weight:var(--fw-semibold);color:var(--c-text-soft);margin-bottom:.35rem}
+.fld input,.fld select{width:100%;background:var(--c-bg);border:none;border-radius:var(--r-sm);padding:.75rem .9rem;color:var(--t1);font-size:var(--fs-body);font-family:var(--ff);outline:none;box-shadow:var(--ne-in-sm);transition:box-shadow var(--ease)}
+.fld input:focus,.fld select:focus{box-shadow:var(--ne-in-sm),0 0 0 3px rgba(46,139,87,.16)}
+.fld input::placeholder{color:var(--c-text-faint)}
+.fld input[type="file"]{padding:.55rem .9rem;font-size:var(--fs-caption);color:var(--t2)}
+.fld-row{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+
+.err{background:var(--c-danger-bg);border:1px solid rgba(193,67,60,.25);border-radius:var(--r-sm);padding:.6rem .9rem;color:var(--c-danger);font-size:var(--fs-caption);margin-bottom:.85rem;display:none;align-items:center;gap:.5rem;font-weight:var(--fw-medium)}
+.err::before{content:"";width:16px;height:16px;flex-shrink:0;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/%3E%3Cline x1='12' y1='9' x2='12' y2='13'/%3E%3Cline x1='12' y1='17' x2='12.01' y2='17'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/%3E%3Cline x1='12' y1='9' x2='12' y2='13'/%3E%3Cline x1='12' y1='17' x2='12.01' y2='17'/%3E%3C/svg%3E") center/contain no-repeat}
+.err.show{display:flex}
+
+.ok-banner{background:var(--c-success-bg);border:1px solid rgba(54,139,79,.2);border-radius:var(--r-sm);padding:.75rem 1rem;margin-bottom:1rem;text-align:center;font-size:var(--fs-caption);color:var(--c-primary-dark)}
+.ok-banner strong{color:var(--c-text);font-size:var(--fs-body)}
+
+/* Buttons */
+.btn{width:100%;padding:.85rem;background:linear-gradient(150deg,var(--c-primary),var(--c-primary-dark));border:none;border-radius:var(--r-sm);color:#0F1410;font-size:var(--fs-body);font-weight:var(--fw-semibold);font-family:var(--fd);cursor:pointer;transition:all var(--ease);box-shadow:var(--ne-sm);letter-spacing:.1px}
+.btn:hover:not(:disabled){box-shadow:var(--ne-md)}
+.btn:active:not(:disabled){transform:scale(.98);box-shadow:var(--ne-in-md)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-sec{width:100%;padding:.7rem;background:var(--c-bg);border:none;border-radius:var(--r-sm);color:var(--c-text-soft);font-size:var(--fs-caption);font-weight:var(--fw-semibold);font-family:var(--ff);cursor:pointer;transition:all var(--ease);margin-top:.6rem;box-shadow:var(--ne-sm)}
+.btn-sec:hover{color:var(--c-primary-dark);box-shadow:var(--ne-in-sm)}
+
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .65s linear infinite;vertical-align:middle;margin-right:.4rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Links */
+.link-row{text-align:center;margin-top:1.1rem;font-size:var(--fs-caption);color:var(--c-text-soft)}
+.link-row button{background:none;border:none;color:var(--c-primary);font-weight:var(--fw-semibold);cursor:pointer;font-family:var(--ff);font-size:var(--fs-caption);padding:0;margin-left:.3rem}
+.link-row button:hover{text-decoration:underline}
+
+/* Payment / Trial / Status / Permanent pages */
+.pay-box{display:none}
+.pay-box.on{display:block;animation:enter .3s var(--ease-spring)}
+.qr-wrap{text-align:center;margin:1rem 0;padding:1.1rem;background:var(--c-bg);border-radius:var(--r-lg);position:relative;box-shadow:var(--ne-in-sm)}
+.qr-wrap img{max-width:200px;width:100%;border-radius:var(--r-md);display:block;margin:0 auto .6rem}
+.qr-fallback{width:180px;height:180px;margin:0 auto .6rem;background:var(--c-surface);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;color:var(--c-text-faint);box-shadow:var(--ne-sm)}
+.qr-fallback svg{width:48px;height:48px}
+.pay-info{text-align:center;margin-bottom:1rem}
+.pay-info .amt{font-size:1.7rem;font-weight:var(--fw-bold);color:var(--c-primary-dark)}
+.pay-info .amt span{font-size:.9rem;opacity:.7;font-weight:var(--fw-medium)}
+.pay-info .phone{font-size:var(--fs-body);color:var(--t2);margin-top:.25rem}
+.pay-info .inst{font-size:var(--fs-caption);color:var(--t3);margin-top:.45rem;line-height:var(--lh-normal);padding:0 .5rem}
+
+.trial-banner{background:var(--c-info-bg);border:1px solid rgba(43,108,176,.18);border-radius:var(--r-sm);padding:.75rem 1rem;margin-bottom:1rem;text-align:center;font-size:var(--fs-caption);color:var(--c-info)}
+.trial-banner strong{color:var(--c-text);font-size:var(--fs-body)}
+.trial-banner .timer{font-size:1.15rem;font-weight:var(--fw-bold);color:var(--c-primary-dark);margin-top:.25rem;font-variant-numeric:tabular-nums}
+
+.expired-banner{background:var(--c-danger-bg);border:1px solid rgba(193,67,60,.2);border-radius:var(--r-sm);padding:.75rem 1rem;margin-bottom:1rem;text-align:center;font-size:var(--fs-caption);color:var(--c-danger)}
+.expired-banner strong{color:var(--c-text)}
+
+.perm-banner{background:var(--c-success-bg);border:1px solid rgba(54,139,79,.2);border-radius:var(--r-sm);padding:.75rem 1rem;margin-bottom:1rem;text-align:center;font-size:var(--fs-caption);color:var(--c-primary-dark)}
+.perm-banner strong{color:var(--c-text);font-size:var(--fs-body)}
+
+.status-card{text-align:center;padding:1.3rem .5rem}
+.status-card .big-icon{width:56px;height:56px;margin:0 auto .8rem;color:var(--c-primary);background:var(--c-bg);border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;box-shadow:var(--ne-sm)}
+.status-card .big-icon svg{width:28px;height:28px}
+.status-card h2{font-size:var(--fs-section-title);font-weight:var(--fw-bold);margin-bottom:.35rem;color:var(--c-text)}
+.status-card p{font-size:var(--fs-caption);color:var(--t3);line-height:var(--lh-normal);margin-bottom:1.1rem}
+
+/* Toast */
+#toasts{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9000;display:flex;flex-direction:column;align-items:center;gap:.4rem;pointer-events:none;width:calc(100vw - 2rem);max-width:340px}
+.toast{background:var(--c-text);border-radius:var(--r-sm);padding:.6rem 1.1rem;font-size:var(--fs-caption);font-weight:var(--fw-medium);color:#fff;box-shadow:var(--sh-lg);animation:tin .18s var(--ease-spring);pointer-events:auto;max-width:100%;text-align:center}
+.toast.out{animation:tout .2s ease forwards}
+@keyframes tin{from{opacity:0;transform:translateY(10px) scale(.95)}to{opacity:1;transform:none}}
+@keyframes tout{from{opacity:1}to{opacity:0;transform:translateY(-6px)}}
+
+/* Divider */
+.or-div{display:flex;align-items:center;gap:.6rem;margin:1rem 0;color:var(--t3);font-size:var(--fs-caption);font-weight:var(--fw-medium)}
+.or-div::before,.or-div::after{content:"";flex:1;height:1px;background:var(--c-divider)}
+
+/* Offline badge */
+.offline-badge{display:none;background:var(--c-bg);border-radius:var(--r-sm);padding:.45rem .8rem;margin-bottom:1rem;text-align:center;font-size:var(--fs-caption);color:var(--c-warning);font-weight:var(--fw-medium);box-shadow:var(--ne-in-sm)}
+.offline-badge.show{display:block}
+
+/* Responsive */
+@media(max-width:480px){.card{padding:1.75rem 1.35rem;margin:.8rem;border-radius:var(--r-lg)}.fld-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="bg-motif" aria-hidden="true"></div>
+
+<div class="card" id="main-card">
+  <div class="logo">
+    <div class="l-icon brand-mark"><img src="icon-192.png" alt="Abhyas"></div>
+    <h1>Abhyas</h1>
+    <svg class="path-motif" viewBox="0 0 180 44" fill="none" aria-hidden="true">
+      <path d="M14,36 C55,34 75,20 110,16 C130,14 150,10 166,8" stroke="var(--c-text-faint)" stroke-width="1.5" stroke-dasharray="3 4" stroke-linecap="round"/>
+      <circle cx="14" cy="36" r="3" fill="var(--c-surface)" stroke="var(--c-text-faint)" stroke-width="1.5"/>
+      <circle cx="62" cy="27" r="3" fill="var(--c-surface)" stroke="var(--c-text-faint)" stroke-width="1.5"/>
+      <circle cx="110" cy="16" r="3" fill="var(--c-surface)" stroke="var(--c-text-faint)" stroke-width="1.5"/>
+      <circle class="path-motif-peak" cx="166" cy="8" r="5" fill="var(--c-primary)"/>
+    </svg>
+    <p>Your path to mastery</p>
+  </div>
+
+  <div class="net"><div class="ndot" id="ndot"></div><span id="nstat">Checking connection…</span></div>
+  <div class="offline-badge" id="offline-badge">Offline mode — using cached session</div>
+
+  <!-- MODE TABS -->
+  <div class="tabs" id="auth-tabs">
+    <button class="tab active" onclick="APP.setMode('login')">Sign In</button>
+    <button class="tab" onclick="APP.setMode('signup')">Create Account</button>
+  </div>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6654137367323086"
+     crossorigin="anonymous"></script>
+  <div class="err" id="err" role="alert" aria-live="assertive"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       UNIFIED LOGIN — Single form routes to Admin OR User
+       ═══════════════════════════════════════════════════════════════ -->
+  <div id="form-login">
+    <div class="fld"><label for="in-user">Username</label><input type="text" id="in-user" placeholder="Enter username" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
+    <div class="fld"><label for="in-pass">Password</label><input type="password" id="in-pass" placeholder="Enter password" autocomplete="current-password"></div>
+    <button class="btn" id="btn-login" onclick="APP.login()">Sign In →</button>
+    <div class="link-row"><span>New here?</span><button onclick="APP.setMode('signup')">Create Account</button></div>
+  </div>
+
+  <!-- SIGNUP FORM -->
+  <div id="form-signup" style="display:none">
+    <div class="fld-row">
+      <div class="fld"><label for="su-name">Full Name</label><input type="text" id="su-name" placeholder="Your name"></div>
+      <div class="fld"><label for="su-mobile">Mobile</label><input type="tel" id="su-mobile" placeholder="98XXXXXXXX"></div>
+    </div>
+    <div class="fld"><label for="su-email">Email Address</label><input type="email" id="su-email" placeholder="you@example.com"></div>
+    <div class="fld"><label for="su-user">Username</label><input type="text" id="su-user" placeholder="Choose username" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
+    <div class="fld-row">
+      <div class="fld"><label for="su-pass">Password</label><input type="password" id="su-pass" placeholder="Min 6 chars" autocomplete="new-password"></div>
+      <div class="fld"><label for="su-cpass">Confirm</label><input type="password" id="su-cpass" placeholder="Repeat password" autocomplete="new-password"></div>
+    </div>
+    <button class="btn" id="btn-signup" onclick="APP.signup()">Create Account →</button>
+    <div class="link-row"><span>Have an account?</span><button onclick="APP.setMode('login')">Sign In</button></div>
+  </div>
+
+  <!-- PERMANENT ACCESS WELCOME -->
+  <div id="form-permanent" class="pay-box" style="display:none">
+    <div class="perm-banner">
+      <strong>Permanent Access Active</strong><br>Your account is fully unlocked.
+    </div>
+    <div class="status-card">
+      <div class="big-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></div>
+      <h2>Welcome back, <span id="perm-name">User</span>!</h2>
+      <p>You have unlimited access to all study materials and quizzes.</p>
+      <button class="btn" onclick="APP.goUser()">Enter Study Dashboard →</button>
+      <button class="btn-sec" onclick="APP.logout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- TRIAL ACTIVE -->
+  <div id="form-trial" class="pay-box" style="display:none">
+    <div class="trial-banner">
+      <strong>Welcome! Trial Active</strong>
+      <div class="timer" id="trial-timer">23:59:59</div>
+      <div style="font-size:.72rem;margin-top:.3rem;color:var(--t3)">Pay anytime to unlock permanent access.</div>
+    </div>
+    <button class="btn" onclick="APP.goUser()">Enter Study Dashboard →</button>
+    <button class="btn-sec" onclick="APP.setMode('payment')">Pay Now (Permanent)</button>
+    <button class="btn-sec" onclick="APP.logout()">Logout</button>
+  </div>
+
+  <!-- PAYMENT FORM -->
+  <div id="form-payment" class="pay-box" style="display:none">
+    <div class="expired-banner" id="pay-banner" style="display:none">
+      <strong>Trial Expired</strong><br>Complete payment to unlock permanent access.
+    </div>
+    <div class="expired-banner" id="pay-settings-warn" style="display:none">
+      <strong>Couldn't refresh payment details from the server.</strong><br>Showing the last known info — reload the page once you're back online.
+    </div>
+    <div class="qr-wrap">
+      <div class="qr-fallback" id="qr-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+      <img id="qr-img" style="display:none" alt="Payment QR" onerror="APP.onQrError()">
+    </div>
+    <div class="pay-info">
+      <div class="amt">Rs <span id="pay-amt">100</span></div>
+      <div class="phone" id="pay-phone">9863200285</div>
+      <div class="inst" id="pay-inst">Scan the QR code and submit your transaction ID for verification.</div>
+    </div>
+    <div class="fld"><label for="pay-txn">Transaction ID (TXN ID)</label><input type="text" id="pay-txn" placeholder="e.g. TXN123456789"></div>
+    <div class="fld"><label for="pay-rem">Remarks (optional)</label><input type="text" id="pay-rem" placeholder="Any note for admin…"></div>
+    <div class="fld"><label for="pay-file">Screenshot / Receipt</label><input type="file" id="pay-file" accept="image/*" onchange="APP.onFile()"></div>
+    <button class="btn" id="btn-pay" onclick="APP.submitPayment()">Submit Payment →</button>
+    <button class="btn-sec" onclick="APP.logout()">← Back to Login</button>
+  </div>
+
+  <!-- STATUS / WAITING -->
+  <div id="form-status" class="pay-box" style="display:none">
+    <div class="status-card">
+      <div class="big-icon" id="st-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+      <h2 id="st-title">Payment Submitted</h2>
+      <p id="st-msg">Your payment is under review. You will be notified once verified.</p>
+      <button class="btn-sec" onclick="APP.logout()">Back to Login</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+
+
+<script src="shared.js"></script>
+<script>
+/* ═════════════════════════════════════════════════════════════════════════════
+   ABHYAS — UNIFIED GATEWAY
+   One login → Admin (admin.html) OR User (user.html)
+   Session schema designed for online + offline validation in user.html
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwAhfyQm7NvxaNjgRm3oC9SdKwrfKNfjgDd-J0nYjYAhsU1d2PP2JfyMI30ol9AGSatyg/exec"; // ← REPLACE WITH YOUR DEPLOYED URL
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   SESSION SCHEMA (stored in localStorage as 'abhyas_session')
+   ───────────────────────────────────────────────────────────────────────────
+   {
+     type: "user" | "admin",
+     username: string,
+     name: string,           // user only
+     email: string,          // user only
+     mobile: string,         // user only
+     token: string,          // session token from backend
+     access: {
+       level: "permanent" | "trial" | "pending_review" | "expired" | "unknown",
+       trialExpiresAt: "ISO date string", // if trial
+       permanent: boolean
+     },
+     settings: {             // cached app settings
+       paymentAmount: "XXX",
+       contactPhone: "9863200285",
+       qrCodeUrl: "...",
+       paymentInstructions: "..."
+     },
+     lastVerified: timestamp,
+     createdAt: timestamp
+   }
+
+   FOR user.html DEVELOPERS:
+   ─────────────────────────
+   1. Read: const s = JSON.parse(localStorage.getItem('abhyas_session'));
+   2. If !s or s.type !== 'user' → redirect to gateway.
+   3. OFFLINE check:
+      - if s.access.level === 'permanent' → ALLOW
+      - if s.access.level === 'trial'  → check Date.now() < new Date(s.access.trialExpiresAt)
+      - if s.access.level === 'expired' or 'pending_review' or 'unknown' → BLOCK, redirect to gateway
+   4. ONLINE check (background):
+      - fetch(GAS_URL + '?action=checkSession&token=' + s.token)
+      - Update s.access if server state changed.
+   5. Call APP.logout() from gateway if you need global logout.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+const APP = {
+  mode: 'login',
+  online: false,
+  trialTimerId: null,
+  fileData: null,
+  session: null, // in-memory copy
+
+  async init() {
+    this.checkNet(); // fire in the background — don't block rendering on a ping
+    setInterval(() => this.checkNet(), 15000);
+
+    // Resume existing session
+    const saved = this.getSession();
+    if (saved) {
+      this.session = saved;
+      if (saved.type === 'admin') {
+        this.toast('🛡️ Resuming admin session…');
+        setTimeout(() => this.goAdmin(), 400);
+        return;
+      }
+      if (saved.type === 'user') {
+        this.resumeUserSession(saved);
+        return;
+      }
+    }
+    this.setMode('login');
+  },
+
+  /* ── Network ── */
+  async checkNet() {
+    const wasOnline = this.online;
+    const dot = document.getElementById('ndot');
+    const txt = document.getElementById('nstat');
+    const badge = document.getElementById('offline-badge');
+    this.online = await pingBackend(GAS_URL);
+    if (this.online) {
+      dot.className = 'ndot';
+      txt.textContent = 'Backend connected';
+      badge.classList.remove('show');
+      if (!wasOnline && this.mode === 'payment') {
+        this.loadPaymentUI();
+      }
+      if (!wasOnline && navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_STALE_IF_ONLINE' });
+      }
+    } else {
+      dot.className = 'ndot off';
+      txt.textContent = 'Offline mode';
+      if (this.session) badge.classList.add('show');
+    }
+    this.updatePayButtonState();
+  },
+
+  updatePayButtonState() {
+    const btn = document.getElementById('btn-pay');
+    if (!btn) return;
+    btn.disabled = !this.online;
+    btn.textContent = this.online ? 'Submit Payment →' : 'Offline — reconnect to pay';
+  },
+
+  /* ── Session helpers ── */
+  getSession() {
+    try {
+      const raw = localStorage.getItem('abhyas_session');
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      localStorage.removeItem('abhyas_session');
+      return null;
+    }
+  },
+
+  saveSession(obj) {
+    this.session = obj;
+    localStorage.setItem('abhyas_session', JSON.stringify(obj));
+  },
+
+  clearSession() {
+    this.session = null;
+    localStorage.removeItem('abhyas_session');
+  },
+
+  /* ── UI Mode Switcher ── */
+  setMode(m) {
+    this.mode = m;
+    const tabs = document.getElementById('auth-tabs');
+    if (tabs) {
+      tabs.style.display = (m === 'login' || m === 'signup') ? 'flex' : 'none';
+      document.querySelectorAll('.tab').forEach((t, i) => {
+        t.classList.toggle('active', (m === 'login' && i === 0) || (m === 'signup' && i === 1));
+      });
+    }
+    const ids = ['form-login','form-signup','form-payment','form-trial','form-status','form-permanent'];
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const show = id === 'form-' + m;
+      el.style.display = show ? 'block' : 'none';
+      if (show) el.classList.add('on'); else el.classList.remove('on');
+    });
+    this.hideErr();
+    if (m !== 'trial') this.clearTrialTimer();
+
+    if (m === 'payment') {
+      this.loadPaymentUI();
+      if (!this._payRefreshTimer) {
+        this._payRefreshTimer = setInterval(() => {
+          if (this.mode === 'payment' && this.online) this.loadPaymentUI();
+        }, 20000);
+      }
+    } else if (this._payRefreshTimer) {
+      clearInterval(this._payRefreshTimer);
+      this._payRefreshTimer = null;
+    }
+  },
+
+  showErr(msg) {
+    const e = document.getElementById('err');
+    e.textContent = msg;
+    e.classList.add('show');
+  },
+  hideErr() {
+    document.getElementById('err').classList.remove('show');
+  },
+
+  /* ── API ── */
+  async api(action, params = {}, method = 'GET') {
+    const qs = new URLSearchParams(params).toString();
+    if (method === 'GET') {
+      try {
+        const r = await fetch(GAS_URL + '?action=' + action + '&' + qs, { cache: 'no-store' });
+        return await r.json();
+      } catch (e) {
+        return { success: false, error: 'Network error. Check connection or CORS settings.' };
+      }
+    } else {
+      try {
+        const r = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action, ...params })
+        });
+        return await r.json();
+      } catch (e) {
+        return { success: false, error: 'Network error. Check connection or CORS settings.' };
+      }
+    }
+  },
+
+  /* ═════════════════════════════════════════════════════════════════════════════
+     UNIFIED LOGIN
+     ═════════════════════════════════════════════════════════════════════════════ */
+  async login() {
+    const u = document.getElementById('in-user').value.trim();
+    const p = document.getElementById('in-pass').value;
+    if (!u || !p) return this.showErr('Enter username and password.');
+    if (u.length < 3) return this.showErr('Username too short.');
+
+    this.setLoading('btn-login', true);
+    const res = await this.api('login', { username: u, password: p }, 'POST');
+    this.setLoading('btn-login', false);
+
+    if (!res.success) return this.showErr(res.error || 'Login failed.');
+
+    if (res.role === 'admin' || res.isAdmin) {
+      this.saveSession({
+        type: 'admin',
+        username: u,
+        token: res.token || res.adminToken,
+        lastVerified: Date.now()
+      });
+      this.toast('🛡️ Welcome, Administrator!');
+      setTimeout(() => this.goAdmin(), 500);
+      return;
+    }
+
+    this.handleUserAuth(res);
+  },
+
+  /* ═════════════════════════════════════════════════════════════════════════════
+     SIGNUP
+     ═════════════════════════════════════════════════════════════════════════════ */
+  async signup() {
+    const name = document.getElementById('su-name').value.trim();
+    const email = document.getElementById('su-email').value.trim();
+    const mobile = document.getElementById('su-mobile').value.trim();
+    const user = document.getElementById('su-user').value.trim();
+    const pass = document.getElementById('su-pass').value;
+    const cpass = document.getElementById('su-cpass').value;
+
+    if (!name || !email || !mobile || !user || !pass) return this.showErr('All fields are required.');
+    if (user.length < 3) return this.showErr('Username must be at least 3 characters.');
+    if (pass.length < 6) return this.showErr('Password must be at least 6 characters.');
+    if (pass !== cpass) return this.showErr('Passwords do not match.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return this.showErr('Invalid email address.');
+    if (!/^(98|97|96|99)\d{8}$/.test(mobile)) return this.showErr('Invalid Nepali mobile number. Use 10 digits starting with 98/97/96/99.');
+
+    this.setLoading('btn-signup', true);
+    const res = await this.api('signup', { username: user, password: pass, name, email, mobile }, 'POST');
+    this.setLoading('btn-signup', false);
+
+    if (!res.success) return this.showErr(res.error || 'Signup failed.');
+
+    this.toast('🎉 Account created! 24-hour trial started.');
+
+    const session = {
+      type: 'user',
+      username: user,
+      name,
+      email,
+      mobile,
+      token: res.token,
+      access: {
+        level: 'trial',
+        trialExpiresAt: res.trialExpiresAt,
+        permanent: false
+      },
+      settings: {},
+      lastVerified: Date.now()
+    };
+    this.saveSession(session);
+    this.startTrialTimer(new Date(res.trialExpiresAt));
+    this.setMode('trial');
+  },
+
+  /* ═════════════════════════════════════════════════════════════════════════════
+     USER AUTH ROUTING (after login or resume)
+     ═════════════════════════════════════════════════════════════════════════════ */
+  handleUserAuth(res) {
+    const user = res.user || {};
+    const access = {
+      level: res.permanentAccess || user.status === 'active' ? 'permanent'
+             : res.isTrial ? 'trial'
+             : res.needsPayment && user.status === 'payment_pending' ? 'pending_review'
+             : res.needsPayment ? 'expired'
+             : 'unknown',
+      trialExpiresAt: res.trialExpiresAt || user.trialExpiresAt,
+      permanent: !!(res.permanentAccess || user.status === 'active'),
+      accessType: res.accessType || user.accessType || 'permanent',
+      accessExpiresAt: res.accessExpiresAt || user.accessExpiresAt || ''
+    };
+
+    const session = {
+      type: 'user',
+      username: user.username || res.username,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      token: res.token,
+      access,
+      settings: res.settings || {},
+      lastVerified: Date.now()
+    };
+    this.saveSession(session);
+
+    if (access.level === 'permanent') {
+      document.getElementById('perm-name').textContent = session.name || session.username;
+      this.setMode('permanent');
+      this.toast('✅ Permanent access active.');
+    } else if (access.level === 'trial') {
+      this.startTrialTimer(new Date(access.trialExpiresAt));
+      this.setMode('trial');
+    } else if (access.level === 'expired') {
+      this.settings = res.settings || {};
+      document.getElementById('pay-banner').style.display = 'block';
+      this.setMode('payment');
+    } else if (access.level === 'pending_review') {
+      this.setMode('status');
+      this.loadPaymentStatus();
+    } else {
+      this.showErr(res.error || 'Account issue. Contact admin.');
+    }
+  },
+
+  async loadPaymentStatus() {
+    if (!this.session || !this.online) return;
+    try {
+      const res = await this.api('getPaymentStatus', { username: this.session.username, token: this.session.token });
+      if (res.success && res.payment) {
+        const p = res.payment;
+        const msgEl = document.getElementById('st-msg');
+        const when = p.submittedAt ? new Date(p.submittedAt).toLocaleString() : '';
+        msgEl.textContent = `TXN ${p.txId} submitted${when ? ' on ' + when : ''} — waiting for admin verification. You'll get full access as soon as it's approved.`;
+      }
+    } catch (e) {}
+  },
+
+  async resumeUserSession(saved) {
+    if (saved.access && saved.access.level === 'permanent') {
+      document.getElementById('perm-name').textContent = saved.name || saved.username;
+      this.setMode('permanent');
+      return;
+    }
+    if (saved.access && saved.access.level === 'trial' && saved.access.trialExpiresAt) {
+      const end = new Date(saved.access.trialExpiresAt);
+      if (end > Date.now()) {
+        this.startTrialTimer(end);
+        this.setMode('trial');
+        this.syncSessionQuietly(saved);
+        return;
+      } else {
+        saved.access.level = 'expired';
+        this.saveSession(saved);
+      }
+    }
+    if (saved.access && saved.access.level === 'expired') {
+      this.settings = saved.settings || {};
+      document.getElementById('pay-banner').style.display = 'block';
+      this.setMode('payment');
+      return;
+    }
+    if (saved.access && saved.access.level === 'pending_review') {
+      this.setMode('status');
+      if (this.online) this.loadPaymentStatus();
+      return;
+    }
+
+    if (!this.online) {
+      this.showErr('Offline. Cannot verify session.');
+      this.setMode('login');
+      return;
+    }
+    const res = await this.api('checkSession', { token: saved.token, username: saved.username });
+    if (!res.success) {
+      this.clearSession();
+      this.showErr('Session expired. Please login again.');
+      this.setMode('login');
+      return;
+    }
+    this.handleUserAuth(res);
+  },
+
+  async syncSessionQuietly(saved) {
+    if (!this.online) return;
+    try {
+      const res = await this.api('checkSession', { token: saved.token, username: saved.username });
+      if (res.success && res.user) {
+        const updated = { ...saved, access: { ...saved.access }, lastVerified: Date.now() };
+        if (res.permanentAccess || res.user.status === 'active') {
+          updated.access.level = 'permanent';
+          updated.access.permanent = true;
+          this.saveSession(updated);
+          this.setMode('permanent');
+        }
+      }
+    } catch (e) { /* silent fail */ }
+  },
+
+  /* ── Trial Timer ── */
+  startTrialTimer(end) {
+    this.clearTrialTimer();
+    const el = document.getElementById('trial-timer');
+    const tick = () => {
+      const diff = end - Date.now();
+      if (diff <= 0) {
+        el.textContent = '00:00:00';
+        this.clearTrialTimer();
+        if (this.session) {
+          this.session.access.level = 'expired';
+          this.saveSession(this.session);
+        }
+        document.getElementById('pay-banner').style.display = 'block';
+        this.setMode('payment');
+        return;
+      }
+      const h = String(Math.floor(diff / 3600000)).padStart(2, '0');
+      const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
+      const s = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+      el.textContent = h + ':' + m + ':' + s;
+    };
+    tick();
+    this.trialTimerId = setInterval(tick, 1000);
+  },
+
+  clearTrialTimer() {
+    if (this.trialTimerId) {
+      clearInterval(this.trialTimerId);
+      this.trialTimerId = null;
+    }
+  },
+
+  /* ── Payment UI ── */
+  async loadPaymentUI() {
+    this.updatePayButtonState();
+    let s = this.settings || {};
+    let fetchFailed = false;
+    if (this.online) {
+      try {
+        const r = await this.api('getSettings', {});
+        if (r.success) {
+          s = r.settings || {};
+        } else {
+          fetchFailed = true;
+          console.warn('getSettings returned success:false —', r.error || '(no error message)');
+        }
+      } catch (e) {
+        fetchFailed = true;
+        console.warn('getSettings request threw —', e);
+      }
+    }
+    if (Object.keys(s).length === 0 && this.session && this.session.settings) {
+      s = { ...this.session.settings };
+    }
+    if (this.session) { this.session.settings = s; this.saveSession(this.session); }
+
+    const qrVal = s.qrCodeUrl || '';
+    console.log('%c[Payment Settings]', 'color:#F5A623;font-weight:bold', {
+      source: fetchFailed ? 'fetch failed — using cached/default' : (this.online ? 'live from backend' : 'offline cache'),
+      paymentAmount: s.paymentAmount,
+      contactPhone: s.contactPhone,
+      qrCodeUrl_length: qrVal.length,
+      qrCodeUrl_validFormat: qrVal.startsWith('data:image') || qrVal.startsWith('http'),
+      qrCodeUrl_preview: qrVal ? qrVal.slice(0, 40) + '…' : '(empty — no QR uploaded yet)'
+    });
+
+    document.getElementById('pay-amt').textContent = s.paymentAmount || '100';
+    document.getElementById('pay-phone').textContent = s.contactPhone || '9863200285';
+    document.getElementById('pay-inst').textContent = s.paymentInstructions || 'Scan the QR code and submit your transaction ID for verification.';
+    const qr = s.qrCodeUrl || '';
+    const img = document.getElementById('qr-img');
+    const fb = document.getElementById('qr-fallback');
+    if (qr && (qr.startsWith('http') || qr.startsWith('data:image'))) {
+      img.src = qr;
+      img.style.display = 'block';
+      fb.style.display = 'none';
+    } else {
+      img.style.display = 'none';
+      fb.style.display = 'flex';
+    }
+    const warn = document.getElementById('pay-settings-warn');
+    if (warn) warn.style.display = (this.online && fetchFailed) ? 'block' : 'none';
+  },
+
+  onQrError() {
+    document.getElementById('qr-img').style.display = 'none';
+    document.getElementById('qr-fallback').style.display = 'flex';
+  },
+
+  onFile() {
+    const f = document.getElementById('pay-file').files[0];
+    if (!f) { this.fileData = null; return; }
+    if (f.size > 4.5 * 1024 * 1024) {
+      this.showErr('File too large. Max 4.5 MB.');
+      document.getElementById('pay-file').value = '';
+      this.fileData = null;
+      return;
+    }
+    const r = new FileReader();
+    r.onload = e => { this.fileData = e.target.result; };
+    r.readAsDataURL(f);
+  },
+
+  async submitPayment() {
+    const txn = document.getElementById('pay-txn').value.trim();
+    const rem = document.getElementById('pay-rem').value.trim();
+    if (!txn) return this.showErr('Transaction ID is required.');
+    if (!this.session || this.session.type !== 'user') return this.showErr('Session error. Please login again.');
+    if (!this.online) return this.showErr('You need an internet connection to submit payment. Please reconnect and try again.');
+
+    this.setLoading('btn-pay', true);
+    const payload = {
+      username: this.session.username,
+      token: this.session.token,
+      name: this.session.name,
+      email: this.session.email,
+      mobile: this.session.mobile,
+      txId: txn,
+      remarks: rem,
+      screenshot: this.fileData || ''
+    };
+    const res = await this.api('submitPayment', payload, 'POST');
+    this.setLoading('btn-pay', false);
+
+    if (!res.success) return this.showErr(res.error || 'Submission failed.');
+
+    this.session.access.level = 'pending_review';
+    this.saveSession(this.session);
+
+    this.toast('✅ Payment submitted! Waiting for admin verification.');
+    this.setMode('status');
+  },
+
+  /* ── Navigation ── */
+  goUser() {
+    if (!this.session || this.session.type !== 'user') {
+      this.showErr('Please login first.');
+      return;
+    }
+    const lvl = this.session.access.level;
+    if (lvl !== 'permanent' && lvl !== 'trial') {
+      this.showErr('Access denied. Complete payment or wait for verification.');
+      return;
+    }
+    if (lvl === 'trial' && new Date(this.session.access.trialExpiresAt) <= Date.now()) {
+      this.showErr('Trial expired. Please pay to continue.');
+      this.session.access.level = 'expired';
+      this.saveSession(this.session);
+      this.setMode('payment');
+      return;
+    }
+    window.location.href = 'user.html';
+  },
+
+  goAdmin() {
+    if (!this.session || this.session.type !== 'admin') {
+      this.showErr('Admin session invalid.');
+      return;
+    }
+    window.location.href = 'admin.html';
+  },
+
+  logout() {
+    this.clearTrialTimer();
+    this.clearSession();
+    this.fileData = null;
+    ['in-user','in-pass','su-name','su-mobile','su-email','su-user','su-pass','su-cpass','pay-txn','pay-rem','pay-file'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    this.setMode('login');
+    this.toast('👋 Logged out.');
+  },
+
+  setLoading(id, on) {
+    const b = document.getElementById(id);
+    const labels = {
+      'btn-login': 'Sign In →',
+      'btn-signup': 'Create Account →',
+      'btn-pay': 'Submit Payment →'
+    };
+    if (on) {
+      b.disabled = true;
+      b.innerHTML = '<span class="spin"></span>Processing…';
+    } else {
+      b.disabled = false;
+      b.innerHTML = labels[id] || 'Submit';
+    }
+  },
+
+  toast(msg) {
+    const box = document.getElementById('toasts');
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    box.appendChild(t);
+    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 220); }, 3000);
+  }
+};
+
+APP.init();
+</script>
+</body>
+</html>

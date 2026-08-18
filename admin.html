@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#F2F4F3">
+<title>Abhyas — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/phosphor/phosphor-regular.css">
+<link rel="stylesheet" href="design-system.css">
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+:root{
+  --c0:#F2F4F3;--c1:#EBEEEC;--c2:#FFFFFF;--c3:#FFFFFF;--c4:#E4EFE8;--c5:#E7EAE8;
+  --b0:rgba(26,26,26,.035);--b1:#E7EAE8;--b2:rgba(26,26,26,.11);
+  --amb:#2E8B57;--amb2:#256B44;--amb-glow:rgba(46,139,87,.20);--teal:#2E8B57;--deep:#4A6A55;
+  --vio:#5B4B8A;--vio2:#473A6B;--vio-glow:rgba(91,75,138,.22);
+  --sky:#2B6CB0;--sky-glow:rgba(43,108,176,.20);
+  --grn:#2E7D4F;--grn-glow:rgba(46,125,79,.20);
+  --ros:#C1433C;--ros-glow:rgba(193,67,60,.20);
+  --ok:var(--grn);--ok-bg:rgba(46,125,79,.09);--ok-bd:rgba(46,125,79,.28);
+  --bad:var(--ros);--bad-bg:rgba(193,67,60,.08);--bad-bd:rgba(193,67,60,.26);
+  --warn:var(--amb);--warn-bg:rgba(46,139,87,.09);--warn-bd:rgba(46,139,87,.26);
+  --t1:var(--c-text);--t2:var(--c-text-soft);--t3:var(--c-text-faint);
+  --ff:'Inter',system-ui,sans-serif;--fd:'Inter',system-ui,sans-serif;--fm:'JetBrains Mono',monospace;
+  --r1:12px;--r2:16px;--r3:20px;--r4:22px;
+  /* Neumorphic dual-tone elevation -- same system as index.html/user.html */
+  --ne-light:#FFFFFF;--ne-dark:rgba(74,106,85,.16);
+  --ne-sm:-3px -3px 8px var(--ne-light),3px 3px 8px var(--ne-dark);
+  --ne-md:-5px -5px 14px var(--ne-light),6px 6px 16px var(--ne-dark);
+  --ne-lg:-7px -7px 20px var(--ne-light),9px 9px 26px var(--ne-dark);
+  --ne-in-sm:inset -3px -3px 7px var(--ne-light),inset 3px 3px 7px var(--ne-dark);
+  --ne-in-md:inset -4px -4px 10px var(--ne-light),inset 4px 4px 10px var(--ne-dark);
+  --ease:.15s cubic-bezier(.4,0,.2,1);--spring:.22s cubic-bezier(.34,1.56,.64,1);--eout:.2s cubic-bezier(0,0,.2,1)
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{height:100%}
+body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:4px}
+::selection{background:rgba(54,139,79,.22);color:var(--t1)}
+
+/* LOGIN GATE */
+#gate{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--c0);flex-direction:column}
+.gate-card{width:100%;max-width:400px;margin:1rem;background:var(--c2);border-radius:var(--r4);padding:2rem 1.5rem;box-shadow:var(--ne-lg);animation:enter .4s var(--spring)}
+@keyframes enter{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:none}}
+.gate-logo{text-align:center;margin-bottom:1.4rem}
+.gate-logo .icon{width:60px;height:60px;margin:0 auto .6rem;display:flex;align-items:center;justify-content:center}
+.gate-logo .icon img{width:100%;height:100%;object-fit:contain;display:block}
+.gate-logo h1{font-family:var(--fd);font-size:1.4rem;font-weight:700;color:var(--t1);letter-spacing:-.2px}
+.gate-logo p{font-size:.62rem;color:var(--t3);margin-top:.2rem;font-weight:600;text-transform:uppercase;letter-spacing:1.2px}
+.fld{margin-bottom:.75rem}
+.fld label{display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t3);margin-bottom:.3rem}
+.fld input{width:100%;background:var(--c0);border:none;border-radius:var(--r2);padding:.7rem .85rem;color:var(--t1);font-size:.88rem;font-family:var(--ff);outline:none;transition:box-shadow var(--ease);box-shadow:var(--ne-in-sm)}
+.fld input:focus{box-shadow:var(--ne-in-sm),0 0 0 3px rgba(46,139,87,.16)}
+.fld input::placeholder{color:var(--t3);opacity:.5}
+.btn{width:100%;padding:.82rem;background:linear-gradient(150deg,var(--amb),var(--amb2));border:none;border-radius:var(--r2);color:#0F1410;font-size:.92rem;font-weight:700;font-family:var(--fd);cursor:pointer;transition:all var(--ease);box-shadow:var(--ne-sm);letter-spacing:.3px}
+.btn:hover:not(:disabled){box-shadow:var(--ne-md)}
+.btn:active:not(:disabled),.btn-s:active:not(:disabled),.tb-btn:active,.sb-item:active{transform:scale(.97)}
+:focus-visible{outline:2px solid var(--amb);outline-offset:2px;border-radius:4px}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,0,0,.25);border-top-color:#000;border-radius:50%;animation:spin .65s linear infinite;vertical-align:middle;margin-right:.4rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{background:rgba(193,67,60,.1);border:1px solid rgba(193,67,60,.3);border-radius:8px;padding:.5rem .85rem;color:#ff9aaa;font-size:.76rem;margin-bottom:.8rem;display:none;align-items:center;gap:.4rem}
+.err.show{display:flex}
+.link-row{text-align:center;margin-top:1rem;font-size:.76rem;color:var(--t3)}
+.link-row a{color:var(--amb);cursor:pointer;text-decoration:underline;font-weight:700}
+
+/* ADMIN APP */
+#app{display:none;flex-direction:column;min-height:100vh}
+#app.on{display:flex}
+
+/* TOPBAR */
+#tb{height:56px;background:rgba(250,250,250,.9);backdrop-filter:blur(20px) saturate(1.3);border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;padding:0 1rem;position:sticky;top:0;z-index:500;flex-shrink:0}
+.tb-brand{display:flex;align-items:center;gap:.55rem;font-family:var(--fd);font-size:.95rem;font-weight:700;color:var(--t1);cursor:pointer}
+.tb-brand .mark{width:32px;height:32px;display:flex;align-items:center;justify-content:center}
+.tb-brand .mark img{width:100%;height:100%;object-fit:contain;display:block}
+.tb-r{display:flex;align-items:center;gap:.3rem}
+.tb-btn{background:var(--b0);border:1px solid var(--b1);color:var(--t2);border-radius:var(--r1);padding:.28rem .55rem;font-size:.68rem;font-weight:600;cursor:pointer;font-family:var(--ff);display:flex;align-items:center;gap:.22rem;transition:all var(--ease);white-space:nowrap;height:32px}
+.tb-btn:hover{background:var(--b1);color:var(--t1);border-color:var(--b2)}
+.tb-btn.danger{color:var(--ros);border-color:var(--bad-bd)}.tb-btn.danger:hover{background:var(--bad-bg)}
+#menu-btn{display:none}
+@media(max-width:900px){#menu-btn{display:flex !important}}
+
+/* LAYOUT */
+#layout{display:flex;flex:1;min-height:0;overflow:hidden}
+#sb{width:220px;flex-shrink:0;background:var(--c0);border-right:1px solid var(--b1);overflow-y:auto;padding:.8rem .55rem;transition:transform var(--eout);display:flex;flex-direction:column}
+@media(max-width:900px){
+  #sb{position:fixed;left:0;top:56px;bottom:0;z-index:400;transform:translateX(-110%);width:240px}
+  #sb.open{transform:translateX(0);box-shadow:0 16px 44px rgba(17,19,21,.12)}
+}
+#ov{display:none;position:fixed;inset:0;z-index:399;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)}
+#ov.show{display:block}
+.sb-close{display:none;align-items:center;justify-content:center;width:40px;height:40px;margin:0 0 .5rem auto;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.85rem;cursor:pointer}
+@media(max-width:900px){.sb-close{display:flex}}
+.sb-item{display:flex;align-items:center;gap:.55rem;padding:.4rem .5rem;border-radius:var(--r1);font-size:.78rem;font-weight:500;color:var(--t2);cursor:pointer;transition:all var(--ease);margin-bottom:.3rem;border:1px solid transparent}
+.sb-item:hover{background:var(--c2);color:var(--t1);box-shadow:var(--ne-sm)}
+.sb-item.active{background:var(--c2);color:var(--amb);font-weight:600;box-shadow:var(--ne-in-sm)}
+.sb-item.active .sb-ic{background:var(--c4);color:var(--amb)}
+.sb-ic{width:26px;height:26px;border-radius:var(--r1);background:var(--c2);display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0;box-shadow:var(--ne-sm);transition:all var(--ease)}
+.sb-lbl{font-size:.55rem;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:var(--t3);padding:.25rem .45rem .1rem;margin-bottom:.1rem}
+.sb-div{height:1px;background:var(--b1);margin:.3rem .45rem}
+
+#main{flex:1;overflow-y:auto;padding:1rem 1rem 1.5rem}
+@media(max-width:900px){#main{padding:.8rem .7rem 1.2rem}}
+
+.view{display:none}
+.view.on{display:block;animation:vfade .16s var(--eout)}
+@keyframes vfade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.ph{margin-bottom:1rem}
+.ph h2{font-family:var(--fd);font-size:1.1rem;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:.4rem}
+.ph p{font-size:.74rem;color:var(--t2);margin-top:.15rem;line-height:1.5}
+
+/* CARDS */
+.card{background:var(--c2);border-radius:var(--r3);padding:1rem 1.05rem;box-shadow:var(--ne-sm);margin-bottom:.75rem}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;padding-bottom:.55rem;border-bottom:1px solid var(--b1)}
+.card-hd h3{font-family:var(--fd);font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:.35rem}
+
+/* STAT CARDS */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.55rem;margin-bottom:.85rem}
+@media(max-width:700px){.stats-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:400px){.stats-grid{grid-template-columns:1fr}}
+.stat-card{background:var(--c2);border-radius:var(--r2);padding:1rem .7rem;text-align:center;position:relative;overflow:hidden;transition:transform var(--spring),box-shadow var(--ease);cursor:pointer;box-shadow:var(--ne-sm)}
+.stat-card:hover{transform:translateY(-2px);box-shadow:var(--ne-md)}
+.stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--r2) var(--r2) 0 0}
+.stat-card.c-vio::after{background:linear-gradient(90deg,var(--vio),var(--sky))}
+.stat-card.c-sky::after{background:var(--sky)}
+.stat-card.c-grn::after{background:var(--grn)}
+.stat-card.c-amb::after{background:var(--amb)}
+.stat-card.c-ros::after{background:var(--ros)}
+.stat-card.c-teal::after{background:var(--teal)}
+.stat-v{font-family:var(--fm);font-size:1.6rem;font-weight:700;line-height:1}
+.stat-l{font-size:.58rem;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);margin-top:.2rem}
+
+/* BUTTONS */
+.btn-s{display:inline-flex;align-items:center;justify-content:center;gap:.25rem;padding:.38rem .75rem;border-radius:var(--r1);font-size:.74rem;font-weight:600;font-family:var(--ff);cursor:pointer;border:1.5px solid transparent;transition:all var(--ease);white-space:nowrap;user-select:none}
+.btn-s:disabled{opacity:.42;cursor:not-allowed}
+.btn-g{background:var(--ok-bg);color:var(--grn);border-color:var(--ok-bd)}
+.btn-g:hover:not(:disabled){background:var(--grn);color:#fff;box-shadow:0 0 18px var(--grn-glow)}
+.btn-r{background:var(--bad-bg);color:var(--ros);border-color:var(--bad-bd)}
+.btn-r:hover:not(:disabled){background:var(--ros);color:#fff;box-shadow:0 0 18px var(--ros-glow)}
+.btn-a{background:var(--warn-bg);color:var(--amb);border-color:var(--warn-bd)}
+.btn-a:hover:not(:disabled){background:var(--amb);color:#000;box-shadow:0 0 18px var(--amb-glow)}
+.btn-p{background:rgba(101,82,168,.11);color:var(--vio);border-color:rgba(101,82,168,.26)}
+.btn-p:hover:not(:disabled){background:var(--vio);color:#fff;box-shadow:0 0 20px var(--vio-glow)}
+.btn-c{background:rgba(43,108,176,.1);color:var(--sky);border-color:rgba(43,108,176,.25)}
+.btn-c:hover:not(:disabled){background:var(--sky);color:#fff;box-shadow:0 0 20px var(--sky-glow)}
+.btn-sm{padding:.26rem .55rem;font-size:.68rem}
+
+/* TABLES */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--b1);border-radius:var(--r2);background:var(--c2)}
+table{width:100%;border-collapse:collapse;font-size:.76rem}
+th{background:var(--c1);color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;font-size:.6rem;padding:.55rem .7rem;text-align:left;border-bottom:1px solid var(--b1)}
+td{padding:.5rem .7rem;border-bottom:1px solid var(--b1);color:var(--t2);vertical-align:middle}
+tr:hover td{background:var(--b0)}
+tr:last-child td{border-bottom:none}
+.mono{font-family:var(--fm);font-size:.72rem}
+.badge{display:inline-flex;align-items:center;gap:.2rem;padding:.12rem .4rem;border-radius:20px;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.badge-trial{background:rgba(43,108,176,.12);color:var(--sky);border:1px solid rgba(43,108,176,.25)}
+.badge-active{background:rgba(46,125,79,.12);color:var(--grn);border:1px solid rgba(46,125,79,.3)}
+.badge-expired{background:rgba(193,67,60,.12);color:var(--ros);border:1px solid rgba(193,67,60,.3)}
+.badge-pending{background:rgba(54,139,79,.12);color:var(--amb);border:1px solid rgba(54,139,79,.3)}
+.badge-verified{background:rgba(46,125,79,.12);color:var(--grn);border:1px solid rgba(46,125,79,.3)}
+.badge-rejected{background:rgba(193,67,60,.12);color:var(--ros);border:1px solid rgba(193,67,60,.3)}
+
+/* Search & Filter */
+.toolbar{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.7rem;align-items:center}
+.toolbar input,.toolbar select{background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r1);padding:.4rem .65rem;color:var(--t1);font-size:.76rem;font-family:var(--ff);outline:none}
+.toolbar input:focus,.toolbar select:focus{border-color:var(--amb);box-shadow:0 0 0 3px rgba(54,139,79,.12)}
+.toolbar input{flex:1;min-width:180px}
+
+/* Settings Form */
+.sf{margin-bottom:.65rem}
+.sf label{display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t3);margin-bottom:.28rem}
+.sf input,.sf textarea,.sf select{width:100%;background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r1);padding:.55rem .75rem;color:var(--t1);font-size:.8rem;font-family:var(--ff);outline:none;transition:border-color var(--ease),box-shadow var(--ease)}
+.sf input:focus,.sf textarea:focus,.sf select:focus{border-color:var(--amb);box-shadow:0 0 0 3px rgba(54,139,79,.12)}
+.sf textarea{resize:vertical;min-height:80px}
+.sf .hint{font-size:.68rem;color:var(--t3);margin-top:.25rem}
+
+/* Modal */
+.mbg{position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;padding:1rem}
+.mbg.show{display:flex}
+.mbox{background:var(--c2);border:1px solid var(--b2);border-radius:var(--r4);width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 16px 44px rgba(17,19,21,.12);animation:mfade .16s var(--spring)}
+.mbox.wide{max-width:640px}
+@keyframes mfade{from{opacity:0;transform:scale(.93) translateY(8px)}to{opacity:1;transform:none}}
+.mhd{display:flex;align-items:center;justify-content:space-between;padding:.85rem 1rem .55rem;border-bottom:1px solid var(--b1)}
+.mhd h3{font-family:var(--fd);font-size:.88rem;font-weight:700}
+.mcl{background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t2);font-size:.9rem;transition:all var(--ease)}
+.mcl:hover{background:var(--bad-bg);color:var(--ros);border-color:var(--bad-bd)}
+.mbody{padding:.85rem 1rem}
+
+/* Toasts */
+#toasts{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9000;display:flex;flex-direction:column;align-items:center;gap:.3rem;pointer-events:none;width:calc(100vw - 2rem);max-width:340px}
+.toast{background:var(--t1);border:1px solid var(--t1);border-radius:var(--r2);padding:.55rem 1rem;font-size:.78rem;font-weight:600;color:#fff;box-shadow:0 16px 40px rgba(17,19,21,.16);animation:tin .18s var(--spring);pointer-events:auto;max-width:100%;text-align:center}
+.toast.out{animation:tout .2s ease forwards}
+@keyframes tin{from{opacity:0;transform:translateY(10px) scale(.92)}to{opacity:1;transform:none}}
+@keyframes tout{from{opacity:1}to{opacity:0;transform:translateY(-6px)}}
+
+.empty{text-align:center;padding:2rem 1rem;color:var(--t3)}.empty-i{font-size:2rem;margin-bottom:.4rem}
+
+hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
+
+/* Pagination */
+.pg{display:flex;align-items:center;justify-content:center;gap:.3rem;margin-top:.7rem}
+.pg button{background:var(--b0);border:1px solid var(--b1);color:var(--t2);border-radius:var(--r1);padding:.3rem .55rem;font-size:.72rem;font-weight:600;cursor:pointer;transition:all var(--ease);min-width:28px}
+.pg button:hover:not(:disabled){background:var(--b1);color:var(--t1)}
+.pg button:disabled{opacity:.4;cursor:not-allowed}
+.pg button.on{background:var(--amb);color:#000;border-color:var(--amb)}
+.pg-info{font-size:.68rem;color:var(--t3);margin-left:.5rem}
+
+/* Loading overlay */
+.ld-overlay{position:fixed;inset:0;z-index:8000;background:rgba(17,19,21,.45);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;flex-direction:column;gap:.6rem}
+.ld-overlay.show{display:flex}
+.ld-spin{width:32px;height:32px;border:3px solid rgba(54,139,79,.2);border-top-color:var(--amb);border-radius:50%;animation:spin .8s linear infinite}
+.ld-text{font-size:.78rem;color:var(--t2);font-weight:600}
+
+/* Detail grid */
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+@media(max-width:500px){.dgrid{grid-template-columns:1fr}}
+.ditem{padding:.5rem .6rem;background:var(--b0);border-radius:var(--r1);border:1px solid var(--b1)}
+.ditem label{display:block;font-size:.58rem;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:.15rem;font-weight:700}
+.ditem val{display:block;font-size:.78rem;color:var(--t1);font-weight:600;word-break:break-word}
+
+/* Checkbox */
+.chk{width:16px;height:16px;accent-color:var(--amb);cursor:pointer}
+
+/* Bulk bar */
+.bulk-bar{display:none;align-items:center;gap:.5rem;padding:.5rem .7rem;background:linear-gradient(90deg,rgba(54,139,79,.1),rgba(54,139,79,.05));border:1px solid rgba(54,139,79,.2);border-radius:var(--r1);margin-bottom:.6rem;font-size:.74rem}
+.bulk-bar.show{display:flex}
+
+/* Activity log */
+.log-item{padding:.5rem .6rem;border-bottom:1px solid var(--b1);font-size:.74rem}
+.log-item:last-child{border-bottom:none}
+.log-time{font-size:.62rem;color:var(--t3);font-family:var(--fm)}
+.log-action{color:var(--amb);font-weight:600}
+
+/* Responsive */
+@media(max-width:600px){
+  .gate-card{padding:1.5rem 1.1rem;margin:.8rem}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .toolbar input{min-width:100px}
+}
+</style>
+<base target="_blank">
+</head>
+<body>
+
+<!-- LOGIN GATE -->
+<div id="gate">
+  <div class="gate-card">
+    <div class="gate-logo">
+      <div class="icon"><img src="icon-192.png" alt="Abhyas"></div>
+      <h1>Admin World</h1>
+      <p>Abhyas V1 Management</p>
+    </div>
+    <div class="err" id="err" role="alert" aria-live="assertive"></div>
+    <div class="fld"><label for="ad-user">Admin Username</label><input type="text" id="ad-user" placeholder="admin" autocomplete="username" autocapitalize="none"></div>
+    <div class="fld"><label for="ad-pass">Password</label><input type="password" id="ad-pass" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="btn" id="btn-login" onclick="ADMIN.login()">Enter Admin Panel →</button>
+    <div class="link-row"><a onclick="localStorage.removeItem('abhyas_admin'); localStorage.removeItem('abhyas_session'); location.href='index.html'">← Back to User Login</a></div>
+  </div>
+</div>
+
+<!-- LOADING OVERLAY -->
+<div class="ld-overlay" id="ld-overlay">
+  <div class="ld-spin"></div>
+  <div class="ld-text" id="ld-text">Loading…</div>
+</div>
+
+<!-- ADMIN APP -->
+<div id="app">
+  <!-- TOPBAR -->
+  <div id="tb">
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <button class="tb-btn" id="menu-btn" onclick="UI.sidebarOpen()" title="Menu"><i class="ph ph-list"></i></button>
+      <div class="tb-brand" onclick="UI.nav('dashboard')">
+        <div class="mark"><img src="icon-192.png" alt="Abhyas"></div>
+        <span style="font-family:var(--fd);font-size:.9rem;font-weight:700">Admin World</span>
+      </div>
+    </div>
+    <div class="tb-r">
+      <div style="font-size:.68rem;color:var(--t3);font-weight:600;margin-right:.4rem" id="admin-name">admin</div>
+      <button class="tb-btn" onclick="ADMIN.refresh()" title="Refresh"><i class="ph ph-arrow-clockwise"></i></button>
+      <button class="tb-btn" onclick="UI.nav('logs')" title="Activity Logs"><i class="ph ph-clipboard-text"></i></button>
+      <button class="tb-btn danger" onclick="ADMIN.logout()" title="Logout">⏻</button>
+    </div>
+  </div>
+
+  <div id="layout">
+    <div id="ov" onclick="UI.sidebarClose()"></div>
+    <div id="sb">
+      <button class="sb-close" onclick="UI.sidebarClose()" aria-label="Close menu"><i class="ph ph-x"></i></button>
+      <div class="sb-lbl">Menu</div>
+      <div class="sb-item active" id="nav-dashboard" onclick="UI.nav('dashboard')"><div class="sb-ic"><i class="ph ph-chart-bar"></i></div>Dashboard</div>
+      <div class="sb-item" id="nav-users" onclick="UI.nav('users')"><div class="sb-ic"><i class="ph ph-user"></i></div>Users</div>
+      <div class="sb-item" id="nav-payments" onclick="UI.nav('payments')"><div class="sb-ic"><i class="ph ph-credit-card"></i></div>Payments</div>
+      <div class="sb-item" id="nav-logs" onclick="UI.nav('logs')"><div class="sb-ic"><i class="ph ph-clipboard-text"></i></div>Activity Logs</div>
+      <div class="sb-item" id="nav-settings" onclick="UI.nav('settings')"><div class="sb-ic"><i class="ph ph-gear"></i></div>Settings</div>
+      <div class="sb-div"></div>
+      <div class="sb-item" onclick="localStorage.removeItem('abhyas_admin'); localStorage.removeItem('abhyas_session'); location.href='index.html'"><div class="sb-ic"><i class="ph ph-house"></i></div>User Portal</div>
+      <div style="text-align:center;font-size:.62rem;color:var(--t3);opacity:.6;padding:.6rem 0 .2rem">Abhyas V1</div>
+    </div>
+
+    <div id="main">
+      <!-- DASHBOARD -->
+      <div class="view on" id="view-dashboard">
+        <div class="ph"><h2><i class="ph ph-chart-bar"></i> Dashboard</h2><p>Overview of your study platform</p></div>
+        <div class="stats-grid" id="dash-stats">
+          <div class="stat-card c-vio" onclick="UI.nav('users')"><div class="stat-v" id="st-users">0</div><div class="stat-l">Total Users</div></div>
+          <div class="stat-card c-sky" onclick="USERS.filterBy('trial')"><div class="stat-v" id="st-trial">0</div><div class="stat-l">Trial Users</div></div>
+          <div class="stat-card c-grn" onclick="USERS.filterBy('active')"><div class="stat-v" id="st-active">0</div><div class="stat-l">Active / Paid</div></div>
+          <div class="stat-card c-ros" onclick="USERS.filterBy('expired')"><div class="stat-v" id="st-expired">0</div><div class="stat-l">Expired</div></div>
+          <div class="stat-card c-amb" onclick="USERS.filterBy('payment_pending')"><div class="stat-v" id="st-pending">0</div><div class="stat-l">Pending Pay</div></div>
+          <div class="stat-card c-teal" onclick="UI.nav('payments')"><div class="stat-v" id="st-payments">0</div><div class="stat-l">Total Payments</div></div>
+          <div class="stat-card c-grn" onclick="PAYMENTS.filterBy('verified')"><div class="stat-v" id="st-verified">0</div><div class="stat-l">Verified</div></div>
+          <div class="stat-card c-ros" onclick="PAYMENTS.filterBy('rejected')"><div class="stat-v" id="st-rejected">0</div><div class="stat-l">Rejected</div></div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><h3><i class="ph ph-lightning"></i> Quick Actions</h3></div>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <button class="btn-s btn-g" onclick="UI.nav('users')"><i class="ph ph-user"></i> Manage Users</button>
+            <button class="btn-s btn-a" onclick="UI.nav('payments')"><i class="ph ph-credit-card"></i> Review Payments</button>
+            <button class="btn-s btn-p" onclick="UI.nav('settings')"><i class="ph ph-gear"></i> Edit Settings</button>
+            <button class="btn-s btn-c" onclick="ADMIN.exportUsers()"><i class="ph ph-download-simple"></i> Export Users CSV</button>
+            <button class="btn-s btn-c" onclick="ADMIN.exportPayments()"><i class="ph ph-download-simple"></i> Export Payments CSV</button>
+            <button class="btn-s btn-r" onclick="ADMIN.changePassword()"><i class="ph ph-lock-key"></i> Change Password</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- USERS -->
+      <div class="view" id="view-users">
+        <div class="ph"><h2><i class="ph ph-user"></i> Users</h2><p>Manage all registered accounts</p></div>
+        <div class="toolbar">
+          <input type="text" id="u-search" placeholder="Search username, name, email…" oninput="USERS.debouncedFilter()">
+          <select id="u-filter" onchange="USERS.filter()" aria-label="Filter users">
+            <option value="all">All Status</option>
+            <option value="trial">Trial</option>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+            <option value="payment_pending">Pending Pay</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <button class="btn-s btn-c" onclick="ADMIN.exportUsers()"><i class="ph ph-download-simple"></i> CSV</button>
+        </div>
+        <div class="tbl-wrap"><table id="users-tbl"><thead><tr>
+          <th><input type="checkbox" class="chk" id="u-chk-all" onchange="USERS.toggleAll()" aria-label="Select all users"></th>
+          <th>User</th><th>Contact</th><th>Status</th><th>Created</th><th>Access</th><th style="text-align:right">Actions</th>
+        </tr></thead><tbody id="users-body"><tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-tray"></i></div><p>No users found</p></td></tr></tbody></table></div>
+        <div class="pg" id="u-pg"></div>
+      </div>
+
+      <!-- PAYMENTS -->
+      <div class="view" id="view-payments">
+        <div class="ph"><h2><i class="ph ph-credit-card"></i> Payments</h2><p>Verify or reject payment submissions</p></div>
+        <div class="toolbar">
+          <input type="text" id="p-search" placeholder="Search username, TXN ID…" oninput="PAYMENTS.debouncedFilter()">
+          <select id="p-filter" onchange="PAYMENTS.filter()" aria-label="Filter payments">
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="verified">Verified</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <button class="btn-s btn-c" onclick="ADMIN.exportPayments()"><i class="ph ph-download-simple"></i> CSV</button>
+        </div>
+        <div class="bulk-bar" id="p-bulk">
+          <span id="p-bulk-count">0 selected</span>
+          <button class="btn-s btn-g btn-sm" onclick="PAYMENTS.bulkVerify()"><i class="ph ph-check"></i> Verify All</button>
+          <button class="btn-s btn-r btn-sm" onclick="PAYMENTS.bulkReject()"><i class="ph ph-x"></i> Reject All</button>
+          <button class="btn-s btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="PAYMENTS.clearSelection()">Clear</button>
+        </div>
+        <div class="tbl-wrap"><table id="payments-tbl"><thead><tr>
+          <th><input type="checkbox" class="chk" id="p-chk-all" onchange="PAYMENTS.toggleAll()" aria-label="Select all payments"></th>
+          <th>User</th><th>TXN ID</th><th>Amount</th><th>Status</th><th>Submitted</th><th style="text-align:right">Actions</th>
+        </tr></thead><tbody id="payments-body"><tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-tray"></i></div><p>No payments found</p></td></tr></tbody></table></div>
+        <div class="pg" id="p-pg"></div>
+      </div>
+
+      <!-- ACTIVITY LOGS -->
+      <div class="view" id="view-logs">
+        <div class="ph"><h2><i class="ph ph-clipboard-text"></i> Activity Logs</h2><p>Track all admin actions</p></div>
+        <div class="toolbar">
+          <input type="text" id="l-search" placeholder="Search action, admin, target…" oninput="LOGS.filter()">
+          <select id="l-filter" onchange="LOGS.filter()" aria-label="Filter activity logs">
+            <option value="all">All Actions</option>
+            <option value="verify">Verified Payment</option>
+            <option value="reject">Rejected Payment</option>
+            <option value="delete_user">Deleted User</option>
+            <option value="delete_payment">Deleted Payment</option>
+            <option value="update_settings">Updated Settings</option>
+            <option value="login">Login</option>
+          </select>
+        </div>
+        <div class="card" id="logs-card">
+          <div class="empty" id="logs-empty"><div class="empty-i"><i class="ph ph-tray"></i></div><p>No activity logs</p></div>
+          <div id="logs-list"></div>
+        </div>
+        <div class="pg" id="l-pg"></div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="view" id="view-settings">
+        <div class="ph"><h2><i class="ph ph-gear"></i> Settings</h2><p>Configure payment, QR, and app info</p></div>
+        <div class="card">
+          <div class="card-hd"><h3>Payment Configuration</h3></div>
+          <div class="sf"><label for="set-name">App Name</label><input type="text" id="set-name" placeholder="Abhyas"></div>
+          <div class="sf">
+            <label for="set-qr-file">Payment QR Code</label>
+            <input type="file" id="set-qr-file" accept="image/*" onchange="SETTINGS.onQrFile(event)">
+            <div style="display:flex;align-items:center;gap:.6rem;margin-top:.5rem">
+              <img id="set-qr-preview" alt="Payment QR code preview" style="display:none;width:90px;height:90px;object-fit:contain;border-radius:8px;border:1px solid var(--b1);background:#fff">
+              <span id="set-qr-status" style="font-size:.85rem;opacity:.7">No QR uploaded yet</span>
+            </div>
+            <input type="hidden" id="set-qr">
+          </div>
+          <div class="sf"><label for="set-phone">Contact Phone</label><input type="text" id="set-phone" placeholder="9863200285"></div>
+          <div class="sf"><label for="set-amount">Payment Amount (Rs)</label><input type="number" id="set-amount" placeholder="100" min="1"></div>
+          <div class="sf"><label for="set-inst">Payment Instructions</label><textarea id="set-inst" placeholder="Instructions shown to users…"></textarea></div>
+          <div class="sf"><label for="set-trial">Trial Hours</label><input type="number" id="set-trial" placeholder="24" min="1"></div>
+          <hr>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <button class="btn" style="width:auto;padding:.6rem 1.2rem" onclick="SETTINGS.save()"><i class="ph ph-floppy-disk"></i> Save Settings</button>
+            <button class="btn-s btn-r" onclick="ADMIN.changePassword()"><i class="ph ph-lock-key"></i> Change My Password</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><h3>Admin Accounts</h3></div>
+          <p style="font-size:.8rem;opacity:.7;margin:0 0 .8rem">Anyone with an admin login can create more admins here — useful for handing off review work without sharing one password.</p>
+          <div id="admins-list" style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:.8rem"></div>
+          <hr>
+          <div class="sf"><label for="adm-new-user">New Admin Username</label><input type="text" id="adm-new-user" placeholder="letters, numbers, . _ - only"></div>
+          <div class="sf"><label for="adm-new-pass">New Admin Password</label><input type="password" id="adm-new-pass" placeholder="Min 6 characters"></div>
+          <button class="btn-s btn-g" onclick="ADMINS.create()"><i class="ph ph-plus"></i> Add Admin</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REVIEW MODAL -->
+<div class="mbg" id="mbg-review" onclick="MODAL.close('review')">
+  <div class="mbox" onclick="event.stopPropagation()">
+    <div class="mhd"><h3 id="mtitle-review">Review Payment</h3><button class="mcl" onclick="MODAL.close('review')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
+    <div class="mbody" id="mbody-review"></div>
+  </div>
+</div>
+
+<!-- USER DETAIL MODAL -->
+<div class="mbg" id="mbg-user" onclick="MODAL.close('user')">
+  <div class="mbox wide" onclick="event.stopPropagation()">
+    <div class="mhd"><h3 id="mtitle-user">User Details</h3><button class="mcl" onclick="MODAL.close('user')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
+    <div class="mbody" id="mbody-user"></div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="mbg" id="mbg-pwd" onclick="MODAL.close('pwd')">
+  <div class="mbox" onclick="event.stopPropagation()">
+    <div class="mhd"><h3>Change Admin Password</h3><button class="mcl" onclick="MODAL.close('pwd')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
+    <div class="mbody">
+      <div class="sf"><label for="pwd-current">Current Password</label><input type="password" id="pwd-current" placeholder="••••••••"></div>
+      <div class="sf"><label for="pwd-new">New Password</label><input type="password" id="pwd-new" placeholder="Min 6 characters"></div>
+      <div class="sf"><label for="pwd-confirm">Confirm New Password</label><input type="password" id="pwd-confirm" placeholder="••••••••"></div>
+      <div style="display:flex;gap:.4rem;margin-top:.5rem">
+        <button class="btn-s btn-g" style="flex:1" onclick="ADMIN.doChangePassword()">Save New Password</button>
+        <button class="btn-s" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="MODAL.close('pwd')">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+
+<script src="shared.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURATION — Replace with your GAS Web App URL
+// ═══════════════════════════════════════════════════════════════
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwAhfyQm7NvxaNjgRm3oC9SdKwrfKNfjgDd-J0nYjYAhsU1d2PP2JfyMI30ol9AGSatyg/exec";
+
+// ═══════════════════════════════════════════════════════════════
+// ADMIN CORE — esc() and pingBackend() now come from shared.js
+// ═══════════════════════════════════════════════════════════════
+
+const ADMIN = {
+  creds: null,
+  data: {users:[], payments:[], settings:{}, logs:[]},
+  state: {uPage:1, pPage:1, lPage:1, uPerPage:15, pPerPage:15, lPerPage:20},
+
+  init() {
+    const saved = localStorage.getItem('abhyas_admin');
+    if (saved) {
+      try {
+        this.creds = JSON.parse(saved);
+        this.unlock();
+        return;
+      } catch(e) { localStorage.removeItem('abhyas_admin'); }
+    }
+  },
+
+  async login() {
+    const u = document.getElementById('ad-user').value.trim();
+    const p = document.getElementById('ad-pass').value;
+    if (!u || !p) return this.showErr('Enter admin credentials.');
+    if (p.length < 4) return this.showErr('Password too short.');
+    this.setLoading(true);
+    try {
+      const res = await this.post('adminLogin', {username:u, password:p});
+      if (!res.success) throw new Error(res.error || 'Invalid credentials');
+      this.creds = {user: u, token: res.adminToken, expires: Date.now() + 86400000};
+      localStorage.setItem('abhyas_admin', JSON.stringify(this.creds));
+      this.unlock();
+      this.toast('✅ Signed in');
+    } catch(e) { this.showErr(e.message || 'Login failed. Check connection.'); }
+    this.setLoading(false);
+  },
+
+  unlock() {
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').classList.add('on');
+    document.getElementById('admin-name').textContent = this.creds?.user || 'admin';
+    this.refresh();
+  },
+
+  logout() {
+    localStorage.removeItem('abhyas_admin');
+    localStorage.removeItem('abhyas_session');
+    location.href = 'index.html';
+  },
+
+  setLoading(on) {
+    const b = document.getElementById('btn-login');
+    b.disabled = on;
+    b.innerHTML = on ? '<span class="spin"></span>Verifying…' : 'Enter Admin Panel →';
+  },
+
+  showErr(msg) {
+    const e = document.getElementById('err');
+    e.textContent = msg; e.classList.add('show');
+    setTimeout(() => e.classList.remove('show'), 4000);
+  },
+
+  async post(action, params={}) {
+    const body = {action, ...params, adminToken: this.creds?.token};
+    const r = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('Network error: ' + r.status);
+    return await r.json();
+  },
+
+  ALL_SCOPES: ['stats','users','payments','settings','logs','admins'],
+
+  // scope: optional array of which pieces to reload, e.g. ['stats','users']
+  // after granting one user access. Omit it (or pass nothing) for the full
+  // six-endpoint reload — that's still what the manual refresh button and
+  // the 'r' shortcut use, since at that point the person genuinely wants
+  // everything re-synced.
+  async refresh(scope) {
+    const want = (scope && scope.length) ? scope : this.ALL_SCOPES;
+    const isFull = want === this.ALL_SCOPES;
+    this.showLoading('Refreshing data…');
+    try {
+      const fetchers = {
+        stats:    () => this.post('adminStats'),
+        users:    () => this.post('adminListUsers'),
+        payments: () => this.post('adminListPayments'),
+        settings: () => this.post('getSettings'),
+        logs:     () => this.post('adminListLogs').catch(() => ({success:false, logs:[]})),
+        admins:   () => this.post('adminListAdmins').catch(() => ({success:false, admins:[]}))
+      };
+      const results = await Promise.all(want.map(k => fetchers[k]()));
+      const failures = [];
+      want.forEach((k, i) => {
+        const r = results[i];
+        if (k === 'stats') { if (r.success) this.renderStats(r.stats); else failures.push('stats: '+(r.error||'unknown')); }
+        else if (k === 'users') { if (r.success) { this.data.users = r.users; USERS.render(); } else failures.push('users: '+(r.error||'unknown')); }
+        else if (k === 'payments') { if (r.success) { this.data.payments = r.payments; PAYMENTS.render(); } else failures.push('payments: '+(r.error||'unknown')); }
+        else if (k === 'settings') { if (r.success) { this.data.settings = r.settings; SETTINGS.load(); } }
+        else if (k === 'logs') { if (r.success) { this.data.logs = r.logs; LOGS.render(); } }
+        else if (k === 'admins') { if (r.success) ADMINS.render(r.admins); }
+      });
+      if (failures.length) {
+        this.toast('❌ Some data failed to load — ' + failures[0] + (failures.length>1 ? ` (+${failures.length-1} more)` : ''));
+        if (failures.some(f => /auth failed/i.test(f))) {
+          this.toast('🔒 Admin session invalid — please log out and back in.');
+        }
+      } else if (isFull) {
+        // Single-scope refreshes follow a mutating action that already
+        // toasted its own success message — no need to double up.
+        this.toast('✅ Data refreshed');
+      }
+    } catch(e) { this.toast('❌ Refresh failed: ' + e.message); }
+    this.hideLoading();
+  },
+
+  renderStats(s) {
+    const set = (id,v) => document.getElementById(id).textContent = (v ?? 0).toLocaleString();
+    set('st-users', s.users?.total);
+    set('st-trial', s.users?.trial);
+    set('st-active', s.users?.active);
+    set('st-expired', s.users?.expired);
+    set('st-pending', s.users?.paymentPending);
+    set('st-payments', s.payments?.total);
+    set('st-verified', s.payments?.verified);
+    set('st-rejected', s.payments?.rejected);
+  },
+
+  showLoading(text='Loading…') {
+    document.getElementById('ld-text').textContent = text;
+    document.getElementById('ld-overlay').classList.add('show');
+  },
+  hideLoading() {
+    document.getElementById('ld-overlay').classList.remove('show');
+  },
+
+  toast(msg, duration=3000) {
+    const box = document.getElementById('toasts');
+    const t = document.createElement('div'); t.className='toast'; t.textContent=msg;
+    box.appendChild(t); setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),220)},duration);
+  },
+
+  exportUsers() {
+    const rows = ADMIN.data.users;
+    if (!rows.length) return this.toast('No users to export');
+    const headers = ['Username','Name','Email','Mobile','Status','Created','Access'];
+    const csv = [headers.join(',')];
+    rows.forEach(u => {
+      csv.push([u.username, u.name||'', u.email||'', u.mobile||'', u.status, u.createdAt||'', u.permanentAccess?'Permanent':u.status].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+    });
+    this.downloadCSV(csv.join('\n'), 'users_export.csv');
+  },
+
+  exportPayments() {
+    const rows = ADMIN.data.payments;
+    if (!rows.length) return this.toast('No payments to export');
+    const headers = ['Username','Name','TXN ID','Amount','Status','Submitted','Remarks'];
+    const csv = [headers.join(',')];
+    rows.forEach(p => {
+      csv.push([p.username, p.name||'', p.txId, ADMIN.data.settings.paymentAmount||100, p.status, p.submittedAt||'', p.remarks||''].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+    });
+    this.downloadCSV(csv.join('\n'), 'payments_export.csv');
+  },
+
+  downloadCSV(content, filename) {
+    const blob = new Blob([content], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    this.toast('📥 Downloaded ' + filename);
+  },
+
+  changePassword() {
+    document.getElementById('pwd-current').value = '';
+    document.getElementById('pwd-new').value = '';
+    document.getElementById('pwd-confirm').value = '';
+    document.getElementById('mbg-pwd').classList.add('show');
+  },
+
+  async doChangePassword() {
+    const current = document.getElementById('pwd-current').value;
+    const newPass = document.getElementById('pwd-new').value;
+    const confirm = document.getElementById('pwd-confirm').value;
+    if (!current || !newPass) return ADMIN.toast('❌ Fill all fields');
+    if (newPass.length < 6) return ADMIN.toast('❌ Password must be 6+ chars');
+    if (newPass !== confirm) return ADMIN.toast('❌ Passwords do not match');
+    try {
+      const res = await ADMIN.post('adminChangePassword', {currentPassword: current, newPassword: newPass});
+      if (res.success) {
+        ADMIN.toast('✅ Password changed. Please re-login.');
+        setTimeout(() => ADMIN.logout(), 2000);
+      } else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// ADMIN ACCOUNTS — multi-admin management (Settings tab)
+// ═══════════════════════════════════════════════════════════════
+const ADMINS = {
+  list: [],
+  render(admins) {
+    this.list = admins || [];
+    const box = document.getElementById('admins-list');
+    if (!box) return;
+    if (!this.list.length) { box.innerHTML = '<p style="font-size:.8rem;opacity:.6">No admin accounts found.</p>'; return; }
+    const me = (ADMIN.creds?.user || '').toLowerCase();
+    box.innerHTML = this.list.map(a => {
+      const isMe = a.username.toLowerCase() === me;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:8px">
+        <div>
+          <div style="font-weight:600;font-size:.85rem">${esc(a.username)}${isMe ? ' <span style="opacity:.6;font-weight:400">(you)</span>' : ''}</div>
+          <div style="font-size:.68rem;opacity:.6">Added ${a.createdAt ? new Date(a.createdAt).toLocaleDateString() : '—'}${a.createdBy ? ' by ' + esc(a.createdBy) : ''}</div>
+        </div>
+        ${isMe ? '' : `<button class="btn-s btn-r btn-sm" onclick="ADMINS.del('${escAttrJs(a.username)}')"><i class="ph ph-trash"></i> Remove</button>`}
+      </div>`;
+    }).join('');
+  },
+  async create() {
+    const u = document.getElementById('adm-new-user').value.trim();
+    const p = document.getElementById('adm-new-pass').value;
+    if (!u || !p) return ADMIN.toast('❌ Enter a username and password');
+    if (p.length < 6) return ADMIN.toast('❌ Password must be 6+ chars');
+    ADMIN.showLoading('Creating admin…');
+    try {
+      const res = await ADMIN.post('adminCreateAdmin', {username: u, password: p});
+      if (res.success) {
+        ADMIN.toast('✅ Admin "' + u + '" created');
+        document.getElementById('adm-new-user').value = '';
+        document.getElementById('adm-new-pass').value = '';
+        const r = await ADMIN.post('adminListAdmins');
+        if (r.success) this.render(r.admins);
+      } else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  },
+  async del(username) {
+    if (!confirm(`Remove admin "${username}"? They'll lose access immediately.`)) return;
+    ADMIN.showLoading('Removing admin…');
+    try {
+      const res = await ADMIN.post('adminDeleteAdmin', {username});
+      if (res.success) {
+        ADMIN.toast('✅ Admin removed');
+        const r = await ADMIN.post('adminListAdmins');
+        if (r.success) this.render(r.admins);
+      } else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// UI NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+const UI = {
+  nav(id) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+    document.getElementById('view-' + id).classList.add('on');
+    document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('active'));
+    const el = document.getElementById('nav-' + id); if(el) el.classList.add('active');
+    this.sidebarClose();
+  },
+  sidebarOpen() { 
+    document.getElementById('sb').classList.add('open'); 
+    document.getElementById('ov').classList.add('show'); 
+  },
+  sidebarClose() { 
+    document.getElementById('sb').classList.remove('open'); 
+    document.getElementById('ov').classList.remove('show'); 
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// PAGINATION HELPER
+// ═══════════════════════════════════════════════════════════════
+const PAGINATION = {
+  render(containerId, current, total, callback) {
+    const el = document.getElementById(containerId);
+    if (total <= 1) { el.innerHTML = ''; return; }
+    let html = '';
+    html += `<button ${current===1?'disabled':''} onclick="${callback}(${current-1})">←</button>`;
+    for (let i=1; i<=total; i++) {
+      if (i===1 || i===total || (i>=current-1 && i<=current+1)) {
+        html += `<button class="${i===current?'on':''}" onclick="${callback}(${i})">${i}</button>`;
+      } else if (i===current-2 || i===current+2) {
+        html += `<span style="color:var(--t3);font-size:.7rem">…</span>`;
+      }
+    }
+    html += `<button ${current===total?'disabled':''} onclick="${callback}(${current+1})">→</button>`;
+    html += `<span class="pg-info">Page ${current} of ${total}</span>`;
+    el.innerHTML = html;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// USERS MODULE
+// ═══════════════════════════════════════════════════════════════
+const USERS = {
+  selected: new Set(),
+  debounceTimer: null,
+
+  debouncedFilter() {
+    clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => this.filter(), 300);
+  },
+
+  filterBy(status) {
+    document.getElementById('u-filter').value = status;
+    UI.nav('users');
+    this.filter();
+  },
+
+  _visibleRows() {
+    const q = document.getElementById('u-search').value.toLowerCase();
+    const f = document.getElementById('u-filter').value;
+    return ADMIN.data.users.filter(u => {
+      const match = !q || (u.username||'').toLowerCase().includes(q) || (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q);
+      const status = f==='all' ? true : u.status===f;
+      return match && status;
+    });
+  },
+
+  filter() {
+    this.renderPage(this._visibleRows());
+  },
+
+  clearFilters() {
+    document.getElementById('u-search').value = '';
+    document.getElementById('u-filter').value = 'all';
+    this.filter();
+  },
+
+  render() { this.filter(); },
+
+  renderPage(rows) {
+    const perPage = ADMIN.state.uPerPage;
+    const totalPages = Math.ceil(rows.length / perPage) || 1;
+    if (ADMIN.state.uPage > totalPages) ADMIN.state.uPage = totalPages;
+    const start = (ADMIN.state.uPage - 1) * perPage;
+    const pageRows = rows.slice(start, start + perPage);
+    const tb = document.getElementById('users-body');
+    if (!pageRows.length) { 
+      const isFiltered = ADMIN.data.users.length > 0;
+      tb.innerHTML = isFiltered
+        ? '<tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-magnifying-glass"></i></div><p>No users match your search/filter</p><button class="btn-s btn-a btn-sm" onclick="USERS.clearFilters()">Clear filters</button></td></tr>'
+        : '<tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-tray"></i></div><p>No users yet</p></td></tr>'; 
+      document.getElementById('u-pg').innerHTML = '';
+      return; 
+    }
+    tb.innerHTML = pageRows.map(u => {
+      const badge = u.status==='trial'?'badge-trial':u.status==='active'?'badge-active':u.status==='expired'?'badge-expired':u.status==='payment_pending'?'badge-pending':'badge-rejected';
+      const access = USERS.accessLabel(u);
+      const checked = this.selected.has(u.username) ? 'checked' : '';
+      return `<tr>
+        <td><input type="checkbox" class="chk" ${checked} onchange="USERS.toggle('${u.username}')" aria-label="Select user ${esc(u.username)}"></td>
+        <td><div style="font-weight:600;color:var(--t1);cursor:pointer" onclick="USERS.view('${escAttrJs(u.username)}')">${esc(u.name)||esc(u.username)}</div><div class="mono" style="font-size:.68rem;color:var(--t3)">${esc(u.username)}</div></td>
+        <td><div style="font-size:.72rem">${esc(u.email)||'—'}</div><div style="font-size:.68rem;color:var(--t3)">${esc(u.mobile)||'—'}</div></td>
+        <td><span class="badge ${badge}">${u.status}</span></td>
+        <td class="mono" style="font-size:.68rem">${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</td>
+        <td style="font-size:.72rem">${access}</td>
+        <td style="text-align:right">
+          <button class="btn-s btn-c btn-sm" onclick="USERS.view('${escAttrJs(u.username)}')" title="View Details"><i class="ph ph-eye"></i></button>
+          <button class="btn-s btn-a btn-sm" onclick="USERS.edit('${escAttrJs(u.username)}')" title="Edit User"><i class="ph ph-pencil-simple"></i></button>
+          <button class="btn-s btn-r btn-sm" onclick="USERS.del('${escAttrJs(u.username)}')" title="Delete"><i class="ph ph-trash"></i></button>
+        </td>
+      </tr>`;
+    }).join('');
+    PAGINATION.render('u-pg', ADMIN.state.uPage, totalPages, 'USERS.goPage');
+  },
+
+  goPage(p) { ADMIN.state.uPage = p; this.filter(); },
+
+  accessLabel(u) {
+    if (!u.permanentAccess) return u.status==='trial' ? 'Trial' : 'None';
+    if (u.accessType === 'yearly') {
+      return u.accessExpiresAt ? `Yearly (until ${new Date(u.accessExpiresAt).toLocaleDateString()})` : 'Yearly';
+    }
+    return 'Permanent';
+  },
+
+  async grantAccess(username, duration) {
+    if (!confirm(`Grant ${duration==='year'?'1-YEAR':'PERMANENT'} access to "${username}"?`)) return;
+    ADMIN.showLoading('Granting access…');
+    try {
+      const res = await ADMIN.post('adminGrantAccess', {username, duration});
+      if (res.success) { ADMIN.toast('✅ Access granted'); MODAL.close('user'); ADMIN.refresh(['stats','users']); }
+      else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  },
+
+  toggle(username) {
+    if (this.selected.has(username)) this.selected.delete(username);
+    else this.selected.add(username);
+  },
+
+  toggleAll() {
+    const all = document.getElementById('u-chk-all').checked;
+    this._visibleRows().forEach(u => all ? this.selected.add(u.username) : this.selected.delete(u.username));
+    this.filter();
+  },
+
+  view(username) {
+    const u = ADMIN.data.users.find(x => x.username === username);
+    if (!u) return;
+    const badge = u.status==='trial'?'badge-trial':u.status==='active'?'badge-active':u.status==='expired'?'badge-expired':u.status==='payment_pending'?'badge-pending':'badge-rejected';
+    const access = USERS.accessLabel(u);
+    const pay = ADMIN.data.payments.find(p => p.username === username);
+    document.getElementById('mtitle-user').textContent = 'User: ' + (u.name || u.username);
+    document.getElementById('mbody-user').innerHTML = `
+      <div class="dgrid" style="margin-bottom:.8rem">
+        <div class="ditem"><label>Username</label><val class="mono">${u.username}</val></div>
+        <div class="ditem"><label>Full Name</label><val>${esc(u.name) || '—'}</val></div>
+        <div class="ditem"><label>Email</label><val>${esc(u.email) || '—'}</val></div>
+        <div class="ditem"><label>Mobile</label><val>${esc(u.mobile) || '—'}</val></div>
+        <div class="ditem"><label>Status</label><val><span class="badge ${badge}">${u.status}</span></val></div>
+        <div class="ditem"><label>Access Type</label><val>${access}</val></div>
+        <div class="ditem"><label>Created</label><val>${u.createdAt ? new Date(u.createdAt).toLocaleString() : '—'}</val></div>
+        <div class="ditem"><label>Trial Expires</label><val>${u.trialExpiresAt ? new Date(u.trialExpiresAt).toLocaleString() : '—'}</val></div>
+      </div>
+      ${pay ? `<div style="background:var(--b0);border-radius:var(--r1);padding:.6rem;border:1px solid var(--b1);margin-bottom:.8rem">
+        <div style="font-size:.62rem;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:.3rem">Payment Info</div>
+        <div style="font-size:.78rem">TXN ID: <span class="mono">${esc(pay.txId)}</span></div>
+        <div style="font-size:.78rem">Status: <span class="badge ${pay.status==='pending'?'badge-pending':pay.status==='verified'?'badge-verified':'badge-rejected'}">${pay.status}</span></div>
+        ${pay.remarks ? `<div style="font-size:.76rem;color:var(--t3);margin-top:.2rem">Remarks: ${esc(pay.remarks)}</div>` : ''}
+        ${pay.screenshotUrl && pay.screenshotUrl.startsWith('http') ? `<a href="${esc(pay.screenshotUrl)}" target="_blank" rel="noopener" style="color:var(--sky);font-size:.76rem">View Screenshot →</a>` : ''}
+      </div>` : '<div style="font-size:.76rem;color:var(--t3);margin-bottom:.8rem">No payment record found.</div>'}
+      <div style="background:var(--b0);border-radius:var(--r1);padding:.6rem;border:1px solid var(--b1);margin-bottom:.8rem">
+        <div style="font-size:.62rem;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:.4rem">Grant / Extend Access</div>
+        <div style="display:flex;gap:.4rem">
+          <button class="btn-s btn-g" style="flex:1" onclick="USERS.grantAccess('${escAttrJs(u.username)}','permanent')"><i class="ph ph-infinity"></i> Grant Permanent</button>
+          <button class="btn-s btn-a" style="flex:1" onclick="USERS.grantAccess('${escAttrJs(u.username)}','year')"><i class="ph ph-calendar-blank"></i> Grant 1 Year</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:.4rem">
+        <button class="btn-s btn-a" onclick="MODAL.close('user'); USERS.edit('${escAttrJs(u.username)}')"><i class="ph ph-pencil-simple"></i> Edit User</button>
+        <button class="btn-s btn-r" onclick="MODAL.close('user'); USERS.del('${escAttrJs(u.username)}')"><i class="ph ph-trash"></i> Delete</button>
+        <button class="btn-s" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="MODAL.close('user')">Close</button>
+      </div>
+    `;
+    document.getElementById('mbg-user').classList.add('show');
+  },
+
+  edit(username) {
+    const u = ADMIN.data.users.find(x => x.username === username);
+    if (!u) return;
+    document.getElementById('mtitle-user').textContent = 'Edit User: ' + username;
+    document.getElementById('mbody-user').innerHTML = `
+      <div class="sf"><label for="edit-name">Full Name</label><input type="text" id="edit-name" value="${esc(u.name)}"></div>
+      <div class="sf"><label for="edit-email">Email</label><input type="email" id="edit-email" value="${esc(u.email)}"></div>
+      <div class="sf"><label for="edit-mobile">Mobile</label><input type="text" id="edit-mobile" value="${esc(u.mobile)}"></div>
+      <div class="sf"><label for="edit-status">Status</label>
+        <select id="edit-status">
+          <option value="trial" ${u.status==='trial'?'selected':''}>Trial</option>
+          <option value="active" ${u.status==='active'?'selected':''}>Active</option>
+          <option value="expired" ${u.status==='expired'?'selected':''}>Expired</option>
+          <option value="payment_pending" ${u.status==='payment_pending'?'selected':''}>Pending Pay</option>
+          <option value="rejected" ${u.status==='rejected'?'selected':''}>Rejected</option>
+        </select>
+      </div>
+      <div class="sf"><label><input type="checkbox" id="edit-permanent" ${u.permanentAccess?'checked':''} style="accent-color:var(--amb);margin-right:.3rem"> Permanent Access</label></div>
+      <div class="sf"><label for="edit-password">Reset Password (leave blank to keep)</label><input type="text" id="edit-password" placeholder="New password…"></div>
+      <div style="display:flex;gap:.4rem;margin-top:.5rem">
+        <button class="btn-s btn-g" style="flex:1" onclick="USERS.saveEdit('${escAttrJs(username)}')"><i class="ph ph-floppy-disk"></i> Save Changes</button>
+        <button class="btn-s" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="MODAL.close('user')">Cancel</button>
+      </div>
+    `;
+    document.getElementById('mbg-user').classList.add('show');
+  },
+
+  async saveEdit(username) {
+    const updates = {
+      name: document.getElementById('edit-name').value.trim(),
+      email: document.getElementById('edit-email').value.trim(),
+      mobile: document.getElementById('edit-mobile').value.trim(),
+      status: document.getElementById('edit-status').value,
+      permanentAccess: document.getElementById('edit-permanent').checked,
+      password: document.getElementById('edit-password').value
+    };
+    try {
+      const res = await ADMIN.post('adminUpdateUser', {username, ...updates});
+      if (res.success) { 
+        ADMIN.toast('✅ User updated'); 
+        MODAL.close('user');
+        ADMIN.refresh(['stats','users']); 
+      } else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+  },
+
+  async del(username) {
+    if (!confirm('Delete user "' + username + '"? This cannot be undone.\n\nAll associated data (payments, progress) will also be deleted.')) return;
+    ADMIN.showLoading('Deleting user…');
+    try {
+      const res = await ADMIN.post('adminDeleteUser', {username});
+      if (res.success) { ADMIN.toast('✅ Deleted ' + username); ADMIN.refresh(['stats','users','payments']); }
+      else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// PAYMENTS MODULE
+// ═══════════════════════════════════════════════════════════════
+const PAYMENTS = {
+  selected: new Set(),
+  debounceTimer: null,
+
+  debouncedFilter() {
+    clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => this.filter(), 300);
+  },
+
+  filterBy(status) {
+    document.getElementById('p-filter').value = status;
+    UI.nav('payments');
+    this.filter();
+  },
+
+  _visibleRows() {
+    const q = document.getElementById('p-search').value.toLowerCase();
+    const f = document.getElementById('p-filter').value;
+    return ADMIN.data.payments.filter(p => {
+      const match = !q || (p.username||'').toLowerCase().includes(q) || (p.txId||'').toLowerCase().includes(q);
+      const status = f==='all' ? true : p.status===f;
+      return match && status;
+    });
+  },
+
+  filter() {
+    this.renderPage(this._visibleRows());
+    this.updateBulkBar();
+  },
+
+  clearFilters() {
+    document.getElementById('p-search').value = '';
+    document.getElementById('p-filter').value = 'all';
+    this.filter();
+  },
+
+  render() { this.filter(); },
+
+  renderPage(rows) {
+    const perPage = ADMIN.state.pPerPage;
+    const totalPages = Math.ceil(rows.length / perPage) || 1;
+    if (ADMIN.state.pPage > totalPages) ADMIN.state.pPage = totalPages;
+    const start = (ADMIN.state.pPage - 1) * perPage;
+    const pageRows = rows.slice(start, start + perPage);
+    const tb = document.getElementById('payments-body');
+    if (!pageRows.length) { 
+      const isFiltered = ADMIN.data.payments.length > 0;
+      tb.innerHTML = isFiltered
+        ? '<tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-magnifying-glass"></i></div><p>No payments match your search/filter</p><button class="btn-s btn-a btn-sm" onclick="PAYMENTS.clearFilters()">Clear filters</button></td></tr>'
+        : '<tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-tray"></i></div><p>No payments yet</p></td></tr>'; 
+      document.getElementById('p-pg').innerHTML = '';
+      return; 
+    }
+    tb.innerHTML = pageRows.map(p => {
+      const badge = p.status==='pending'?'badge-pending':p.status==='verified'?'badge-verified':'badge-rejected';
+      const checked = this.selected.has(p.username) ? 'checked' : '';
+      return `<tr>
+        <td><input type="checkbox" class="chk" ${checked} onchange="PAYMENTS.toggle('${p.username}')" aria-label="Select payment from ${esc(p.username)}"></td>
+        <td><div style="font-weight:600;color:var(--t1)">${esc(p.name)||p.username}</div><div class="mono" style="font-size:.68rem;color:var(--t3)">${p.username}</div></td>
+        <td class="mono">${esc(p.txId)}${p.duplicateTxId ? ` <span title="Also submitted by: ${esc(p.duplicateTxIdUsers.join(', '))}" style="color:var(--warn,#f5a623);cursor:help"><i class="ph ph-warning"></i></span>` : ''}</td>
+        <td style="font-size:.72rem">Rs ${ADMIN.data.settings.paymentAmount||'100'}</td>
+        <td><span class="badge ${badge}">${p.status}</span></td>
+        <td class="mono" style="font-size:.68rem">${p.submittedAt ? new Date(p.submittedAt).toLocaleDateString() : '—'}</td>
+        <td style="text-align:right">
+          ${p.status==='pending' ? `<button class="btn-s btn-g btn-sm" onclick="PAYMENTS.review('${escAttrJs(p.username)}')"><i class="ph ph-check"></i> Verify</button> <button class="btn-s btn-r btn-sm" onclick="PAYMENTS.reject('${escAttrJs(p.username)}')"><i class="ph ph-x"></i> Reject</button>` : '<span style="font-size:.68rem;color:var(--t3)">Reviewed</span>'}
+          <button class="btn-s btn-r btn-sm" style="margin-left:.2rem" onclick="PAYMENTS.del('${escAttrJs(p.username)}')"><i class="ph ph-trash"></i></button>
+        </td>
+      </tr>`;
+    }).join('');
+    PAGINATION.render('p-pg', ADMIN.state.pPage, totalPages, 'PAYMENTS.goPage');
+  },
+
+  goPage(p) { ADMIN.state.pPage = p; this.filter(); },
+
+  toggle(username) {
+    if (this.selected.has(username)) this.selected.delete(username);
+    else this.selected.add(username);
+    this.updateBulkBar();
+  },
+
+  toggleAll() {
+    const all = document.getElementById('p-chk-all').checked;
+    this._visibleRows().forEach(p => all ? this.selected.add(p.username) : this.selected.delete(p.username));
+    this.updateBulkBar();
+    this.filter();
+  },
+
+  updateBulkBar() {
+    const bar = document.getElementById('p-bulk');
+    const count = this.selected.size;
+    document.getElementById('p-bulk-count').textContent = count + ' selected';
+    bar.classList.toggle('show', count > 0);
+  },
+
+  clearSelection() {
+    this.selected.clear();
+    document.getElementById('p-chk-all').checked = false;
+    this.updateBulkBar();
+    this.filter();
+  },
+
+  async bulkVerify() {
+    if (!this.selected.size) return;
+    if (!confirm('Verify ' + this.selected.size + ' payment(s)?')) return;
+    await this._bulkReview('verified');
+  },
+
+  async bulkReject() {
+    if (!this.selected.size) return;
+    const reason = prompt('Rejection reason for ' + this.selected.size + ' payment(s):');
+    if (reason === null) return;
+    await this._bulkReview('rejected', reason);
+  },
+
+  // Single request for the whole selection instead of one adminReviewPayment
+  // call per row — see adminReviewPaymentsBatch in CODE.gs.
+  async _bulkReview(status, rejectionReason) {
+    const usernames = [...this.selected];
+    ADMIN.showLoading((status==='verified'?'Verifying ':'Rejecting ') + usernames.length + ' payment(s)…');
+    try {
+      const res = await ADMIN.post('adminReviewPaymentsBatch', {
+        usernames: JSON.stringify(usernames),
+        status,
+        rejectionReason: rejectionReason || ''
+      });
+      if (!res.success) throw new Error(res.error || 'Batch review failed');
+      const ok = res.results.filter(r => r.success).length;
+      const failed = res.results.length - ok;
+      ADMIN.toast('✅ ' + ok + (status==='verified'?' verified':' rejected') + (failed ? ', ❌ ' + failed + ' failed' : ''));
+    } catch(e) {
+      ADMIN.toast('❌ ' + e.message);
+    }
+    ADMIN.hideLoading();
+    this.clearSelection();
+    ADMIN.refresh(['stats','payments','users']);
+  },
+
+  review(username) { MODAL.openReview(username, 'verified'); },
+  reject(username) { MODAL.openReview(username, 'rejected'); },
+
+  async del(username) {
+    if (!confirm('Delete payment record for "' + username + '"?')) return;
+    ADMIN.showLoading('Deleting…');
+    try {
+      const res = await ADMIN.post('adminDeletePayment', {username});
+      if (res.success) { ADMIN.toast('✅ Deleted'); ADMIN.refresh(['stats','payments']); }
+      else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// MODAL SYSTEM
+// ═══════════════════════════════════════════════════════════════
+const MODAL = {
+  openReview(username, action) {
+    const p = ADMIN.data.payments.find(x => x.username === username);
+    if (!p) return;
+    const title = action==='verified' ? 'Verify Payment' : 'Reject Payment';
+    document.getElementById('mtitle-review').textContent = title;
+    document.getElementById('mbody-review').innerHTML = `
+      ${p.duplicateTxId ? `<div style="background:rgba(54,139,79,.12);border:1px solid rgba(54,139,79,.4);border-radius:var(--r1);padding:.6rem;margin-bottom:.8rem;font-size:.78rem;color:var(--warn,#f5a623)"><i class="ph ph-warning"></i> This transaction ID was also submitted by: <strong>${esc(p.duplicateTxIdUsers.join(', '))}</strong>. Double-check the screenshot before approving.</div>` : ''}
+      <div style="margin-bottom:.8rem">
+        <div style="font-size:.78rem;color:var(--t3);margin-bottom:.15rem">User</div>
+        <div style="font-weight:600">${esc(p.name)||p.username} <span class="mono" style="font-size:.72rem;color:var(--t3)">(${p.username})</span></div>
+      </div>
+      <div style="margin-bottom:.8rem">
+        <div style="font-size:.78rem;color:var(--t3);margin-bottom:.15rem">Transaction ID</div>
+        <div class="mono" style="font-weight:600">${esc(p.txId)}</div>
+      </div>
+      <div style="margin-bottom:.8rem">
+        <div style="font-size:.78rem;color:var(--t3);margin-bottom:.15rem">Remarks</div>
+        <div style="font-size:.8rem">${esc(p.remarks)||'—'}</div>
+      </div>
+      ${p.screenshotUrl && p.screenshotUrl.startsWith('http') ? `<div style="margin-bottom:.8rem"><div style="font-size:.78rem;color:var(--t3);margin-bottom:.15rem">Screenshot</div><a href="${esc(p.screenshotUrl)}" target="_blank" rel="noopener" style="color:var(--sky);font-size:.78rem">View Screenshot →</a></div>` : ''}
+      ${action==='rejected' ? `<div class="sf" style="margin-bottom:.8rem"><label for="rej-reason">Rejection Reason</label><input type="text" id="rej-reason" placeholder="Why are you rejecting this payment?"></div>` : ''}
+      ${action==='verified' ? `<div class="sf" style="margin-bottom:.8rem"><label for="grant-duration">Grant Duration</label>
+        <select id="grant-duration">
+          <option value="permanent">♾ Permanent</option>
+          <option value="year">📅 1 Year</option>
+        </select>
+      </div>` : ''}
+      <div style="display:flex;gap:.4rem">
+        <button class="btn-s ${action==='verified'?'btn-g':'btn-r'}" style="flex:1" onclick="MODAL.confirmReview('${escAttrJs(username)}', '${action}')">${action==='verified'?'<i class="ph ph-check"></i> Confirm Verify':'<i class="ph ph-x"></i> Confirm Reject'}</button>
+        <button class="btn-s" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="MODAL.close('review')">Cancel</button>
+      </div>
+    `;
+    document.getElementById('mbg-review').classList.add('show');
+  },
+
+  async confirmReview(username, status) {
+    const reason = document.getElementById('rej-reason')?.value || '';
+    const duration = document.getElementById('grant-duration')?.value || 'permanent';
+    if (status === 'verified') {
+      const p = ADMIN.data.payments.find(x => x.username === username);
+      // The duplicate-TXN-ID warning badge was previously cosmetic — approving
+      // still went through identically either way. Now it actually stops
+      // the one-click path and makes the admin confirm they've checked it.
+      if (p && p.duplicateTxId && !confirm(
+        `This transaction ID was also submitted by: ${p.duplicateTxIdUsers.join(', ')}.\n\n` +
+        `Verify anyway?`
+      )) return;
+    }
+    ADMIN.showLoading(status==='verified'?'Verifying…':'Rejecting…');
+    try {
+      const res = await ADMIN.post('adminReviewPayment', {username, status, rejectionReason: reason});
+      if (res.success) {
+        if (status==='verified' && duration==='year') {
+          await ADMIN.post('adminGrantAccess', {username, duration:'year'});
+        }
+        ADMIN.toast(status==='verified'?`✅ Verified! User now has ${duration==='year'?'1-year':'permanent'} access.`:'✅ Rejected.'); 
+        MODAL.close('review'); 
+        ADMIN.refresh(['stats','payments','users']); 
+      }
+      else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  },
+
+  close(name) { document.getElementById('mbg-' + name).classList.remove('show'); }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// SETTINGS MODULE
+// ═══════════════════════════════════════════════════════════════
+const SETTINGS = {
+  load() {
+    const s = ADMIN.data.settings;
+    document.getElementById('set-name').value = s.appName || '';
+    document.getElementById('set-qr').value = s.qrCodeUrl || '';
+    document.getElementById('set-phone').value = s.contactPhone || '';
+    document.getElementById('set-amount').value = s.paymentAmount || '';
+    document.getElementById('set-inst').value = s.paymentInstructions || '';
+    document.getElementById('set-trial').value = s.trialHours || '';
+
+    const preview = document.getElementById('set-qr-preview');
+    const status = document.getElementById('set-qr-status');
+    if (s.qrCodeUrl) {
+      preview.src = s.qrCodeUrl;
+      preview.style.display = 'block';
+      status.textContent = s.qrCodeUrl.startsWith('data:image')
+        ? 'Uploaded QR on file'
+        : 'Using an external link (may fail to load for users — re-upload recommended)';
+    } else {
+      preview.style.display = 'none';
+      status.textContent = 'No QR uploaded yet';
+    }
+  },
+
+  onQrFile(evt) {
+    const file = evt.target.files[0];
+    if (!file) return;
+    const status = document.getElementById('set-qr-status');
+    status.textContent = 'Processing…';
+
+    const SHEET_CELL_LIMIT = 48000;
+    const attempts = [
+      { max: 600, type: 'image/jpeg', quality: 0.85 },
+      { max: 600, type: 'image/jpeg', quality: 0.6 },
+      { max: 450, type: 'image/jpeg', quality: 0.6 },
+      { max: 450, type: 'image/jpeg', quality: 0.4 },
+      { max: 320, type: 'image/jpeg', quality: 0.5 },
+      { max: 320, type: 'image/jpeg', quality: 0.3 },
+    ];
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let best = null;
+        for (const a of attempts) {
+          const scale = Math.min(1, a.max / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL(a.type, a.quality);
+          if (dataUrl.length <= SHEET_CELL_LIMIT) { best = dataUrl; break; }
+          if (!best || dataUrl.length < best.length) best = dataUrl;
+        }
+
+        if (!best || best.length > SHEET_CELL_LIMIT) {
+          const kb = best ? Math.round(best.length * 0.75 / 1024) : '?';
+          status.textContent = `❌ Still too large even at lowest quality (~${kb}KB). Try cropping to just the QR square, or use a plain generated QR instead of a screenshot.`;
+          return;
+        }
+
+        document.getElementById('set-qr').value = best;
+        const preview = document.getElementById('set-qr-preview');
+        preview.src = best;
+        preview.style.display = 'block';
+        status.textContent = '✅ Ready — click Save Settings to publish';
+      };
+      img.onerror = () => { status.textContent = '❌ Could not read that image file.'; };
+      img.src = e.target.result;
+    };
+    reader.onerror = () => { status.textContent = '❌ Could not read that file.'; };
+    reader.readAsDataURL(file);
+  },
+
+  async save() {
+    const amount = parseInt(document.getElementById('set-amount').value);
+    const trial = parseInt(document.getElementById('set-trial').value);
+    if (isNaN(amount) || amount < 1) return ADMIN.toast('❌ Invalid payment amount');
+    if (isNaN(trial) || trial < 1) return ADMIN.toast('❌ Invalid trial hours');
+
+    const settings = [
+      {key:'appName', value: document.getElementById('set-name').value.trim()},
+      {key:'qrCodeUrl', value: document.getElementById('set-qr').value.trim()},
+      {key:'contactPhone', value: document.getElementById('set-phone').value.trim()},
+      {key:'paymentAmount', value: amount},
+      {key:'paymentInstructions', value: document.getElementById('set-inst').value},
+      {key:'trialHours', value: trial},
+    ];
+    ADMIN.showLoading('Saving settings…');
+    try {
+      const res = await ADMIN.post('adminUpdateSettingsBatch', {settings});
+      if (res.success) {
+        ADMIN.toast('✅ Settings saved');
+        ADMIN.refresh(['settings']);
+      } else {
+        for (const s of settings) {
+          await ADMIN.post('adminUpdateSettings', {key: s.key, value: s.value});
+        }
+        ADMIN.toast('✅ Settings saved');
+        ADMIN.refresh(['settings']);
+      }
+    } catch(e) { ADMIN.toast('❌ Save failed: ' + e.message); }
+    ADMIN.hideLoading();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// ACTIVITY LOGS MODULE
+// ═══════════════════════════════════════════════════════════════
+const LOGS = {
+  filter() {
+    const q = document.getElementById('l-search').value.toLowerCase();
+    const f = document.getElementById('l-filter').value;
+    const rows = ADMIN.data.logs.filter(l => {
+      const match = !q || (l.admin||'').toLowerCase().includes(q) || (l.target||'').toLowerCase().includes(q) || (l.action||'').toLowerCase().includes(q);
+      const action = f==='all' ? true : (l.action||'').includes(f);
+      return match && action;
+    });
+    this.renderPage(rows);
+  },
+
+  render() { this.filter(); },
+
+  renderPage(rows) {
+    const perPage = ADMIN.state.lPerPage;
+    const totalPages = Math.ceil(rows.length / perPage) || 1;
+    if (ADMIN.state.lPage > totalPages) ADMIN.state.lPage = totalPages;
+    const start = (ADMIN.state.lPage - 1) * perPage;
+    const pageRows = rows.slice(start, start + perPage);
+    const el = document.getElementById('logs-list');
+    const empty = document.getElementById('logs-empty');
+    if (!pageRows.length) { 
+      el.innerHTML = ''; 
+      empty.style.display = 'block';
+      document.getElementById('l-pg').innerHTML = '';
+      return; 
+    }
+    empty.style.display = 'none';
+    el.innerHTML = pageRows.map(l => {
+      const time = l.timestamp ? new Date(l.timestamp).toLocaleString() : '—';
+      return `<div class="log-item">
+        <div class="log-time">${time}</div>
+        <div><span class="log-action">${esc(l.action)||'Action'}</span> by <strong>${esc(l.admin)||'Unknown'}</strong>
+        ${l.target ? ' → <span class="mono">' + esc(l.target) + '</span>' : ''}
+        ${l.details ? '<div style="color:var(--t3);font-size:.7rem;margin-top:.15rem">' + esc(l.details) + '</div>' : ''}</div>
+      </div>`;
+    }).join('');
+    PAGINATION.render('l-pg', ADMIN.state.lPage, totalPages, 'LOGS.goPage');
+  },
+
+  goPage(p) { ADMIN.state.lPage = p; this.filter(); }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// AUTO-REFRESH & INIT
+// ═══════════════════════════════════════════════════════════════
+ADMIN.init();
+
+setInterval(() => {
+  if (!document.hidden && ADMIN.creds) {
+    ADMIN.refresh();
+  }
+}, 60000);
+
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'r') { e.preventDefault(); ADMIN.refresh(); }
+    if (e.key === '1') { e.preventDefault(); UI.nav('dashboard'); }
+    if (e.key === '2') { e.preventDefault(); UI.nav('users'); }
+    if (e.key === '3') { e.preventDefault(); UI.nav('payments'); }
+    if (e.key === '4') { e.preventDefault(); UI.nav('logs'); }
+    if (e.key === '5') { e.preventDefault(); UI.nav('settings'); }
+  }
+  if (e.key === 'Escape') {
+    MODAL.close('review'); MODAL.close('user'); MODAL.close('pwd');
+  }
+});
+</script>
+</body>
+</html>
