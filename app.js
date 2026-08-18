@@ -4,7 +4,7 @@
 
 /* ═══════════════ 1. CONFIG & CONSTANTS ═══════════════ */
 const APP_CONFIG = {
-  APPS_URL: "https://script.google.com/macros/s/AKfycbwAhfyQm7NvxaNjgRm3oC9SdKwrfKNfjgDd-J0nYjYAhsU1d2PP2JfyMI30ol9AGSatyg/exec",
+  APPS_URL: "https://script.google.com/macros/s/AKfycbyZLZxf6VKNiMfhY6memPTKj-dGW7jxyX1c-9GI0OPG8TqazSZi_P-7Y-8DlpT0ZlrjHg/exec",
 };
 const APPS = APP_CONFIG.APPS_URL;
 
