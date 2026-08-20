@@ -289,17 +289,49 @@ function autoResizeCapped_(sheet, colStart, colCount, maxWidthPx) {
   }
 }
 
+// One shared "auto format" pass for every sheet: bold/colored header,
+// frozen header row, alternating row bands (readable at a glance without
+// manually shading), a border around the whole table, and capped
+// auto-resized columns. Centralized here so every sheet gets the same
+// treatment and a new sheet added later can't accidentally be left out
+// (which is what happened before — Admins and Progress had header color
+// but no banding/borders, and were missing entirely from
+// fixSheetFormatting()'s retrofit pass).
+//
+// bandTheme must be one of SpreadsheetApp.BandingTheme (e.g. BLUE,
+// GREEN, PURPLE, YELLOW, CYAN, ORANGE, RED, GREY) — pick the one that
+// visually matches each sheet's existing header color so old sheets
+// don't suddenly look like they belong to a different table.
+function applyTableFormat_(sheet, headers, headerColor, bandTheme, maxWidthPx) {
+  const numCols = headers.length;
+  const maxRows = Math.max(1, sheet.getMaxRows() - 1);
+
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, numCols)
+    .setFontWeight("bold")
+    .setBackground(headerColor)
+    .setFontColor("white");
+
+  // Banding needs a >1-row range (header + at least one data row) or
+  // Sheets throws — on a brand-new sheet maxRows can be 0 rows tall in
+  // practice-safe terms, so guard rather than let this throw on setup.
+  const fullRange = sheet.getRange(1, 1, maxRows + 1, numCols);
+  fullRange.getBandings().forEach(b => b.remove()); // idempotent: safe to re-run via fixSheetFormatting()
+  if (maxRows >= 1) {
+    const banding = fullRange.applyRowBanding(bandTheme, true, false);
+    banding.setHeaderRowColor(headerColor);
+  }
+  fullRange.setBorder(true, true, true, true, true, true, "#d0d0d0", SpreadsheetApp.BorderStyle.SOLID);
+
+  autoResizeCapped_(sheet, 1, numCols, maxWidthPx || 300);
+}
+
 function getUsersSheet_() {
   const spreadsheet = getSpreadsheet_();
   let sheet = spreadsheet.getSheetByName(USERS_SHEET);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(USERS_SHEET);
     sheet.appendRow(USER_HEADERS);
-    sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, USER_HEADERS.length)
-      .setFontWeight("bold")
-      .setBackground("#4285f4")
-      .setFontColor("white");
     // Force plain text on every column a person can type digits-only into —
     // otherwise Sheets silently converts it to a Number, which strips
     // leading zeros and can round or reformat long digit strings.
@@ -307,7 +339,7 @@ function getUsersSheet_() {
     // contact=6 (mirrors email OR mobile, so carries the same risk).
     const maxRows = sheet.getMaxRows() - 1;
     [1, 5, 6].forEach(col => sheet.getRange(2, col, maxRows, 1).setNumberFormat("@"));
-    autoResizeCapped_(sheet, 1, USER_HEADERS.length, 300);
+    applyTableFormat_(sheet, USER_HEADERS, "#4285f4", SpreadsheetApp.BandingTheme.BLUE, 300);
   }
   return sheet;
 }
@@ -318,18 +350,13 @@ function getPaymentsSheet_() {
   if (!sheet) {
     sheet = spreadsheet.insertSheet(PAYMENTS_SHEET);
     sheet.appendRow(PAYMENT_HEADERS);
-    sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, PAYMENT_HEADERS.length)
-      .setFontWeight("bold")
-      .setBackground("#34a853")
-      .setFontColor("white");
     // mobile=4 and txId=5 are both free-typed and frequently all-digits
     // (a transaction ID is very often numeric) — same auto-typing risk as
     // Users.mobile, and previously the actual cause of the payment-upload
     // crash. Force text on both so they're never silently coerced.
     const maxRows = sheet.getMaxRows() - 1;
     [4, 5].forEach(col => sheet.getRange(2, col, maxRows, 1).setNumberFormat("@"));
-    autoResizeCapped_(sheet, 1, PAYMENT_HEADERS.length, 300);
+    applyTableFormat_(sheet, PAYMENT_HEADERS, "#34a853", SpreadsheetApp.BandingTheme.GREEN, 300);
   }
   return sheet;
 }
@@ -340,11 +367,6 @@ function getSettingsSheet_() {
   if (!sheet) {
     sheet = spreadsheet.insertSheet(SETTINGS_SHEET);
     sheet.appendRow(SETTINGS_HEADERS);
-    sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, SETTINGS_HEADERS.length)
-      .setFontWeight("bold")
-      .setBackground("#fbbc04")
-      .setFontColor("white");
     // value=2 holds a mix of plain numeric-looking strings (paymentAmount
     // "100", trialHours "24") AND the QR code as a data:image base64
     // string tens of thousands of characters long. Force text so the
@@ -355,7 +377,7 @@ function getSettingsSheet_() {
     // getSettingValue_/handleSignup, not silently in the sheet).
     const maxRows = sheet.getMaxRows() - 1;
     sheet.getRange(2, 2, maxRows, 1).setNumberFormat("@");
-    autoResizeCapped_(sheet, 1, 2, 400);
+    applyTableFormat_(sheet, SETTINGS_HEADERS, "#fbbc04", SpreadsheetApp.BandingTheme.YELLOW, 400);
     sheet.getRange(2, 2, maxRows, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
   }
   return sheet;
@@ -367,12 +389,7 @@ function getLogsSheet_() {
   if (!sheet) {
     sheet = spreadsheet.insertSheet(LOGS_SHEET);
     sheet.appendRow(LOG_HEADERS);
-    sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, LOG_HEADERS.length)
-      .setFontWeight("bold")
-      .setBackground("#9c27b0")
-      .setFontColor("white");
-    autoResizeCapped_(sheet, 1, LOG_HEADERS.length, 320); // details=5 is free text and the usual outlier
+    applyTableFormat_(sheet, LOG_HEADERS, "#9c27b0", SpreadsheetApp.BandingTheme.PURPLE, 320); // details=5 is free text and the usual outlier
   }
   return sheet;
 }
@@ -389,14 +406,9 @@ function getAdminsSheet_() {
   if (!sheet) {
     sheet = spreadsheet.insertSheet(ADMINS_SHEET);
     sheet.appendRow(ADMIN_HEADERS);
-    sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, ADMIN_HEADERS.length)
-      .setFontWeight("bold")
-      .setBackground("#ea4335")
-      .setFontColor("white");
     const maxRows = sheet.getMaxRows() - 1;
     sheet.getRange(2, 1, maxRows, 1).setNumberFormat("@"); // username, same all-digits protection as Users
-    autoResizeCapped_(sheet, 1, ADMIN_HEADERS.length, 300);
+    applyTableFormat_(sheet, ADMIN_HEADERS, "#ea4335", SpreadsheetApp.BandingTheme.RED, 300);
 
     const salt = makeSalt_();
     sheet.appendRow([
@@ -444,14 +456,9 @@ function getProgressSheet_() {
   if (!sheet) {
     sheet = spreadsheet.insertSheet(PROGRESS_SHEET);
     sheet.appendRow(PROGRESS_HEADERS);
-    sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, PROGRESS_HEADERS.length)
-      .setFontWeight("bold")
-      .setBackground("#0f9d58")
-      .setFontColor("white");
     const maxRows = sheet.getMaxRows() - 1;
     sheet.getRange(2, 1, maxRows, 1).setNumberFormat("@"); // username, same all-digits protection as Users
-    autoResizeCapped_(sheet, 1, PROGRESS_HEADERS.length, 300);
+    applyTableFormat_(sheet, PROGRESS_HEADERS, "#0f9d58", SpreadsheetApp.BandingTheme.GREEN, 300);
   }
   return sheet;
 }
@@ -1836,27 +1843,46 @@ function adminStats(p) {
  * spreadsheet needs this to retrofit the same protection (and won't be
  * touched again after — safe to re-run any time, it's idempotent).
  */
+// Retrofits the shared auto-format (header/banding/borders/column widths)
+// onto every sheet that already exists, since getXSheet_()'s formatting
+// only runs once, at creation, and won't touch a sheet made before a
+// formatting change like this one. Previously this only covered Users,
+// Payments, Settings, and Logs — Admins and Progress were silently left
+// on old-style formatting with no way to catch up short of deleting and
+// recreating the sheet. Now covers all six, and is idempotent (safe to
+// re-run any time — applyTableFormat_ clears old bandings before
+// reapplying rather than stacking duplicates).
 function fixSheetFormatting() {
   const u = getUsersSheet_();
   let maxRows = u.getMaxRows() - 1;
   [1, 5, 6].forEach(col => u.getRange(2, col, maxRows, 1).setNumberFormat("@"));
-  autoResizeCapped_(u, 1, USER_HEADERS.length, 300);
+  applyTableFormat_(u, USER_HEADERS, "#4285f4", SpreadsheetApp.BandingTheme.BLUE, 300);
 
   const p = getPaymentsSheet_();
   maxRows = p.getMaxRows() - 1;
   [4, 5].forEach(col => p.getRange(2, col, maxRows, 1).setNumberFormat("@"));
-  autoResizeCapped_(p, 1, PAYMENT_HEADERS.length, 300);
+  applyTableFormat_(p, PAYMENT_HEADERS, "#34a853", SpreadsheetApp.BandingTheme.GREEN, 300);
 
   const s = getSettingsSheet_();
   maxRows = s.getMaxRows() - 1;
   s.getRange(2, 2, maxRows, 1).setNumberFormat("@");
-  autoResizeCapped_(s, 1, 2, 400);
+  applyTableFormat_(s, SETTINGS_HEADERS, "#fbbc04", SpreadsheetApp.BandingTheme.YELLOW, 400);
   s.getRange(2, 2, maxRows, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
 
   const l = getLogsSheet_();
-  autoResizeCapped_(l, 1, LOG_HEADERS.length, 320);
+  applyTableFormat_(l, LOG_HEADERS, "#9c27b0", SpreadsheetApp.BandingTheme.PURPLE, 320);
 
-  console.log("✅ Sheet formatting fixed/retrofitted on all four sheets.");
+  const a = getAdminsSheet_();
+  maxRows = a.getMaxRows() - 1;
+  a.getRange(2, 1, maxRows, 1).setNumberFormat("@");
+  applyTableFormat_(a, ADMIN_HEADERS, "#ea4335", SpreadsheetApp.BandingTheme.RED, 300);
+
+  const pr = getProgressSheet_();
+  maxRows = pr.getMaxRows() - 1;
+  pr.getRange(2, 1, maxRows, 1).setNumberFormat("@");
+  applyTableFormat_(pr, PROGRESS_HEADERS, "#0f9d58", SpreadsheetApp.BandingTheme.GREEN, 300);
+
+  console.log("✅ Sheet formatting fixed/retrofitted on all six sheets.");
   return "Sheet formatting fixed. Check View → Logs for details.";
 }
 
