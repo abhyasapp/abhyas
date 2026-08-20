@@ -1,15 +1,25 @@
 /* ═══════════════════════════════════════════════════════════════
    CHAPTER DATA.js
    ───────────────────────────────────────────────────────────────
-   Updated 2026-08-16 (v6).
+   Updated 2026-08-19 (v7).
 
    Chapters "1" (Structural Engineering), "2" (Engineering Survey),
-   "3" (Construction Materials), "4" (Concrete Technology), "7"
-   (Estimating & Costing), "8" (Engineering Drawing) and "9"
-   (Engineering Economics) under level7 now point to REAL
-   question-bank files. All other chapters still point to the
-   earlier placeholder subtopic files — swap those in as real
+   "3" (Construction Materials), "4" (Concrete Technology), "5"
+   (Geotechnical Engineering, chapters 7.1-7.5 only — see note
+   below), "7" (Estimating & Costing), "8" (Engineering Drawing)
+   and "9" (Engineering Economics) under level7 now point to REAL
+   question-bank files. All other chapters/subtopics still point to
+   the earlier placeholder subtopic files — swap those in as real
    content gets uploaded/sorted for them.
+
+   Geotechnical Engineering: only one source file (geotech.json, 63
+   questions, Q1-63) was found in the user's Drive. It covers Soil
+   Formation (7.1), 3-Phase Soil (7.2), Water in Soil (7.3), and
+   Index Properties (7.4) reasonably, but Rock & Earthquake (7.5)
+   has only 1 question and Tunneling (7.6) has none at all — 7.6
+   was left pointing at its old placeholder since there was nothing
+   to sort into it. User confirmed proceeding with this partial
+   coverage on 2026-08-19.
 
    Estimating & Costing content (249 questions, #246 absent in the
    user's own source numbering) was pulled from the user's ESTIMATE
@@ -125,11 +135,11 @@ const DRIVE = {
     },
     "5": {
       "Abhyas": {
-        "7.1 SOIL FORMATION": "1SyIZ2C2Jpoz4v4mO0_qu5a4Uldp9xjf_",
-        "7.2 3-PHASE SOIL": "1KoGtFbARuQ55_DZZ5_Aj6ox5YsxjIIDj",
-        "7.3 WATER IN SOIL": "1JY8qtz3biEOuumo999cYJXXTAGPabs2o",
-        "7.4 INDEX PROPERTIES": "1dvJxWWytsMT-rp0_ZmfweI0wpxzf36fD",
-        "7.5 ROCK&EARTHQUAKE": "1z8VG1QCaR22ADhZFycxFFyPKoSfcKw1U",
+        "7.1 SOIL FORMATION": "1Jfg5Gji1MLsQ4tSRfhnE5LpVhD7j4Vcc",
+        "7.2 3-PHASE SOIL": "1rHR8T3Ndwhf8wbe7gKH-CB8hvA9H3m9C",
+        "7.3 WATER IN SOIL": "1_PABQhwTxdMN2HZy0IpGELAWXMhIwFO1",
+        "7.4 INDEX PROPERTIES": "17_MfKmOWTwIRDqcwhykTOHYNc2CViaqp",
+        "7.5 ROCK&EARTHQUAKE": "1bfoKt4uKYaL4AaSimTSv2SbBo6HZxLX_",
         "7.6 TUNNELING": "1BO3UpqbjxApK8fdxp3K_Irv6o3FNSIDa"
       }
     },

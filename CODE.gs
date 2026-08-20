@@ -9,7 +9,10 @@
    Bump this on every release that ships to production, so a support
    conversation can start with "what version are you on" instead of
    guessing from symptoms. Surfaced via the `ping` action; mirrored in
-   app.js/index.html/user.html/admin.html/sw.js so every surface agrees. */
+   version.js on the client (single client-side source of truth — see
+   that file's header — sw.js derives its cache name from it too, so
+   bumping BOTH this constant and version.js's APP_VERSION together
+   forces every open browser tab into a fresh session on next load). */
 const APP_VERSION = "1.0";
 
 /* ── ADMIN CREDENTIALS ───────────────────────────────────────────

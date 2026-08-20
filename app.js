@@ -23,7 +23,8 @@ const LS = {
   PROFILE:'abhyas_profile'          // stores S.profile (including id)
 };
 
-const APP_VERSION = '1.0';
+/* APP_VERSION now lives in version.js (loaded before this file) so
+   sw.js can derive its cache name from the same single source. */
 const APP_NAME = 'Abhyas V1';
 
 /* ═══════════════ 2. APP STATE ═══════════════ */

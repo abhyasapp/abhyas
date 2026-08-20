@@ -24,17 +24,23 @@
                          orphaned responses sitting in Cache Storage.
    ═══════════════════════════════════════════════════════════════ */
 
-/* 👇 Bump this name whenever you update any shell file (index.html,
-   user.html, app.js, chapters-data.js, shared.js, manifest.json, or the
-   vendor/ assets). All previous caches will be deleted immediately on
-   activation. */
-const CACHE_NAME = 'abhyas-v3';   // bumped: self-hosted Phosphor icon font added to the shell
+/* 👇 CACHE_NAME is derived from version.js's APP_VERSION, so bumping
+   APP_VERSION there is now the ONLY step needed to force every open
+   browser tab to drop its old cached shell on the next activation —
+   no separate manual cache-name edit here. Still bump APP_VERSION for
+   ANY shell change (index.html, user.html, app.js, chapters-data.js,
+   shared.js, manifest.json, or the vendor/ assets), not just version
+   releases — a cache-relevant file change with no version bump would
+   otherwise never get picked up by an already-installed client. */
+importScripts('./version.js');
+const CACHE_NAME = 'abhyas-v' + APP_VERSION;
 
 const SHELL = [
   './',
   './index.html',
   './user.html',
   './app.js',
+  './version.js',
   './chapters-data.js',
   './shared.js',
   './manifest.json',
