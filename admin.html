@@ -554,6 +554,41 @@ const ADMIN = {
     return await r.json();
   },
 
+  // Payment screenshots used to be a plain <a target="_blank"> straight to
+  // Drive's download URL — for an image, that just opens the file inline
+  // in a new tab instead of downloading it, since Drive's response has no
+  // Content-Disposition: attachment header. This routes through the
+  // adminDownloadScreenshot backend action instead (same DriveApp-proxy
+  // pattern already used for question files), turns the returned base64
+  // into a real blob:, and clicks a synthetic <a download> on THAT — same-
+  // origin blob: URLs are what browsers actually respect a download
+  // attribute on, so this reliably saves the file instead of just viewing it.
+  async downloadScreenshot(url, suggestedName) {
+    this.toast('⬇️ Preparing download…');
+    try {
+      const res = await this.post('adminDownloadScreenshot', {url});
+      if (!res.success) throw new Error(res.error || 'Download failed.');
+      const byteChars = atob(res.base64);
+      const bytes = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([bytes], {type: res.mimeType || 'image/png'});
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = suggestedName || res.filename || 'payment_screenshot.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoke on a delay, not immediately — some browsers (Safari in
+      // particular) start the save asynchronously and revoking the blob:
+      // URL right after .click() can cancel the download before it starts.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+      this.toast('✅ Screenshot downloaded');
+    } catch(e) {
+      this.toast('❌ ' + (e.message || 'Download failed.'));
+    }
+  },
+
   ALL_SCOPES: ['stats','users','payments','settings','logs','admins'],
 
   // scope: optional array of which pieces to reload, e.g. ['stats','users']
@@ -909,7 +944,7 @@ const USERS = {
         <div style="font-size:.78rem">TXN ID: <span class="mono">${esc(pay.txId)}</span></div>
         <div style="font-size:.78rem">Status: <span class="badge ${pay.status==='pending'?'badge-pending':pay.status==='verified'?'badge-verified':'badge-rejected'}">${pay.status}</span></div>
         ${pay.remarks ? `<div style="font-size:.76rem;color:var(--t3);margin-top:.2rem">Remarks: ${esc(pay.remarks)}</div>` : ''}
-        ${pay.screenshotUrl && pay.screenshotUrl.startsWith('http') ? `<a href="${esc(pay.screenshotUrl)}" target="_blank" rel="noopener" style="color:var(--sky);font-size:.76rem">View Screenshot →</a>` : ''}
+        ${pay.screenshotUrl && pay.screenshotUrl.startsWith('http') ? `<a href="#" onclick="event.preventDefault();ADMIN.downloadScreenshot('${escAttrJs(pay.screenshotUrl)}','${escAttrJs(pay.username)}_payment.png')" style="color:var(--sky);font-size:.76rem"><i class="ph ph-download-simple"></i> Download Screenshot</a>` : ''}
       </div>` : '<div style="font-size:.76rem;color:var(--t3);margin-bottom:.8rem">No payment record found.</div>'}
       <div style="background:var(--b0);border-radius:var(--r1);padding:.6rem;border:1px solid var(--b1);margin-bottom:.8rem">
         <div style="font-size:.62rem;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:.4rem">Grant / Extend Access</div>
@@ -1163,7 +1198,7 @@ const MODAL = {
         <div style="font-size:.78rem;color:var(--t3);margin-bottom:.15rem">Remarks</div>
         <div style="font-size:.8rem">${esc(p.remarks)||'—'}</div>
       </div>
-      ${p.screenshotUrl && p.screenshotUrl.startsWith('http') ? `<div style="margin-bottom:.8rem"><div style="font-size:.78rem;color:var(--t3);margin-bottom:.15rem">Screenshot</div><a href="${esc(p.screenshotUrl)}" target="_blank" rel="noopener" style="color:var(--sky);font-size:.78rem">View Screenshot →</a></div>` : ''}
+      ${p.screenshotUrl && p.screenshotUrl.startsWith('http') ? `<div style="margin-bottom:.8rem"><div style="font-size:.78rem;color:var(--t3);margin-bottom:.3rem">Screenshot</div><img src="${esc(p.screenshotUrl)}" style="max-width:100%;max-height:280px;border-radius:var(--r1);border:1px solid var(--b1);display:block;margin-bottom:.4rem" alt="Payment screenshot" onerror="this.style.display='none'"><a href="#" onclick="event.preventDefault();ADMIN.downloadScreenshot('${escAttrJs(p.screenshotUrl)}','${escAttrJs(p.username)}_payment.png')" style="color:var(--sky);font-size:.78rem"><i class="ph ph-download-simple"></i> Download Screenshot</a></div>` : ''}
       ${action==='rejected' ? `<div class="sf" style="margin-bottom:.8rem"><label for="rej-reason">Rejection Reason</label><input type="text" id="rej-reason" placeholder="Why are you rejecting this payment?"></div>` : ''}
       ${action==='verified' ? `<div class="sf" style="margin-bottom:.8rem"><label for="grant-duration">Grant Duration</label>
         <select id="grant-duration">

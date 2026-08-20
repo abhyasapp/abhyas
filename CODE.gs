@@ -157,6 +157,7 @@ function doGet(e) {
       case "adminlistpayments":  result = adminListPayments(e.parameter); break;
       case "adminreviewpayment": result = adminReviewPayment(e.parameter); break;
       case "adminreviewpaymentsbatch": result = adminReviewPaymentsBatch(e.parameter); break;
+      case "admindownloadscreenshot": result = adminDownloadScreenshot(e.parameter); break;
       case "admingrantaccess":   result = adminGrantAccess(e.parameter); break;
       case "adminupdateuser":    result = adminUpdateUser(e.parameter); break;
       case "admindeleteuser":    result = adminDeleteUser(e.parameter); break;
@@ -169,7 +170,7 @@ function doGet(e) {
       default:
         result = {
           success: false,
-          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, saveProgress, getProgress, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminGrantAccess, adminUpdateUser, adminDeleteUser, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs"
+          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, saveProgress, getProgress, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminUpdateUser, adminDeleteUser, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs"
         };
     }
   } catch (err) {
@@ -1302,6 +1303,59 @@ function handleGetFile(p) {
     };
   }
   return { success: true, result: parsed };
+}
+
+// ── PAYMENT SCREENSHOT DOWNLOAD PROXY (ADMIN ONLY, READ-ONLY) ──
+// admin.html previously linked straight to Drive's file.getDownloadUrl()
+// in a plain <a target="_blank">. For an image, that URL's response has
+// no Content-Disposition: attachment header, so browsers just render it
+// inline in a new tab instead of downloading it — clicking "View
+// Screenshot" never actually saved a file, no matter what the link text
+// said. The same fetch()-can't-read-a-plain-Drive-link problem that
+// handleGetFile works around for question JSON applies here too, so this
+// uses the identical pattern: read the file server-side with DriveApp
+// (works regardless of the file's public sharing setting, as long as the
+// script owner's account can see it), hand back base64 + mimeType, and
+// let the client turn that into a real same-origin blob: URL, which
+// browsers WILL respect a download attribute on.
+//
+// Accepts EITHER a bare fileId or the full getDownloadUrl() string
+// already stored in the Payments sheet's screenshotUrl column (so this
+// works against every existing row without a schema migration) — the
+// fileId is extracted from the URL's `id=` query param if a full URL is
+// passed. Admin-gated via checkAdmin_ since payment screenshots can
+// contain a student's personal payment app UI (name, phone, bank details
+// depending on what they screenshotted), not just a bare transaction ID.
+function adminDownloadScreenshot(p) {
+  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+
+  let fileId = String(p.fileId || "").trim();
+  if (!fileId && p.url) {
+    const match = String(p.url).match(/[?&]id=([^&]+)/);
+    if (match) fileId = decodeURIComponent(match[1]);
+  }
+  if (!fileId) return { success: false, error: "Missing fileId or url parameter." };
+
+  let file;
+  try {
+    file = DriveApp.getFileById(fileId);
+  } catch (err) {
+    return { success: false, error: "Could not open screenshot file. It may have been deleted or moved. (" + (err.message || err) + ")" };
+  }
+
+  let blob;
+  try {
+    blob = file.getBlob();
+  } catch (err) {
+    return { success: false, error: "Could not read screenshot contents: " + (err.message || err) };
+  }
+
+  return {
+    success: true,
+    base64: Utilities.base64Encode(blob.getBytes()),
+    mimeType: blob.getContentType() || "image/png",
+    filename: file.getName() || "payment_screenshot.png"
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════
