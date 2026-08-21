@@ -1544,7 +1544,7 @@ const QUIZ = {
       const savedAns = S.quiz.ans[qi];
       return `
       <div class="eqc${savedAns!==null?' answered':''}" id="eqc-${qi}">
-        <div class="qm"><span class="qn mono">Q${qi+1}</span><a class="ib" href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener" title="Search on Google" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px">🔍</a></div>
+        <div class="qm"><span class="qn mono">Q${qi+1}</span><a class="ib" href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener" title="Search on Google" style="text-decoration:none"><i class="ph ph-magnifying-glass"></i></a></div>
         <div class="qt" style="font-size:.85rem">${esc(q.q)}</div>
         ${q.options.map((opt,oi)=>{
           const sel = savedAns===oi;

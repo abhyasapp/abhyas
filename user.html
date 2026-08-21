@@ -942,8 +942,15 @@ window.SRCH={
   go(){
     const inp=$('fc-srch-q'); if(!inp)return;
     const q=encodeURIComponent(inp.value.trim()); if(!q){SRCH.toggle();return;}
+    const url=`https://www.google.com/search?q=${q}`;
+    // Open directly — previously this only rendered a link below the search
+    // bar, so searching was Go-click → then a SECOND click on that link
+    // just to actually reach Google. One click now does it.
+    const win=window.open(url,'_blank','noopener');
+    // If the browser blocked the popup (win is null), or as a visible
+    // fallback either way, still show the link so it's never a dead end.
     htm('fc-srch-links',
-      `<a class="sl sl-g" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener"><i class="ph ph-magnifying-glass"></i> Google</a>`
+      `<a class="sl sl-g" href="${url}" target="_blank" rel="noopener"><i class="ph ph-magnifying-glass"></i> ${win?'Reopen in':'Open'} Google</a>`
     );
   }
 };
