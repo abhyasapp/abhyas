@@ -344,6 +344,12 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           </select>
           <button class="btn-s btn-c" onclick="ADMIN.exportUsers()"><i class="ph ph-download-simple"></i> CSV</button>
         </div>
+        <div class="bulk-bar" id="u-bulk">
+          <span id="u-bulk-count">0 selected</span>
+          <button class="btn-s btn-g btn-sm" onclick="USERS.bulkGrantAccess('permanent')"><i class="ph ph-check"></i> Grant Permanent</button>
+          <button class="btn-s btn-a btn-sm" onclick="USERS.bulkGrantAccess('year')"><i class="ph ph-calendar"></i> Grant 1-Year</button>
+          <button class="btn-s btn-r btn-sm" onclick="USERS.bulkDelete()"><i class="ph ph-trash"></i> Delete</button>
+        </div>
         <div class="tbl-wrap"><table id="users-tbl"><thead><tr>
           <th><input type="checkbox" class="chk" id="u-chk-all" onchange="USERS.toggleAll()" aria-label="Select all users"></th>
           <th>User</th><th>Contact</th><th>Status</th><th>Created</th><th>Access</th><th style="text-align:right">Actions</th>
@@ -661,25 +667,30 @@ const ADMIN = {
   },
 
   exportUsers() {
-    const rows = ADMIN.data.users;
+    // Exports whatever the Users tab's search box + status filter are
+    // currently showing, not the full account list — an admin who
+    // filtered down to e.g. "trial" users almost certainly wants a CSV of
+    // exactly that, not everyone. Falls back to the full list when called
+    // from the dashboard's own Export button (no filter UI on that page).
+    const rows = (typeof USERS !== 'undefined' && document.getElementById('u-search')) ? USERS._visibleRows() : ADMIN.data.users;
     if (!rows.length) return this.toast('No users to export');
     const headers = ['Username','Name','Email','Mobile','Status','Created','Access'];
     const csv = [headers.join(',')];
     rows.forEach(u => {
       csv.push([u.username, u.name||'', u.email||'', u.mobile||'', u.status, u.createdAt||'', u.permanentAccess?'Permanent':u.status].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
     });
-    this.downloadCSV(csv.join('\n'), 'users_export.csv');
+    this.downloadCSV(csv.join('\n'), `users_export_${rows.length===ADMIN.data.users.length?'all':'filtered'}.csv`);
   },
 
   exportPayments() {
-    const rows = ADMIN.data.payments;
+    const rows = (typeof PAYMENTS !== 'undefined' && document.getElementById('p-search')) ? PAYMENTS._visibleRows() : ADMIN.data.payments;
     if (!rows.length) return this.toast('No payments to export');
     const headers = ['Username','Name','TXN ID','Amount','Status','Submitted','Remarks'];
     const csv = [headers.join(',')];
     rows.forEach(p => {
       csv.push([p.username, p.name||'', p.txId, ADMIN.data.settings.paymentAmount||100, p.status, p.submittedAt||'', p.remarks||''].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
     });
-    this.downloadCSV(csv.join('\n'), 'payments_export.csv');
+    this.downloadCSV(csv.join('\n'), `payments_export_${rows.length===ADMIN.data.payments.length?'all':'filtered'}.csv`);
   },
 
   downloadCSV(content, filename) {
@@ -843,6 +854,7 @@ const USERS = {
 
   filter() {
     this.renderPage(this._visibleRows());
+    this.updateBulkBar();
   },
 
   clearFilters() {
@@ -913,12 +925,66 @@ const USERS = {
   toggle(username) {
     if (this.selected.has(username)) this.selected.delete(username);
     else this.selected.add(username);
+    this.updateBulkBar();
   },
 
   toggleAll() {
     const all = document.getElementById('u-chk-all').checked;
     this._visibleRows().forEach(u => all ? this.selected.add(u.username) : this.selected.delete(u.username));
+    this.updateBulkBar();
     this.filter();
+  },
+
+  updateBulkBar() {
+    const bar = document.getElementById('u-bulk');
+    const count = this.selected.size;
+    document.getElementById('u-bulk-count').textContent = count + ' selected';
+    bar.classList.toggle('show', count > 0);
+  },
+
+  clearSelection() {
+    this.selected.clear();
+    document.getElementById('u-chk-all').checked = false;
+    this.updateBulkBar();
+    this.filter();
+  },
+
+  async bulkGrantAccess(duration) {
+    if (!this.selected.size) return;
+    if (!confirm(`Grant ${duration==='year'?'1-YEAR':'PERMANENT'} access to ${this.selected.size} user(s)?`)) return;
+    const usernames = [...this.selected];
+    ADMIN.showLoading('Granting access to ' + usernames.length + ' user(s)…');
+    try {
+      const res = await ADMIN.post('adminGrantAccessBatch', { usernames: JSON.stringify(usernames), duration });
+      if (!res.success) throw new Error(res.error || 'Batch grant failed');
+      const ok = res.results.filter(r => r.success).length;
+      const failed = res.results.length - ok;
+      ADMIN.toast('✅ Access granted to ' + ok + (failed ? ', ❌ ' + failed + ' failed' : ''));
+    } catch(e) {
+      ADMIN.toast('❌ ' + e.message);
+    }
+    ADMIN.hideLoading();
+    this.clearSelection();
+    ADMIN.refresh(['stats','users']);
+  },
+
+  async bulkDelete() {
+    if (!this.selected.size) return;
+    if (!confirm(`Permanently delete ${this.selected.size} user account(s)? This cannot be undone.`)) return;
+    const usernames = [...this.selected];
+    ADMIN.showLoading('Deleting ' + usernames.length + ' user(s)…');
+    try {
+      const res = await ADMIN.post('adminDeleteUsersBatch', { usernames: JSON.stringify(usernames) });
+      if (!res.success) throw new Error(res.error || 'Batch delete failed');
+      const ok = res.results.filter(r => r.success).length;
+      const failed = res.results.length - ok;
+      ADMIN.toast('🗑 Deleted ' + ok + (failed ? ', ❌ ' + failed + ' failed' : ''));
+    } catch(e) {
+      ADMIN.toast('❌ ' + e.message);
+    }
+    ADMIN.hideLoading();
+    this.clearSelection();
+    ADMIN.refresh(['stats','users']);
   },
 
   view(username) {

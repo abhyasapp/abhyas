@@ -228,6 +228,33 @@ function toast(msg,dur=3200){
   c.appendChild(t);
   setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),300)},dur);
 }
+// Toast with an inline Undo button, for reversible destructive actions
+// that don't need a blocking confirm() dialog — e.g. clearAll() below
+// applies the change immediately (list feels instantly responsive) and
+// gives a 6s window to reverse it, instead of interrupting the flow with
+// a modal that has to be dismissed either way. If the toast times out or
+// is dismissed without Undo being pressed, onCommit (if given) runs to
+// finalize anything that was only staged, not actually applied yet.
+function toastUndo(msg, onUndo, dur=6000){
+  const c=document.getElementById('toasts');
+  if(!c)return;
+  const t=document.createElement('div');
+  t.className='toast';
+  t.style.cssText='display:flex;align-items:center;gap:.6rem';
+  const label=document.createElement('span'); label.textContent=msg;
+  const btn=document.createElement('button');
+  btn.textContent='Undo';
+  btn.style.cssText='background:none;border:none;color:var(--amb,#f5b342);font-weight:700;font-size:.76rem;cursor:pointer;padding:.1rem .3rem;flex-shrink:0';
+  let undone=false;
+  btn.onclick=()=>{
+    undone=true;
+    onUndo && onUndo();
+    t.classList.add('out'); setTimeout(()=>t.remove(),300);
+  };
+  t.appendChild(label); t.appendChild(btn);
+  c.appendChild(t);
+  setTimeout(()=>{ if(!undone){ t.classList.add('out'); setTimeout(()=>t.remove(),300); } }, dur);
+}
 function openMod(title,html){
   document.getElementById('mtitle').textContent=title;
   document.getElementById('mbody').innerHTML=html;
@@ -413,17 +440,42 @@ const AUTH = {
 /* ═══════════════ 4b. PSYNC — background progress backup ═══════════════ */
 const PSYNC = {
   _timer: null,
+  // 'idle' | 'pending' | 'syncing' | 'synced' | 'error' — drives the small
+  // dot on the topbar (#tb-sync) so a student can tell at a glance whether
+  // their progress is actually saved, without opening the Settings panel
+  // where PSYNC's original text-only status line lives. That line (below,
+  // via #psync-status) still updates too — this just makes the same state
+  // visible from every screen, not only Settings.
+  _state: 'idle',
   _setStatus(msg){
     const el = document.getElementById('psync-status');
     if(el) el.textContent = msg;
   },
+  _setState(state){
+    this._state = state;
+    const dot = document.getElementById('tb-sync-dot');
+    const btn = document.getElementById('tb-sync-btn');
+    if(!dot || !btn) return;
+    const cfg = {
+      idle:    {color:'var(--t3)', title:'Not synced yet this session', anim:false},
+      pending: {color:'var(--amb)', title:'Sync pending…',              anim:false},
+      syncing: {color:'var(--sky,#38bdf8)', title:'Syncing…',           anim:true},
+      synced:  {color:'var(--grn)', title:'Progress backed up',         anim:false},
+      error:   {color:'var(--rose,#f43f5e)', title:'Sync failed — will retry', anim:false}
+    }[state] || {color:'var(--t3)', title:'', anim:false};
+    dot.style.background = cfg.color;
+    dot.style.animation = cfg.anim ? 'pulse 1s ease-in-out infinite' : 'none';
+    btn.title = cfg.title;
+  },
   scheduleSync(){
     if(!S.user || !S.user.token) return;
+    this._setState('pending');
     clearTimeout(this._timer);
     this._timer = setTimeout(()=>this.pushNow(), 8000);
   },
   async pushNow(){
     if(!S.online || !S.user || !S.user.token) return;
+    this._setState('syncing');
     const payload = JSON.stringify({prog:S.prog, bk:S.bk, fl:S.fl, wr:S.wr, stk:S.stk});
     try{
       const r = await netFetch(APPS, {
@@ -432,9 +484,9 @@ const PSYNC = {
         body: JSON.stringify({action:'saveProgress', username:S.user.username, token:S.user.token, data:payload})
       }, 15000);
       const res = await r.json();
-      if(res && res.success) this._setStatus('Last backed up: ' + new Date().toLocaleString());
-      else this._setStatus('Backup failed — will retry automatically.');
-    }catch(e){ this._setStatus('Backup failed (offline?) — will retry automatically.'); }
+      if(res && res.success){ this._setStatus('Last backed up: ' + new Date().toLocaleString()); this._setState('synced'); }
+      else { this._setStatus('Backup failed — will retry automatically.'); this._setState('error'); }
+    }catch(e){ this._setStatus('Backup failed (offline?) — will retry automatically.'); this._setState('error'); }
   },
   async pullIfEmpty(){
     if(!S.online || !S.user || !S.user.token) return;
@@ -841,12 +893,21 @@ const REV = {
     if(i>-1){arr.splice(i,1);_save(REV._lsKey(kind),arr);REV.renderList(kind);HOME.updateBadges();}
   },
   clearAll(kind){
-    if(!confirm('Clear this whole list?'))return;
+    // Snapshot before clearing so Undo can restore exactly what was there,
+    // including any tags/streak metadata on individual items — not just
+    // an empty-vs-full toggle.
+    const prev = JSON.parse(JSON.stringify(REV._store(kind)));
     if(kind==='bk'){S.bk=[];_save(LS.BK,[]);}
     else if(kind==='fl'){S.fl=[];_save(LS.FL,[]);}
     else {S.wr=[];_save(LS.WR,[]);}
     REV.renderList(kind); HOME.updateBadges();
-    toast('🗑 Cleared');
+    toastUndo('🗑 List cleared', ()=>{
+      if(kind==='bk'){S.bk=prev;_save(LS.BK,prev);}
+      else if(kind==='fl'){S.fl=prev;_save(LS.FL,prev);}
+      else {S.wr=prev;_save(LS.WR,prev);}
+      REV.renderList(kind); HOME.updateBadges();
+      toast('↩️ Restored');
+    });
   },
   start(kind, mode, dueOnly){
     let arr = [...REV._store(kind)];

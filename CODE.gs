@@ -159,8 +159,10 @@ function doGet(e) {
       case "adminreviewpaymentsbatch": result = adminReviewPaymentsBatch(e.parameter); break;
       case "admindownloadscreenshot": result = adminDownloadScreenshot(e.parameter); break;
       case "admingrantaccess":   result = adminGrantAccess(e.parameter); break;
+      case "admingrantaccessbatch": result = adminGrantAccessBatch(e.parameter); break;
       case "adminupdateuser":    result = adminUpdateUser(e.parameter); break;
       case "admindeleteuser":    result = adminDeleteUser(e.parameter); break;
+      case "admindeleteusersbatch": result = adminDeleteUsersBatch(e.parameter); break;
       case "admindeletepayment": result = adminDeletePayment(e.parameter); break;
       case "adminupdatesettings":result = adminUpdateSettings(e.parameter); break;
       case "adminupdatesettingsbatch": result = adminUpdateSettingsBatch(e.parameter); break;
@@ -170,7 +172,7 @@ function doGet(e) {
       default:
         result = {
           success: false,
-          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, saveProgress, getProgress, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminUpdateUser, adminDeleteUser, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs"
+          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, saveProgress, getProgress, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs"
         };
     }
   } catch (err) {
@@ -1726,6 +1728,70 @@ function adminGrantAccess(p) {
   });
 }
 
+// Batched sibling of adminGrantAccess() above, same rationale as
+// adminReviewPaymentsBatch() for payments: one Users read turned into a
+// lookup map, applied to every selected username in one execution,
+// instead of the admin panel firing N sequential adminGrantAccess
+// requests for a multi-select "grant access" action.
+function adminGrantAccessBatch(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+
+  let usernames;
+  try {
+    usernames = JSON.parse(p.usernames || "[]");
+  } catch (e) {
+    return { success: false, error: "usernames must be a JSON array." };
+  }
+  if (!Array.isArray(usernames) || !usernames.length) {
+    return { success: false, error: "No usernames provided." };
+  }
+
+  const duration = String(p.duration || "").trim();
+  if (!["permanent", "year"].includes(duration)) {
+    return { success: false, error: "Duration must be 'permanent' or 'year'." };
+  }
+
+  return withLock_(() => {
+    const sheet = getUsersSheet_();
+    const data = sheet.getDataRange().getValues();
+    const rowByUser = {};
+    for (let i = 1; i < data.length; i++) {
+      rowByUser[String(data[i][0]).toLowerCase().trim()] = i + 1;
+    }
+
+    let expiresAtIso = "";
+    if (duration === "year") {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 365);
+      expiresAtIso = expiresAt.toISOString();
+    }
+    const nowIso = new Date().toISOString();
+    const results = [];
+
+    usernames.forEach(rawUsername => {
+      const username = String(rawUsername || "").trim();
+      const rowIndex = rowByUser[username.toLowerCase()];
+      if (!rowIndex) { results.push({ username, success: false, error: "User not found." }); return; }
+
+      sheet.getRange(rowIndex, 8).setValue("active");
+      sheet.getRange(rowIndex, 10).setValue(nowIso);
+      sheet.getRange(rowIndex, 13).setValue("verified");
+      sheet.getRange(rowIndex, 14).setValue("true");
+      sheet.getRange(rowIndex, 15).setValue(duration === "year" ? "yearly" : "permanent");
+      sheet.getRange(rowIndex, 16).setValue(expiresAtIso);
+
+      results.push({ username, success: true });
+    });
+
+    const okCount = results.filter(r => r.success).length;
+    logAction_(actor, "Bulk Grant Access", usernames.join(", "),
+      "Duration: " + duration + " — " + okCount + "/" + usernames.length + " succeeded");
+
+    return { success: true, duration, accessExpiresAt: expiresAtIso, results };
+  });
+}
+
 // Column indices below follow USER_HEADERS: name=3, email=4, mobile=5,
 // status=8, permanentAccess=14 (1-indexed sheet columns).
 function adminUpdateUser(p) {
@@ -1773,6 +1839,57 @@ function adminDeleteUser(p) {
     sheet.deleteRow(found.rowIndex);
     logAction_(actor, "Delete User", username, "");
     return { success: true, deleted: username };
+  });
+}
+
+// Batched sibling of adminDeleteUser() above. Row indices are deleted
+// HIGH-TO-LOW deliberately — deleteRow() shifts every row below it up by
+// one, so deleting in the order the rows were originally found (low to
+// high) would silently delete the WRONG row for every username after the
+// first one. Sorting descending first means each deleteRow() only ever
+// affects rows that haven't been touched yet.
+function adminDeleteUsersBatch(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+
+  let usernames;
+  try {
+    usernames = JSON.parse(p.usernames || "[]");
+  } catch (e) {
+    return { success: false, error: "usernames must be a JSON array." };
+  }
+  if (!Array.isArray(usernames) || !usernames.length) {
+    return { success: false, error: "No usernames provided." };
+  }
+
+  return withLock_(() => {
+    const sheet = getUsersSheet_();
+    const data = sheet.getDataRange().getValues();
+    const rowByUser = {};
+    for (let i = 1; i < data.length; i++) {
+      rowByUser[String(data[i][0]).toLowerCase().trim()] = i + 1;
+    }
+
+    const results = [];
+    const toDelete = []; // [{username, rowIndex}]
+    usernames.forEach(rawUsername => {
+      const username = String(rawUsername || "").trim();
+      const rowIndex = rowByUser[username.toLowerCase()];
+      if (!rowIndex) { results.push({ username, success: false, error: "User not found." }); return; }
+      toDelete.push({ username, rowIndex });
+    });
+
+    toDelete.sort((a, b) => b.rowIndex - a.rowIndex); // high-to-low, see comment above
+    toDelete.forEach(({ username, rowIndex }) => {
+      sheet.deleteRow(rowIndex);
+      results.push({ username, success: true });
+    });
+
+    const okCount = results.filter(r => r.success).length;
+    logAction_(actor, "Bulk Delete User", usernames.join(", "),
+      okCount + "/" + usernames.length + " succeeded");
+
+    return { success: true, results };
   });
 }
 
