@@ -35,12 +35,53 @@
 importScripts('./version.js');
 const CACHE_NAME = 'abhyas-v' + APP_VERSION;
 
+/* ── PUSH NOTIFICATIONS (Firebase Cloud Messaging) ──────────────────
+   Wrapped in try/catch: these are remote CDN scripts, not part of our
+   own SHELL, so a network hiccup during SW install/activation must
+   never break offline caching (this SW's actual job) just because push
+   notifications couldn't initialize. If firebase-config.js still has
+   its placeholder values (FIREBASE_CONFIGURED === false — see that
+   file), this deliberately skips initializing Firebase at all, rather
+   than letting it throw on a fake API key. */
+let _fcmMessaging = null;
+try {
+  importScripts(
+    './firebase-config.js',
+    'https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js',
+    'https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js'
+  );
+  if (typeof FIREBASE_CONFIGURED !== 'undefined' && FIREBASE_CONFIGURED) {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    _fcmMessaging = firebase.messaging();
+  }
+} catch (err) {
+  console.warn('SW: push notifications unavailable (not configured yet, or offline during install)', err);
+}
+
+// Fires when a push arrives while no Abhyas tab is focused — Firebase's
+// SDK handles the actual push-event parsing; this just decides how to
+// display it. Tapping it is handled by the existing 'notificationclick'
+// listener further down (already built for timetable reminders — reused
+// as-is here, no changes needed there).
+if (_fcmMessaging) {
+  _fcmMessaging.onBackgroundMessage(payload => {
+    const title = (payload.notification && payload.notification.title) || 'Abhyas';
+    const body = (payload.notification && payload.notification.body) || '';
+    self.registration.showNotification(title, {
+      body,
+      icon: './icon-192.png',
+      badge: './icon-192.png'
+    });
+  });
+}
+
 const SHELL = [
   './',
   './index.html',
   './user.html',
   './app.js',
   './version.js',
+  './firebase-config.js',
   './chapters-data.js',
   './shared.js',
   './manifest.json',

@@ -33,6 +33,7 @@ const SETTINGS_SHEET  = "Settings";
 const LOGS_SHEET      = "Logs";
 const ADMINS_SHEET    = "Admins";
 const PROGRESS_SHEET  = "Progress";
+const PUSHTOKENS_SHEET = "PushTokens";
 
 /* ── BRUTE-FORCE LOGIN PROTECTION ────────────────────────────────
    Tracks failed attempts per-username in PropertiesService (not a sheet
@@ -106,6 +107,14 @@ const ADMIN_HEADERS = [
 // blob means adding a new tracked field never needs a new column here.
 const PROGRESS_HEADERS = ["username", "data", "updatedAt"];
 
+// One row per user's current FCM registration token. A user can only ever
+// have ONE row here (unlike Progress, this isn't meant to accumulate
+// history) — re-subscribing (new device, cleared browser data, token
+// rotated by the browser) overwrites the existing row rather than adding
+// a new one, since sendPushNotification_ only ever needs the LATEST
+// token to reach a user, never their subscription history.
+const PUSHTOKENS_HEADERS = ["username", "fcmToken", "updatedAt"];
+
 const TRIAL_HOURS = 24;
 
 /* ═══════════════════════════════════════════════════════════════
@@ -140,6 +149,7 @@ function doGet(e) {
       case "checksession":       result = checkSession(e.parameter); break;
       case "saveprogress":       result = saveProgress(e.parameter); break;
       case "getprogress":        result = getProgress(e.parameter); break;
+      case "savepushtoken":      result = savePushToken(e.parameter); break;
 
       // ── PAYMENT ──
       case "submitpayment":      result = submitPayment(e.parameter); break;
@@ -172,7 +182,7 @@ function doGet(e) {
       default:
         result = {
           success: false,
-          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, saveProgress, getProgress, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs"
+          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, saveProgress, getProgress, savePushToken, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs"
         };
     }
   } catch (err) {
@@ -246,7 +256,9 @@ function setup() {
   getLogsSheet_(); // was missing here — previously only got created lazily on the first admin action, so a fresh setup() run left the Logs tab absent until then.
   getAdminsSheet_(); // seeds the first admin login (see ADMIN_SEED_USERNAME/PASSWORD above)
   getProgressSheet_();
+  getPushTokensSheet_();
   initDefaultSettings_();
+  ensurePushTriggers_();
   // Idempotent — guarantees every sheet has the correct text-formatting
   // and column widths whether it was just created above or already
   // existed from before this update.
@@ -467,6 +479,31 @@ function getProgressSheet_() {
 }
 
 function findProgressRow_(sheet, username) {
+  if (!username) return null;
+  const data = sheet.getDataRange().getValues();
+  const target = String(username).toLowerCase().trim();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase().trim() === target) {
+      return { rowIndex: i + 1, row: data[i] };
+    }
+  }
+  return null;
+}
+
+function getPushTokensSheet_() {
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(PUSHTOKENS_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(PUSHTOKENS_SHEET);
+    sheet.appendRow(PUSHTOKENS_HEADERS);
+    const maxRows = sheet.getMaxRows() - 1;
+    sheet.getRange(2, 1, maxRows, 1).setNumberFormat("@"); // username, same all-digits protection as Users
+    applyTableFormat_(sheet, PUSHTOKENS_HEADERS, "#e67c00", SpreadsheetApp.BandingTheme.ORANGE, 300);
+  }
+  return sheet;
+}
+
+function findPushTokenRow_(sheet, username) {
   if (!username) return null;
   const data = sheet.getDataRange().getValues();
   const target = String(username).toLowerCase().trim();
@@ -1361,6 +1398,210 @@ function adminDownloadScreenshot(p) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   PUSH NOTIFICATIONS — Firebase Cloud Messaging (FCM)
+   ───────────────────────────────────────────────────────────────
+   SETUP REQUIRED (one-time, must be done by a project owner in the
+   Apps Script editor — nothing here works until this is done):
+
+   1. Create a Firebase project at console.firebase.google.com (free
+      tier). Project Settings → Cloud Messaging → note the Sender ID.
+      Project Settings → Cloud Messaging → Web configuration →
+      generate a "Web Push certificate" (this is a VAPID key pair —
+      copy the public key into firebase-config.js on the client).
+   2. Project Settings → Service Accounts → "Generate new private
+      key" — downloads a JSON file. NEVER commit this file or its
+      contents to the repo (it's public on GitHub). Instead:
+   3. In the Apps Script editor: Project Settings (gear icon) →
+      Script Properties → add three properties from that JSON file:
+        FCM_PROJECT_ID    = the "project_id" field
+        FCM_CLIENT_EMAIL  = the "client_email" field
+        FCM_PRIVATE_KEY   = the full "private_key" field, INCLUDING
+                            the -----BEGIN/END PRIVATE KEY----- lines
+   Every function below reads these via PropertiesService — if any
+   are missing, sendPushNotification_ fails loudly with a clear error
+   naming which property is unset, rather than silently doing nothing.
+   ═══════════════════════════════════════════════════════════════ */
+
+// Google's service-account OAuth flow needs a JWT signed with RS256
+// (RSA) — NOT the ES256/elliptic-curve signing that raw Web Push's own
+// VAPID auth requires. Apps Script's Utilities class has no EC signing
+// at all, which is what makes implementing Web Push directly in Apps
+// Script impractical — but it DOES have computeRsaSha256Signature,
+// which is exactly what RS256 needs. That's what makes going through
+// FCM (rather than raw Web Push) actually buildable here.
+function getFcmAccessToken_() {
+  const props = PropertiesService.getScriptProperties();
+  const clientEmail = props.getProperty("FCM_CLIENT_EMAIL");
+  const privateKey = props.getProperty("FCM_PRIVATE_KEY");
+  if (!clientEmail || !privateKey) {
+    throw new Error("Push notifications not configured: missing FCM_CLIENT_EMAIL or FCM_PRIVATE_KEY in Script Properties. See the setup comment above sendPushNotification_.");
+  }
+
+  const header = { alg: "RS256", typ: "JWT" };
+  const now = Math.floor(Date.now() / 1000);
+  const claimSet = {
+    iss: clientEmail,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now
+  };
+
+  const b64url = obj => Utilities.base64EncodeWebSafe(JSON.stringify(obj)).replace(/=+$/, "");
+  const unsigned = b64url(header) + "." + b64url(claimSet);
+  const signatureBytes = Utilities.computeRsaSha256Signature(unsigned, privateKey);
+  const signature = Utilities.base64EncodeWebSafe(signatureBytes).replace(/=+$/, "");
+  const jwt = unsigned + "." + signature;
+
+  const resp = UrlFetchApp.fetch("https://oauth2.googleapis.com/token", {
+    method: "post",
+    contentType: "application/x-www-form-urlencoded",
+    payload: {
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt
+    },
+    muteHttpExceptions: true
+  });
+  const body = JSON.parse(resp.getContentText());
+  if (!body.access_token) {
+    throw new Error("Could not get FCM access token: " + (body.error_description || resp.getContentText()));
+  }
+  return body.access_token;
+}
+
+// Sends one push notification to one user's most recently registered
+// device (see PUSHTOKENS_HEADERS — only the latest token is kept, not a
+// history). Best-effort by design: every call site below wraps this in
+// try/catch, because a failed push should never break the underlying
+// action (payment review, signup, etc.) that triggered it. A stale/
+// invalid token (UNREGISTERED, from an uninstalled PWA or revoked
+// permission) is treated as a normal "nothing to do" case, not an error
+// worth surfacing — FCM returns that as a 404/400 from the send call.
+function sendPushNotification_(username, title, body) {
+  const sheet = getPushTokensSheet_();
+  const found = findPushTokenRow_(sheet, username);
+  if (!found || !found.row[1]) return { success: false, error: "No push token on file for this user." };
+
+  const projectId = PropertiesService.getScriptProperties().getProperty("FCM_PROJECT_ID");
+  if (!projectId) return { success: false, error: "Push notifications not configured: missing FCM_PROJECT_ID." };
+
+  let accessToken;
+  try {
+    accessToken = getFcmAccessToken_();
+  } catch (err) {
+    console.error("sendPushNotification_ auth failed:", err);
+    return { success: false, error: err.message || String(err) };
+  }
+
+  const resp = UrlFetchApp.fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+    method: "post",
+    contentType: "application/json",
+    headers: { Authorization: "Bearer " + accessToken },
+    payload: JSON.stringify({
+      message: {
+        token: found.row[1],
+        notification: { title, body },
+        webpush: { fcm_options: { link: "/" } } // opens/focuses the PWA on click
+      }
+    }),
+    muteHttpExceptions: true
+  });
+
+  const result = JSON.parse(resp.getContentText() || "{}");
+  if (resp.getResponseCode() >= 400) {
+    // UNREGISTERED means the token is dead (uninstalled, permission revoked,
+    // browser data cleared) — clean it up so future attempts don't keep
+    // hitting the same dead end.
+    const isUnregistered = result.error && result.error.details &&
+      result.error.details.some(d => d.errorCode === "UNREGISTERED");
+    if (isUnregistered) sheet.deleteRow(found.rowIndex);
+    return { success: false, error: (result.error && result.error.message) || resp.getContentText() };
+  }
+  return { success: true };
+}
+
+// Called from the client right after the browser grants Notification
+// permission and Firebase hands back an FCM registration token (see
+// user.html's PUSH module). Auth mirrors saveProgress/getProgress — a
+// valid session token, not just a matching username — since a forged
+// call here could otherwise redirect another user's notifications to an
+// attacker's own device.
+function savePushToken(p) {
+  const username = String(p.username || "").trim();
+  const token = String(p.fcmToken || "").trim();
+  if (!username || !token) return { success: false, error: "Username and fcmToken required." };
+
+  const userSheet = getUsersSheet_();
+  const userFound = findUserRow_(userSheet, username);
+  if (!userFound) return { success: false, error: "User not found." };
+  if (!verifyUserToken_(userFound, p.token)) {
+    return { success: false, error: "Session expired. Please log in again.", sessionInvalid: true };
+  }
+
+  return withLock_(() => {
+    const sheet = getPushTokensSheet_();
+    const found = findPushTokenRow_(sheet, username);
+    const now = new Date().toISOString();
+    if (found) {
+      sheet.getRange(found.rowIndex, 2, 1, 2).setValues([[token, now]]);
+    } else {
+      sheet.appendRow([username, token, now]);
+    }
+    return { success: true };
+  });
+}
+
+// Scans for users whose trial expires within the next TRIAL_WARNING_WINDOW_MS
+// and haven't been warned yet (tracked in PropertiesService, not a sheet
+// column — same lightweight pattern as the login-lockout tracking above).
+// Intended to run on a time-driven trigger (see ensurePushTriggers_ below),
+// not called directly from doGet — there's no user-facing action for this,
+// it's purely a scheduled background job.
+const TRIAL_WARNING_WINDOW_MS = 2 * 60 * 60 * 1000; // warn when ≤2h left
+
+function checkTrialExpiryWarnings() {
+  const sheet = getUsersSheet_();
+  const data = sheet.getDataRange().getValues();
+  const props = PropertiesService.getScriptProperties();
+  const now = Date.now();
+  let sent = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const status = data[i][7];
+    const username = data[i][0];
+    const trialExpiresAt = data[i][11] ? new Date(data[i][11]).getTime() : null;
+    if (status !== "trial" || !trialExpiresAt) continue;
+
+    const msLeft = trialExpiresAt - now;
+    if (msLeft <= 0 || msLeft > TRIAL_WARNING_WINDOW_MS) continue;
+
+    const warnKey = "trialwarned_" + String(username).toLowerCase();
+    if (props.getProperty(warnKey)) continue; // already warned this user for this trial
+
+    try {
+      const result = sendPushNotification_(username, "Your trial is ending soon",
+        "Your Abhyas trial expires in under 2 hours. Complete payment to keep your access.");
+      if (result.success) { props.setProperty(warnKey, "1"); sent++; }
+    } catch (err) {
+      console.error("checkTrialExpiryWarnings failed for " + username + ":", err);
+    }
+  }
+  if (sent) console.log("Sent " + sent + " trial-expiry warning(s).");
+  return "Checked. Sent " + sent + " warning(s).";
+}
+
+// Creates the time-driven trigger for checkTrialExpiryWarnings if one
+// doesn't already exist — called from setup() so a fresh deploy gets
+// this automatically, but safe to re-run any time without creating
+// duplicate triggers (which would send duplicate warnings).
+function ensurePushTriggers_() {
+  const already = ScriptApp.getProjectTriggers()
+    .some(t => t.getHandlerFunction() === "checkTrialExpiryWarnings");
+  if (already) return;
+  ScriptApp.newTrigger("checkTrialExpiryWarnings").timeBased().everyMinutes(30).create();
+}
+
+/* ═══════════════════════════════════════════════════════════════
    ADMIN API — The Admin World
    ═══════════════════════════════════════════════════════════════ */
 
@@ -1603,6 +1844,23 @@ function adminReviewPayment(p) {
   }
 
   logAction_(actor, "Review Payment", username, "Status: " + status + (rejectionReason ? " (" + rejectionReason + ")" : ""));
+
+  // Best-effort: a push failure (no token on file, FCM not configured
+  // yet, etc.) should never make the review itself fail or roll back —
+  // the payment status change above is the important part and always
+  // succeeds regardless of notification outcome.
+  if (status === "verified" || status === "rejected") {
+    try {
+      sendPushNotification_(username,
+        status === "verified" ? "Payment verified! 🎉" : "Payment rejected",
+        status === "verified"
+          ? "Your payment has been verified. You now have full access to Abhyas."
+          : "Your payment was rejected" + (rejectionReason ? ": " + rejectionReason : ". Please check and resubmit."));
+    } catch (err) {
+      console.error("Push notification failed for " + username + ":", err);
+    }
+  }
+
   return { success: true, username, status };
   });
 }
@@ -1683,6 +1941,23 @@ function adminReviewPaymentsBatch(p) {
     const okCount = results.filter(r => r.success).length;
     logAction_(actor, "Bulk Review Payment", usernames.join(", "),
       "Status: " + status + (rejectionReason ? " (" + rejectionReason + ")" : "") + " — " + okCount + "/" + usernames.length + " succeeded");
+
+    // Same best-effort push as the single-record adminReviewPayment —
+    // one notification per successfully-updated user, never blocking or
+    // failing the batch itself.
+    if (status === "verified" || status === "rejected") {
+      results.filter(r => r.success).forEach(r => {
+        try {
+          sendPushNotification_(r.username,
+            status === "verified" ? "Payment verified! 🎉" : "Payment rejected",
+            status === "verified"
+              ? "Your payment has been verified. You now have full access to Abhyas."
+              : "Your payment was rejected" + (rejectionReason ? ": " + rejectionReason : ". Please check and resubmit."));
+        } catch (err) {
+          console.error("Push notification failed for " + r.username + ":", err);
+        }
+      });
+    }
 
     return { success: true, status, results };
   });
@@ -2053,7 +2328,12 @@ function fixSheetFormatting() {
   pr.getRange(2, 1, maxRows, 1).setNumberFormat("@");
   applyTableFormat_(pr, PROGRESS_HEADERS, "#0f9d58", SpreadsheetApp.BandingTheme.GREEN, 300);
 
-  console.log("✅ Sheet formatting fixed/retrofitted on all six sheets.");
+  const pt = getPushTokensSheet_();
+  maxRows = pt.getMaxRows() - 1;
+  pt.getRange(2, 1, maxRows, 1).setNumberFormat("@");
+  applyTableFormat_(pt, PUSHTOKENS_HEADERS, "#e67c00", SpreadsheetApp.BandingTheme.ORANGE, 300);
+
+  console.log("✅ Sheet formatting fixed/retrofitted on all seven sheets.");
   return "Sheet formatting fixed. Check View → Logs for details.";
 }
 

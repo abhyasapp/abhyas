@@ -723,6 +723,12 @@ input[type=file]:hover{border-color:var(--amb)}
             <button class="btn btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="DATA.restoreCloud()"><i class="ph ph-cloud-arrow-down"></i> Restore From Cloud</button>
           </div>
         </div>
+        <div class="card"><div class="card-hd"><h3>Notifications</h3></div>
+          <p style="font-size:.78rem;color:var(--t3);margin:0 0 .6rem" id="push-status-desc">Get notified when your trial is about to end or your payment is verified — even when the app isn't open.</p>
+          <div class="bg">
+            <button class="btn btn-a" id="push-enable-btn" onclick="PUSH.enable()"><i class="ph ph-bell"></i> Enable Notifications</button>
+          </div>
+        </div>
       </div>
 
       <!-- OFFLINE CACHE -->
@@ -838,6 +844,9 @@ input[type=file]:hover{border-color:var(--amb)}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
+<script src="firebase-config.js"></script>
 <script src="version.js"></script>
 <script src="shared.js"></script>
 <script src="chapters-data.js"></script>

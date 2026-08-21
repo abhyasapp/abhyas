@@ -376,6 +376,7 @@ const AUTH = {
     TUTORIAL.maybeAutoOpen(user);
     PSYNC.pullIfEmpty();
     TT._startReminderChecker();
+    if(typeof PUSH!=='undefined') PUSH.silentRefresh();
   },
   _updateSidebarCard(user){
     const nameEl = document.getElementById('sb-uname');
@@ -523,6 +524,119 @@ const PSYNC = {
   }
 };
 
+/* ═══════════════ 4c. PUSH — Firebase Cloud Messaging notifications ═══════
+   Deliberately opt-in via a button (Settings → "Enable Notifications"),
+   never an automatic permission prompt on load — an unsolicited browser
+   permission popup on first visit is one of the most reliable ways to
+   make a new visitor bounce, before they've even seen what the app does.
+   See firebase-config.js for the one-time setup this depends on; every
+   method below no-ops safely (with a clear toast) if that hasn't been
+   done yet, rather than throwing on Firebase rejecting a placeholder
+   config. ═══════════════════════════════════════════════════════════ */
+const PUSH = {
+  _messaging: null,
+
+  supported(){
+    return typeof FIREBASE_CONFIGURED !== 'undefined' && FIREBASE_CONFIGURED
+      && 'Notification' in window && 'serviceWorker' in navigator
+      && typeof firebase !== 'undefined';
+  },
+
+  // Reflects current state in the Settings UI: 'unsupported' (browser or
+  // config doesn't allow it at all) | 'denied' (user said no — button
+  // should explain they need to re-enable via browser site settings,
+  // since JS can't re-prompt once denied) | 'granted' | 'default' (never
+  // asked yet).
+  status(){
+    if(!this.supported()) return 'unsupported';
+    return Notification.permission; // 'default' | 'granted' | 'denied'
+  },
+
+  async enable(){
+    if(!this.supported()){
+      toast('❌ Notifications need setup on the backend first — ask your admin.');
+      return;
+    }
+    if(Notification.permission === 'denied'){
+      toast('🔕 Notifications are blocked for this site — enable them in your browser\'s site settings, then try again.');
+      return;
+    }
+    try{
+      const permission = await Notification.requestPermission();
+      if(permission !== 'granted'){ toast('Notifications not enabled.'); return; }
+
+      if(!this._messaging){
+        firebase.initializeApp(FIREBASE_CONFIG);
+        this._messaging = firebase.messaging();
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const token = await this._messaging.getToken({ vapidKey: FIREBASE_VAPID_KEY, serviceWorkerRegistration: reg });
+      if(!token){ toast('❌ Could not get a notification token — try again.'); return; }
+
+      if(!S.user || !S.user.token){ toast('✅ Notifications enabled — will sync once you\'re logged in.'); return; }
+      const r = await netFetch(APPS, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({action:'savePushToken', username:S.user.username, token:S.user.token, fcmToken:token})
+      }, 15000);
+      const res = await r.json();
+      if(res && res.success) toast('🔔 Notifications enabled');
+      else toast('⚠️ Enabled locally, but couldn\'t sync to your account — try again while online.');
+    }catch(e){
+      toast('❌ Could not enable notifications: ' + (e.message||e));
+    }
+  },
+
+  // Runs quietly on every load for an already-granted, already-logged-in
+  // user — refreshes the stored token in case it rotated (browsers do
+  // this periodically), without re-prompting for permission.
+  async silentRefresh(){
+    if(!this.supported() || Notification.permission !== 'granted') return;
+    if(!S.user || !S.user.token) return;
+    try{
+      if(!this._messaging){
+        firebase.initializeApp(FIREBASE_CONFIG);
+        this._messaging = firebase.messaging();
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const token = await this._messaging.getToken({ vapidKey: FIREBASE_VAPID_KEY, serviceWorkerRegistration: reg });
+      if(!token) return;
+      await netFetch(APPS, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({action:'savePushToken', username:S.user.username, token:S.user.token, fcmToken:token})
+      }, 15000);
+    }catch(e){ /* best-effort — a failed silent refresh isn't worth bothering the user about */ }
+  },
+
+  // Reflects current permission state on the Settings button — called
+  // whenever the Progress/Settings view is opened (see UI._goRaw above)
+  // so it's never stale if the person changed the browser's site
+  // permission since their last visit to this screen.
+  refreshButtonUI(){
+    const btn = document.getElementById('push-enable-btn');
+    const desc = document.getElementById('push-status-desc');
+    if(!btn || !desc) return;
+    const state = this.status();
+    if(state === 'unsupported'){
+      btn.style.display = 'none';
+      desc.textContent = 'Notifications aren\'t set up for this deployment yet.';
+    } else if(state === 'granted'){
+      btn.innerHTML = '<i class="ph ph-bell-ringing"></i> Notifications Enabled';
+      btn.disabled = true;
+      btn.style.opacity = '.7';
+      desc.textContent = 'You\'ll be notified about trial expiry and payment status, even when the app is closed.';
+    } else if(state === 'denied'){
+      btn.innerHTML = '<i class="ph ph-bell-slash"></i> Blocked — check browser settings';
+      desc.textContent = 'Notifications are blocked for this site. Enable them in your browser\'s site settings, then reload.';
+    } else {
+      btn.innerHTML = '<i class="ph ph-bell"></i> Enable Notifications';
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  }
+};
+
 /* ═══════════════ 5. PWA ═══════════════ */
 const PWA = {
   init(){
@@ -564,7 +678,7 @@ const UI = {
     UI.cur=v;UI.sidebarClose();window.scrollTo(0,0);
     ({
       home:()=>HOME.render(),
-      progress:()=>PROG.render(),
+      progress:()=>{ PROG.render(); if(typeof PUSH!=='undefined') PUSH.refreshButtonUI(); },
       online:()=>ONPROG.render(),
       offline:()=>CACHE.render(),
       bookmarks:()=>REV.renderList('bk'),
