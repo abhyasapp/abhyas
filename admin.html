@@ -519,7 +519,12 @@ const ADMIN = {
       this.creds = {user: u, token: res.adminToken, expires: Date.now() + 86400000};
       localStorage.setItem('abhyas_admin', JSON.stringify(this.creds));
       this.unlock();
-      this.toast('✅ Signed in');
+      if (res.mustChangePassword) {
+        this.toast('⚠️ You are using the default admin password — please change it now');
+        this.changePassword();
+      } else {
+        this.toast('✅ Signed in');
+      }
     } catch(e) { this.showErr(e.message || 'Login failed. Check connection.'); }
     this.setLoading(false);
   },

@@ -77,6 +77,43 @@ function clearLoginLock_(kind, username) {
   PropertiesService.getScriptProperties().deleteProperty(loginLockKey_(kind, username));
 }
 
+/* ── GETFILE RATE LIMIT ──────────────────────────────────────────
+   handleGetFile (below) is deliberately the one action in this whole
+   API that takes no username/token — it's a bare "fileId in, question
+   JSON out" proxy, by design, so a logged-out visitor never gets stuck
+   on a login wall just to see cached content their browser already
+   fetched. But that also means it's the ONE action with no per-user
+   identity to rate-limit against, and since this repo is public with
+   every Drive fileId sitting in chapters-data.js on GitHub, someone
+   could otherwise hit this endpoint directly, at any volume, without
+   ever creating an account, and scrape the entire question bank.
+
+   Rather than requiring auth here (a bigger behavior change, and one
+   that would need to keep working for expired/offline users reading
+   already-cached content), this is a single global sliding-window
+   counter: one PropertiesService key holding {bucket, count}, reset
+   whenever the current 60-second bucket rolls over. This deliberately
+   does NOT try to distinguish callers (Apps Script's request object
+   has no reliable caller IP) — it's a blunt, whole-API-wide ceiling,
+   generous enough that real concurrent student traffic won't hit it,
+   but low enough to blunt a bulk-scraping script. */
+const GETFILE_RATE_LIMIT_PER_MINUTE = 120;
+
+function checkGetFileRateLimit_() {
+  const props = PropertiesService.getScriptProperties();
+  const key = "getfile_rl";
+  const bucket = Math.floor(Date.now() / 60000); // one 60-second window
+  let state = { bucket, count: 0 };
+  const raw = props.getProperty(key);
+  if (raw) {
+    try { state = JSON.parse(raw); } catch (e) {}
+    if (state.bucket !== bucket) state = { bucket, count: 0 }; // new window — reset
+  }
+  state.count = (state.count || 0) + 1;
+  props.setProperty(key, JSON.stringify(state));
+  return state.count <= GETFILE_RATE_LIMIT_PER_MINUTE;
+}
+
 const USER_HEADERS = [
   "username", "passHash", "name", "email", "mobile",
   "contact", "contactType", "status", "createdAt", "approvedAt",
@@ -1317,6 +1354,9 @@ function handleGetFile(p) {
   if (!fileId) {
     return { success: false, error: "Missing fileId parameter." };
   }
+  if (!checkGetFileRateLimit_()) {
+    return { success: false, error: "Server is busy, please try again in a moment.", rateLimited: true };
+  }
   let file;
   try {
     file = DriveApp.getFileById(fileId);
@@ -1629,10 +1669,25 @@ function adminLogin(p) {
 
   const token = issueAdminToken_(sheet, found.rowIndex);
   logAction_(found.row[0], "Admin Login", "", "");
+
+  // The seed account's credentials are printed in this very source file's
+  // comments (ADMIN_SEED_USERNAME/PASSWORD above) — anyone who's ever seen
+  // this repo knows them. There was previously nothing stopping that
+  // account from staying on "ChangeMe123!" forever; this flag lets the
+  // client force a password-change prompt on login instead of just
+  // hoping the deploying admin remembers the warning comment. Checked
+  // against the RAW password the caller just typed (not the stored hash)
+  // since that's the only point this script ever sees it in plaintext —
+  // once changed, verifyPassword_ above would have already failed against
+  // this literal string, so this check naturally stops firing forever.
+  const stillOnSeedPassword = username.toLowerCase() === ADMIN_SEED_USERNAME.toLowerCase()
+    && password === ADMIN_SEED_PASSWORD;
+
   return {
     success: true,
     isAdmin: true,
     adminToken: token,
+    mustChangePassword: stillOnSeedPassword,
     user: { username: found.row[0], name: "Administrator", role: "admin" },
     message: "Welcome to Admin World"
   };
