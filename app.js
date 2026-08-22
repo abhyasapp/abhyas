@@ -991,7 +991,7 @@ const REV = {
         <div class="qm"><span class="qn mono">#${i+1}</span>
           ${q.tag ? `<span class="ctag ta" style="margin-left:.3rem"><i class="ph ph-tag"></i> ${esc(q.tag)}</span>` : ''}
           ${srBadge}
-          <button class="ib" onclick="REV._removeOne('${kind}','${esc(q.uid||'')}')"><i class="ph ph-trash"></i></button>
+          <button class="ib" onclick="REV._removeOne('${kind}','${esc(q.uid||'')}')" title="Remove from review" aria-label="Remove from review"><i class="ph ph-trash"></i></button>
         </div>
         <div class="qt" style="font-size:.82rem">${esc(q.q)}</div>
         <div style="margin-top:.3rem">${opts}</div>
@@ -1440,9 +1440,9 @@ const QUIZ = {
 
       const isStarred = REV.has('bk', q.uid), isFlagged = REV.has('fl', q.uid);
       document.getElementById('fc-acts').innerHTML = `
-        <button class="ib ${isStarred?'bk-on':''}" onclick="QUIZ._star()" title="Bookmark"><i class="ph ph-star"></i></button>
-        <button class="ib ${isFlagged?'fl-on':''}" onclick="QUIZ._flag()" title="Flag"><i class="ph ph-flag"></i></button>
-        <button class="ib" onclick="SRCH.toggle()" title="Search (Ctrl+F)"><i class="ph ph-magnifying-glass"></i></button>
+        <button class="ib ${isStarred?'bk-on':''}" onclick="QUIZ._star()" title="Bookmark" aria-label="Bookmark this question" aria-pressed="${isStarred?'true':'false'}"><i class="ph ph-star"></i></button>
+        <button class="ib ${isFlagged?'fl-on':''}" onclick="QUIZ._flag()" title="Flag" aria-label="Flag this question" aria-pressed="${isFlagged?'true':'false'}"><i class="ph ph-flag"></i></button>
+        <button class="ib" onclick="SRCH.toggle()" title="Search (Ctrl+F)" aria-label="Search this question"><i class="ph ph-magnifying-glass"></i></button>
         <select class="sel-c" style="font-size:.68rem;padding:.2rem .35rem;width:auto" onchange="QUIZ._tagCurrent(this.value)">
           <option value="">🏷 Tag…</option>
           ${BK_TAGS.map(t=>`<option value="${t}" ${REV.getTag(q.uid)===t?'selected':''}>${t}</option>`).join('')}
@@ -1544,7 +1544,7 @@ const QUIZ = {
       const savedAns = S.quiz.ans[qi];
       return `
       <div class="eqc${savedAns!==null?' answered':''}" id="eqc-${qi}">
-        <div class="qm"><span class="qn mono">Q${qi+1}</span><a class="ib" href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener" title="Search on Google" style="text-decoration:none"><i class="ph ph-magnifying-glass"></i></a></div>
+        <div class="qm"><span class="qn mono">Q${qi+1}</span><a class="ib" href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener" title="Search on Google" aria-label="Search this question on Google" style="text-decoration:none"><i class="ph ph-magnifying-glass"></i></a></div>
         <div class="qt" style="font-size:.85rem">${esc(q.q)}</div>
         ${q.options.map((opt,oi)=>{
           const sel = savedAns===oi;
@@ -2022,7 +2022,7 @@ const ONPROG = {
             <div class="pb-l">
               <span>${esc(rowLabel)}</span>
               <span class="fw-row-right">${fVal} / ${fTotal!=null?fTotal:'?'}${fTotal!=null?` (${fPct}%)`:''}
-                <button class="fw-reset" title="Reset progress for this file" onclick="event.stopPropagation();ONPROG.resetFile('${ref.fid}')"><i class="ph ph-trash"></i></button>
+                <button class="fw-reset" title="Reset progress for this file" aria-label="Reset progress for this file" onclick="event.stopPropagation();ONPROG.resetFile('${ref.fid}')"><i class="ph ph-trash"></i></button>
               </span>
             </div>
             <div class="pb"><div class="pb-f" style="width:${fTotal!=null?fPct:0}%;background:${barColor}"></div></div>
@@ -2046,7 +2046,7 @@ const ONPROG = {
           <div class="pb-w" style="margin-top:.65rem">
             <div class="pb-l">
               <span>${metricLabel} coverage (compiled)</span>
-              <span>${metricVal} / ${total||'?'} (${pct}%)${fid ? ` <button class="fw-reset" title="Reset progress for this file" onclick="ONPROG.resetFile('${fid}')"><i class="ph ph-trash"></i></button>` : ''}</span>
+              <span>${metricVal} / ${total||'?'} (${pct}%)${fid ? ` <button class="fw-reset" title="Reset progress for this file" aria-label="Reset progress for this file" onclick="ONPROG.resetFile('${fid}')"><i class="ph ph-trash"></i></button>` : ''}</span>
             </div>
             <div class="pb"><div class="pb-f" style="width:${pct}%;background:${barColor}"></div></div>
           </div>`}
@@ -2320,7 +2320,7 @@ const TT = {
       <div class="tt-row" style="${isNow?'background:rgba(245,166,35,.08);border-radius:8px;padding-left:.4rem':''}">
         <div class="tt-ti">${s.start}–${s.end}</div>
         <div class="tt-na">${isNow?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ros);margin-right:.35rem"></span>':''}${esc(s.name)}</div>
-        <button class="ib" onclick="TT.remove('${s.id}')"><i class="ph ph-trash"></i></button>
+        <button class="ib" onclick="TT.remove('${s.id}')" title="Remove this slot" aria-label="Remove this slot"><i class="ph ph-trash"></i></button>
       </div>
     `;}).join('') : '<div class="empty"><div class="empty-i"><i class="ph ph-calendar-blank"></i></div><p>Nothing scheduled today</p></div>';
 
@@ -2732,6 +2732,7 @@ function _updateNetBtn(){
   const effectivelyOnline = S.online && !S.forcedOffline;
   btn.textContent = effectivelyOnline ? '🟢' : '🔴';
   btn.title = effectivelyOnline ? 'Online mode — click to force offline' : S.forcedOffline ? 'Forced offline mode — click to go online' : 'Network offline — no connection';
+  btn.setAttribute('aria-label', btn.title);
   btn.style.color = effectivelyOnline ? 'var(--grn)' : 'var(--ros)';
   btn.style.borderColor = effectivelyOnline ? 'rgba(34,197,94,.35)' : 'var(--bad-bd)';
   btn.style.background = effectivelyOnline ? 'rgba(34,197,94,.08)' : 'var(--bad-bg)';

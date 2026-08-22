@@ -467,12 +467,12 @@ input[type=file]:hover{border-color:var(--amb)}
     </div>
     <div class="tb-r">
       <div class="uchip" id="uchip">👤 —</div>
-      <button class="tb-btn" id="net-mode-btn" onclick="NET.toggle()" title="Online mode — click to force offline" style="font-size:.8rem;min-width:32px;justify-content:center;color:var(--grn);border-color:rgba(var(--grn-rgb),.35);background:rgba(var(--grn-rgb),.08)">🟢</button>
+      <button class="tb-btn" id="net-mode-btn" onclick="NET.toggle()" title="Online mode — click to force offline" aria-label="Online mode — click to force offline" style="font-size:.8rem;min-width:32px;justify-content:center;color:var(--grn);border-color:rgba(var(--grn-rgb),.35);background:rgba(var(--grn-rgb),.08)">🟢</button>
       <button class="tb-btn" id="tb-sync-btn" onclick="UI.go('progress')" title="Not synced yet this session" style="min-width:32px;justify-content:center;padding:.28rem"><span id="tb-sync-dot" style="display:block;width:9px;height:9px;border-radius:50%;background:var(--t3);transition:background .3s"></span></button>
-      <button class="tb-btn" onclick="UI.theme()" title="Toggle theme"><i class="ph ph-circle-half"></i></button>
-      <button class="tb-btn" onclick="PWA.toggleFullscreen()" title="Fullscreen"><i class="ph ph-corners-out"></i></button>
-      <button class="tb-btn" id="installBtn" style="display:none" onclick="PWA.install()" title="Install App"><i class="ph ph-device-mobile"></i></button>
-      <button class="tb-btn danger" onclick="AUTH.logout()" title="Log out"><i class="ph ph-power"></i></button>
+      <button class="tb-btn" onclick="UI.theme()" title="Toggle theme" aria-label="Toggle theme"><i class="ph ph-circle-half"></i></button>
+      <button class="tb-btn" onclick="PWA.toggleFullscreen()" title="Fullscreen" aria-label="Toggle fullscreen"><i class="ph ph-corners-out"></i></button>
+      <button class="tb-btn" id="installBtn" style="display:none" onclick="PWA.install()" title="Install App" aria-label="Install app"><i class="ph ph-device-mobile"></i></button>
+      <button class="tb-btn danger" onclick="AUTH.logout()" title="Log out" aria-label="Log out"><i class="ph ph-power"></i></button>
     </div>
   </div>
 
@@ -487,7 +487,7 @@ input[type=file]:hover{border-color:var(--amb)}
           <div id="sb-uname" style="font-size:.8rem;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Student</div>
           <div id="sb-ustatus" style="font-size:.64rem;color:var(--t3)">—</div>
         </div>
-        <button class="ib" onclick="AUTH.logout()" title="Log out" style="flex-shrink:0"><i class="ph ph-power"></i></button>
+        <button class="ib" onclick="AUTH.logout()" title="Log out" aria-label="Log out" style="flex-shrink:0"><i class="ph ph-power"></i></button>
       </div>
       <div class="sb-sec">
         <div class="sb-lbl">Study</div>

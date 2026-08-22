@@ -273,7 +273,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
   <!-- TOPBAR -->
   <div id="tb">
     <div style="display:flex;align-items:center;gap:.5rem">
-      <button class="tb-btn" id="menu-btn" onclick="UI.sidebarOpen()" title="Menu"><i class="ph ph-list"></i></button>
+      <button class="tb-btn" id="menu-btn" onclick="UI.sidebarOpen()" title="Menu" aria-label="Open menu"><i class="ph ph-list"></i></button>
       <div class="tb-brand" onclick="UI.nav('dashboard')">
         <div class="mark"><img src="icon-192.png" alt="Abhyas"></div>
         <span style="font-family:var(--fd);font-size:.9rem;font-weight:700">Admin World</span>
@@ -281,8 +281,8 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
     </div>
     <div class="tb-r">
       <div style="font-size:.68rem;color:var(--t3);font-weight:600;margin-right:.4rem" id="admin-name">admin</div>
-      <button class="tb-btn" onclick="ADMIN.refresh()" title="Refresh"><i class="ph ph-arrow-clockwise"></i></button>
-      <button class="tb-btn" onclick="UI.nav('logs')" title="Activity Logs"><i class="ph ph-clipboard-text"></i></button>
+      <button class="tb-btn" onclick="ADMIN.refresh()" title="Refresh" aria-label="Refresh"><i class="ph ph-arrow-clockwise"></i></button>
+      <button class="tb-btn" onclick="UI.nav('logs')" title="Activity Logs" aria-label="Activity logs"><i class="ph ph-clipboard-text"></i></button>
       <button class="tb-btn danger" onclick="ADMIN.logout()" title="Logout">⏻</button>
     </div>
   </div>
@@ -892,9 +892,9 @@ const USERS = {
         <td class="mono" style="font-size:.68rem">${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</td>
         <td style="font-size:.72rem">${access}</td>
         <td style="text-align:right">
-          <button class="btn-s btn-c btn-sm" onclick="USERS.view('${escAttrJs(u.username)}')" title="View Details"><i class="ph ph-eye"></i></button>
-          <button class="btn-s btn-a btn-sm" onclick="USERS.edit('${escAttrJs(u.username)}')" title="Edit User"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-s btn-r btn-sm" onclick="USERS.del('${escAttrJs(u.username)}')" title="Delete"><i class="ph ph-trash"></i></button>
+          <button class="btn-s btn-c btn-sm" onclick="USERS.view('${escAttrJs(u.username)}')" title="View Details" aria-label="View details"><i class="ph ph-eye"></i></button>
+          <button class="btn-s btn-a btn-sm" onclick="USERS.edit('${escAttrJs(u.username)}')" title="Edit User" aria-label="Edit user"><i class="ph ph-pencil-simple"></i></button>
+          <button class="btn-s btn-r btn-sm" onclick="USERS.del('${escAttrJs(u.username)}')" title="Delete" aria-label="Delete user"><i class="ph ph-trash"></i></button>
         </td>
       </tr>`;
     }).join('');
