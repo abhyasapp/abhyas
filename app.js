@@ -172,6 +172,50 @@ function isOk(sel,cor){
   const s=String(sel).trim(),c=String(cor).trim();
   return(!isNaN(s)&&!isNaN(c)&&s!==''&&c!=='')?Number(s)===Number(c):s.toLowerCase()===c.toLowerCase();
 }
+// Resolves a question's raw img/image field — which an uploaded
+// question-bank JSON may express as EITHER an embedded base64 data URI
+// OR a bare Google Drive reference — into a URL an <img src> can load
+// directly, or null if the value is empty/unrecognized.
+//
+// Deliberately does NOT proxy Drive images through handleGetFile the
+// way question-bank JSON files themselves are proxied — that proxy
+// exists because a plain drive.google.com link returns an HTML preview
+// page to fetch()/JSON.parse(), which doesn't apply to an <img> tag (the
+// browser requests it directly as an image, not via our JS). Instead
+// this builds a direct drive.google.com/thumbnail URL, which works for
+// any file shared "Anyone with the link" — same sharing level
+// adminUploadWeeklySetFile and chapters-data.js's own fileIds already
+// use — without adding load on the Apps Script backend or eating into
+// handleGetFile's rate limit for every single question that has a
+// figure.
+function _resolveQImg(raw){
+  const v = String(raw || '').trim();
+  if(!v) return null;
+  if(v.startsWith('data:image')) return v; // already embedded base64 — use as-is
+  if(/^https?:\/\//.test(v)){
+    // Accepts any drive.google.com share-link shape
+    // (.../file/d/FILEID/view, ...?id=FILEID, .../open?id=FILEID) and
+    // rewrites it to a thumbnail URL; a non-Drive image URL (someone's
+    // own CDN link) is passed through unchanged.
+    const m = v.match(/\/d\/([a-zA-Z0-9_-]{10,})/) || v.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+    return m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w1200` : v;
+  }
+  // A bare Drive fileId, same shape as every fileId already in
+  // chapters-data.js (no slashes, no "data:" prefix — just the id).
+  if(/^[a-zA-Z0-9_-]{10,}$/.test(v)) return `https://drive.google.com/thumbnail?id=${v}&sz=w1200`;
+  return null; // unrecognized shape — fail quiet rather than render a broken image
+}
+// Shared <img> markup for a normalized question — used by every place
+// a question gets rendered as an HTML string (review lists, exam-mode
+// list) so the img/error/lazy-load handling stays in one spot rather
+// than copy-pasted at each call site. _renderFlashcard uses its own
+// dedicated #fc-img element instead (flashcard mode renders one
+// question at a time into fixed DOM nodes, not a fresh template string
+// per question), but resolves the same q.img field.
+function qImgHtml(q){
+  if(!q.img) return '';
+  return `<div style="margin:.4rem 0"><img src="${esc(q.img)}" alt="Question figure" style="max-width:100%;border-radius:8px;border:1px solid var(--b1);display:block" loading="lazy" onerror="this.parentElement.style.display='none'"></div>`;
+}
 function normQ(raw,fid){
   if(raw && typeof raw === 'object' && !Array.isArray(raw) && raw.success === false){
     console.warn('[normQ] Server error for', fid, '—', raw.error);
@@ -213,6 +257,15 @@ function normQ(raw,fid){
       options: options.map(String),
       correct,
       explanation: q.explanation||q.explain||q.exp||q.solution||q.hint||'',
+      // A question's diagram/figure can arrive two ways from an uploaded
+      // question-bank file: already embedded as a base64 data URI
+      // (data:image/png;base64,...), or as a bare Google Drive
+      // reference (a fileId, or a full drive.google.com share link) —
+      // the same two shapes chapters-data.js and now Weekly Sets both
+      // accept for question content itself. _resolveQImg normalizes
+      // whichever one shows up into something an <img src> can use
+      // directly, or null if the field is absent/unrecognized.
+      img: _resolveQImg(q.img || q.image || q.Image || q.figure || q.diagram || ''),
       fileId: fid||'local',
       uid: `${fid||'local'}_${i}`
     });
@@ -1074,6 +1127,7 @@ const REV = {
           <button class="ib" onclick="REV._removeOne('${kind}','${esc(q.uid||'')}')" title="Remove from review" aria-label="Remove from review"><i class="ph ph-trash"></i></button>
         </div>
         <div class="qt" style="font-size:.82rem">${esc(q.q)}</div>
+        ${qImgHtml(q)}
         <div style="margin-top:.3rem">${opts}</div>
         ${q.explanation?`<div class="expl show" style="margin-top:.45rem">${esc(q.explanation)}</div>`:''}
         ${tagPicker}
@@ -1517,6 +1571,10 @@ const QUIZ = {
       document.getElementById('fc-pf').style.width = `${((S.quiz.idx)/S.quiz.qs.length)*100}%`;
       document.getElementById('fc-qn').textContent = 'Q'+(S.quiz.idx+1);
       document.getElementById('fc-q').textContent = q.q;
+      const fcImgWrap = document.getElementById('fc-img-wrap');
+      const fcImg = document.getElementById('fc-img');
+      if(q.img && fcImgWrap && fcImg){ fcImg.src = q.img; fcImgWrap.style.display = ''; }
+      else if(fcImgWrap){ fcImgWrap.style.display = 'none'; }
 
       const isStarred = REV.has('bk', q.uid), isFlagged = REV.has('fl', q.uid);
       document.getElementById('fc-acts').innerHTML = `
@@ -1626,6 +1684,7 @@ const QUIZ = {
       <div class="eqc${savedAns!==null?' answered':''}" id="eqc-${qi}">
         <div class="qm"><span class="qn mono">Q${qi+1}</span><a class="ib" href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener" title="Search on Google" aria-label="Search this question on Google" style="text-decoration:none"><i class="ph ph-magnifying-glass"></i></a></div>
         <div class="qt" style="font-size:.85rem">${esc(q.q)}</div>
+        ${qImgHtml(q)}
         ${q.options.map((opt,oi)=>{
           const sel = savedAns===oi;
           return `<div class="eo${sel?' sel':''}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="Option ${String.fromCharCode(65+oi)}: ${esc(opt)}" onclick="QUIZ.exAnswer(${qi},${oi})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();QUIZ.exAnswer(${qi},${oi})}" id="eo-${qi}-${oi}">
@@ -1715,6 +1774,7 @@ const QUIZ = {
       return `<div class="qcard" style="border-left-color:${correctPick?'var(--ok)':'var(--bad)'}">
         <div class="qm"><span class="qn mono">Q${i+1}</span><span class="ctag ${correctPick?'tg':'tr'}">${correctPick?'Correct':a===null?'Skipped':'Wrong'}</span></div>
         <div class="qt" style="font-size:.82rem">${esc(q.q)}</div>
+        ${qImgHtml(q)}
         ${q.options.map((opt,oi)=>{
           let cls='eo';
           if(isOk(oi,q.correct)) cls+=' shc';
