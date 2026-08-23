@@ -18,6 +18,12 @@
   --sky:#2B6CB0;--sky-glow:rgba(43,108,176,.20);
   --grn:#2E7D4F;--grn-glow:rgba(46,125,79,.20);
   --ros:#C1433C;--ros-glow:rgba(193,67,60,.20);
+  /* RGB triplets for the .tg/.ta/.tr status-tag family below — values
+     match the hex above exactly (confirmed against the pre-existing
+     --amb-glow/--grn-glow/--ros-glow rgba() lines, which already
+     encoded the same decimal RGB). Without these, rgba(var(--x-rgb),n)
+     is invalid CSS (empty value) and silently drops the background. */
+  --amb-rgb:46,139,87;--grn-rgb:46,125,79;--ros-rgb:193,67,60;
   --ok:var(--grn);--ok-bg:rgba(46,125,79,.09);--ok-bd:rgba(46,125,79,.28);
   --bad:var(--ros);--bad-bg:rgba(193,67,60,.08);--bad-bd:rgba(193,67,60,.26);
   --warn:var(--amb);--warn-bg:rgba(46,139,87,.09);--warn-bd:rgba(46,139,87,.26);
@@ -166,6 +172,14 @@ tr:last-child td{border-bottom:none}
 .badge-trial{background:rgba(43,108,176,.12);color:var(--sky);border:1px solid rgba(43,108,176,.25)}
 .badge-active{background:rgba(46,125,79,.12);color:var(--grn);border:1px solid rgba(46,125,79,.3)}
 .badge-expired{background:rgba(193,67,60,.12);color:var(--ros);border:1px solid rgba(193,67,60,.3)}
+/* Small inline status tag family — same definitions as user.html's
+   .ctag/.tg/.ta/.tr, brought over here since admin.html never had its
+   own copy despite using it (Weekly Sets' Live/Scheduled/Archived
+   badges, the preview modal's "has image" indicator) — those were
+   rendering as plain unstyled text with none of the intended pill
+   shape/color until this was added. */
+.ctag{font-size:.59rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;padding:.14rem .5rem;border-radius:20px;display:inline-flex;align-items:center;gap:.22rem}
+.tg{background:rgba(var(--grn-rgb),.11);color:var(--grn)}.ta{background:rgba(var(--amb-rgb),.13);color:var(--amb)}.tr{background:rgba(var(--ros-rgb),.11);color:var(--ros)}
 .badge-pending{background:rgba(54,139,79,.12);color:var(--amb);border:1px solid rgba(54,139,79,.3)}
 .badge-verified{background:rgba(46,125,79,.12);color:var(--grn);border:1px solid rgba(46,125,79,.3)}
 .badge-rejected{background:rgba(193,67,60,.12);color:var(--ros);border:1px solid rgba(193,67,60,.3)}
