@@ -328,7 +328,7 @@ function toastUndo(msg, onUndo, dur=6000){
   const label=document.createElement('span'); label.textContent=msg;
   const btn=document.createElement('button');
   btn.textContent='Undo';
-  btn.style.cssText='background:none;border:none;color:var(--amb,#f5b342);font-weight:700;font-size:.76rem;cursor:pointer;padding:.1rem .3rem;flex-shrink:0';
+  btn.style.cssText='background:none;border:none;color:var(--amb);font-weight:700;font-size:.76rem;cursor:pointer;padding:.1rem .3rem;flex-shrink:0';
   let undone=false;
   btn.onclick=()=>{
     undone=true;
@@ -545,9 +545,9 @@ const PSYNC = {
     const cfg = {
       idle:    {color:'var(--t3)', title:'Not synced yet this session', anim:false},
       pending: {color:'var(--amb)', title:'Sync pending…',              anim:false},
-      syncing: {color:'var(--sky,#38bdf8)', title:'Syncing…',           anim:true},
+      syncing: {color:'var(--sky)', title:'Syncing…',           anim:true},
       synced:  {color:'var(--grn)', title:'Progress backed up',         anim:false},
-      error:   {color:'var(--rose,#f43f5e)', title:'Sync failed — will retry', anim:false}
+      error:   {color:'var(--ros)', title:'Sync failed — will retry', anim:false}
     }[state] || {color:'var(--t3)', title:'', anim:false};
     dot.style.background = cfg.color;
     dot.style.animation = cfg.anim ? 'pulse 1s ease-in-out infinite' : 'none';
@@ -1307,7 +1307,7 @@ const QUIZ = {
       <div style="font-family:var(--fd);font-size:.92rem;font-weight:700;color:var(--ros);margin-bottom:.6rem">Failed to Load</div>
       <div style="font-size:.78rem;color:var(--t2);line-height:1.6;margin-bottom:1rem">${esc(msg)}</div>
       <div style="display:flex;gap:.5rem">
-        <button id="quiz-err-retry" style="flex:1;padding:.58rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r1);color:#0F0A00;font-weight:700;font-size:.82rem;cursor:pointer;font-family:var(--ff)"><i class="ph ph-arrow-clockwise"></i> Retry</button>
+        <button id="quiz-err-retry" style="flex:1;padding:.58rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r1);color:var(--on-accent);font-weight:700;font-size:.82rem;cursor:pointer;font-family:var(--ff)"><i class="ph ph-arrow-clockwise"></i> Retry</button>
         <button onclick="document.getElementById('quiz-error-card').remove()" style="padding:.58rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.82rem;cursor:pointer;font-family:var(--ff)"><i class="ph ph-x"></i> Close</button>
       </div>
     </div>`;
@@ -1321,7 +1321,7 @@ const QUIZ = {
       el = document.createElement('div');
       el.id = 'quiz-loader';
       el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:1rem;backdrop-filter:blur(4px)';
-      el.innerHTML = '<div style="width:44px;height:44px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--neon,#00e5ff);border-radius:50%;animation:spin 0.8s linear infinite"></div><div id="quiz-loader-msg" style="color:#fff;font-size:.9rem;font-weight:600;text-align:center;padding:0 1.5rem"></div>';
+      el.innerHTML = '<div style="width:44px;height:44px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--neon);border-radius:50%;animation:spin 0.8s linear infinite"></div><div id="quiz-loader-msg" style="color:#fff;font-size:.9rem;font-weight:600;text-align:center;padding:0 1.5rem"></div>';
       document.body.appendChild(el);
       if(!document.getElementById('quiz-loader-style')){
         const st = document.createElement('style');
@@ -1371,7 +1371,7 @@ const QUIZ = {
           <i class="ph ph-shuffle"></i> Shuffle question order
         </label>
         <div style="display:flex;gap:.4rem">
-          <button id="qlm-start" style="flex:1;padding:.62rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:#0F0A00;font-weight:700;font-size:.85rem;cursor:pointer;font-family:var(--ff)">Start →</button>
+          <button id="qlm-start" style="flex:1;padding:.62rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:var(--on-accent);font-weight:700;font-size:.85rem;cursor:pointer;font-family:var(--ff)">Start →</button>
           <button onclick="document.getElementById('quiz-limit-modal').remove()" style="padding:.62rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r2);color:var(--t2);font-size:.83rem;cursor:pointer;font-family:var(--ff)"><i class="ph ph-x"></i></button>
         </div>
       </div>`;
@@ -1558,7 +1558,7 @@ const QUIZ = {
         <div style="font-family:var(--fd);font-size:.92rem;font-weight:700;color:var(--t1);margin-bottom:.2rem">Unfinished exam found</div>
         <div style="font-size:.78rem;color:var(--t3);margin-bottom:1rem">${esc(snap.ch)} — ${answered}/${snap.qs.length} answered, ${fmt(adjustedLeft)} left on the clock. This was probably interrupted by a reload or a closed tab.</div>
         <div style="display:flex;gap:.4rem">
-          <button id="exam-resume-btn" style="flex:1;padding:.62rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:#0F0A00;font-weight:700;font-size:.85rem;cursor:pointer;font-family:var(--ff)">▶️ Resume</button>
+          <button id="exam-resume-btn" style="flex:1;padding:.62rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:var(--on-accent);font-weight:700;font-size:.85rem;cursor:pointer;font-family:var(--ff)">▶️ Resume</button>
           <button id="exam-discard-btn" style="padding:.62rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r2);color:var(--t2);font-size:.83rem;cursor:pointer;font-family:var(--ff)">Discard</button>
         </div>
       </div>`;
@@ -2844,7 +2844,7 @@ const TUTORIAL = {
         <div style="flex:1;overflow-y:auto;min-height:0" id="tut-body"></div>
         <div style="display:flex;gap:.4rem;margin-top:1rem">
           <button id="tut-back" style="padding:.6rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r2);color:var(--t2);font-size:.82rem;cursor:pointer;font-family:var(--ff)">← Back</button>
-          <button id="tut-next" style="flex:1;padding:.62rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:#0F0A00;font-weight:700;font-size:.85rem;cursor:pointer;font-family:var(--ff)">Next →</button>
+          <button id="tut-next" style="flex:1;padding:.62rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:var(--on-accent);font-weight:700;font-size:.85rem;cursor:pointer;font-family:var(--ff)">Next →</button>
         </div>
         <button id="tut-skip" style="margin-top:.55rem;background:none;border:none;color:var(--t3);font-size:.72rem;cursor:pointer;font-family:var(--ff);text-decoration:underline">Skip tutorial</button>
       </div>`;

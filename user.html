@@ -69,6 +69,12 @@
   --ease:.15s cubic-bezier(.4,0,.2,1);--spring:.22s cubic-bezier(.34,1.56,.64,1);--eout:.2s cubic-bezier(0,0,.2,1);
   --safe-b:env(safe-area-inset-bottom,0px);
   --sb-w:240px;--tb-h:56px;--bn-h:60px;
+  /* Text color for buttons using the amb2→amb accent gradient as their
+     background (Retry, Start, Resume, tutorial Next — 4 call sites).
+     Near-black rather than pure #000 for a touch less harshness against
+     a bright gradient; single value works across both themes since the
+     accent gradient stays light/bright-ish in both. */
+  --on-accent:#0F0A00;
 }
 
 /* Opt-in dark theme (Settings → toggle) — the app's original dark-navy
