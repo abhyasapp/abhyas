@@ -190,7 +190,25 @@ body{font-family:var(--ff);background:var(--c-bg);color:var(--t1);min-height:100
     <div class="fld"><label for="in-user">Username</label><input type="text" id="in-user" placeholder="Enter username" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
     <div class="fld"><label for="in-pass">Password</label><input type="password" id="in-pass" placeholder="Enter password" autocomplete="current-password"></div>
     <button class="btn" id="btn-login" onclick="APP.login()">Sign In →</button>
+    <div class="link-row"><button onclick="APP.setMode('forgot')" style="font-size:.78rem;opacity:.8">Forgot password?</button></div>
     <div class="link-row"><span>New here?</span><button onclick="APP.setMode('signup')">Create Account</button></div>
+  </div>
+
+  <!-- FORGOT PASSWORD — request a reset code -->
+  <div id="form-forgot" style="display:none">
+    <p style="font-size:.8rem;opacity:.75;margin-bottom:.8rem">Enter your username or the email on your account. If it matches an account, we'll email a reset code to it.</p>
+    <div class="fld"><label for="fg-id">Username or Email</label><input type="text" id="fg-id" placeholder="Your username or email" autocapitalize="none" spellcheck="false"></div>
+    <button class="btn" id="btn-forgot" onclick="APP.requestReset()">Send Reset Code →</button>
+    <div class="link-row"><button onclick="APP.setMode('login')">Back to Sign In</button></div>
+  </div>
+
+  <!-- RESET PASSWORD — consume the emailed code -->
+  <div id="form-reset" style="display:none">
+    <p style="font-size:.8rem;opacity:.75;margin-bottom:.8rem">Paste the reset code from your email, then choose a new password.</p>
+    <div class="fld"><label for="rs-code">Reset Code</label><input type="text" id="rs-code" placeholder="Paste the code from your email" autocapitalize="none" spellcheck="false"></div>
+    <div class="fld"><label for="rs-pass">New Password</label><input type="password" id="rs-pass" placeholder="At least 6 characters" autocomplete="new-password"></div>
+    <button class="btn" id="btn-reset" onclick="APP.confirmReset()">Reset Password →</button>
+    <div class="link-row"><button onclick="APP.setMode('login')">Back to Sign In</button></div>
   </div>
 
   <!-- SIGNUP FORM -->
@@ -334,6 +352,20 @@ const APP = {
     this.checkNet(); // fire in the background — don't block rendering on a ping
     setInterval(() => this.checkNet(), 15000);
 
+    // A person who clicked the reset-code link from their email (see
+    // requestPasswordReset's emailed link in CODE.gs) lands here with
+    // ?resetToken=... in the URL — prefill and jump straight to the
+    // reset form, taking priority over resuming any existing saved
+    // session, since clicking that link means "I want to reset my
+    // password", not "resume whatever I was doing before".
+    const urlToken = new URLSearchParams(window.location.search).get('resetToken');
+    if (urlToken) {
+      this.setMode('reset');
+      const codeEl = document.getElementById('rs-code');
+      if (codeEl) codeEl.value = urlToken;
+      return;
+    }
+
     // Resume existing session
     const saved = this.getSession();
     if (saved) {
@@ -415,7 +447,7 @@ const APP = {
         t.classList.toggle('active', (m === 'login' && i === 0) || (m === 'signup' && i === 1));
       });
     }
-    const ids = ['form-login','form-signup','form-payment','form-trial','form-status','form-permanent'];
+    const ids = ['form-login','form-signup','form-payment','form-trial','form-status','form-permanent','form-forgot','form-reset'];
     ids.forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -503,8 +535,42 @@ const APP = {
   },
 
   /* ═════════════════════════════════════════════════════════════════════════════
-     SIGNUP
+     PASSWORD RESET
      ═════════════════════════════════════════════════════════════════════════════ */
+  async requestReset() {
+    const id = document.getElementById('fg-id').value.trim();
+    if (!id) return this.showErr('Enter your username or email.');
+
+    this.setLoading('btn-forgot', true);
+    const res = await this.api('requestPasswordReset', { identifier: id }, 'POST');
+    this.setLoading('btn-forgot', false);
+
+    // The backend deliberately always returns success:true here (see
+    // requestPasswordReset's own comment in CODE.gs) — a specific
+    // "no account found" error would let anyone probe which usernames/
+    // emails are registered, so this client can't and shouldn't try to
+    // show anything more specific than the generic message either.
+    if (!res.success) return this.showErr(res.error || 'Something went wrong — try again.');
+    this.toast('📧 ' + (res.message || 'If that account exists, a reset code has been emailed to it.'));
+    this.setMode('reset');
+  },
+
+  async confirmReset() {
+    const code = document.getElementById('rs-code').value.trim();
+    const newPass = document.getElementById('rs-pass').value;
+    if (!code) return this.showErr('Paste the reset code from your email.');
+    if (!newPass || newPass.length < 6) return this.showErr('New password must be at least 6 characters.');
+
+    this.setLoading('btn-reset', true);
+    const res = await this.api('resetPassword', { token: code, newPassword: newPass }, 'POST');
+    this.setLoading('btn-reset', false);
+
+    if (!res.success) return this.showErr(res.error || 'Could not reset password.');
+    this.toast('✅ Password reset — please sign in with your new password.');
+    document.getElementById('rs-code').value = '';
+    document.getElementById('rs-pass').value = '';
+    this.setMode('login');
+  },
   async signup() {
     const name = document.getElementById('su-name').value.trim();
     const email = document.getElementById('su-email').value.trim();

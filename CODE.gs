@@ -213,6 +213,8 @@ function doGet(e) {
       // ── AUTH ──
       case "login":              result = handleLogin(e.parameter); break;
       case "signup":             result = handleSignup(e.parameter); break;
+      case "requestpasswordreset": result = requestPasswordReset(e.parameter); break;
+      case "resetpassword":      result = resetPassword(e.parameter); break;
       case "checksession":       result = checkSession(e.parameter); break;
       case "saveprogress":       result = saveProgress(e.parameter); break;
       case "getprogress":        result = getProgress(e.parameter); break;
@@ -255,7 +257,7 @@ function doGet(e) {
       default:
         result = {
           success: false,
-          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, saveProgress, getProgress, savePushToken, listWeeklySets, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs, adminCreateWeeklySet, adminUploadWeeklySetFile, adminUpdateWeeklySet, adminDeleteWeeklySet, adminListWeeklySets"
+          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, requestPasswordReset, resetPassword, checkSession, saveProgress, getProgress, savePushToken, listWeeklySets, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs, adminCreateWeeklySet, adminUploadWeeklySetFile, adminUpdateWeeklySet, adminDeleteWeeklySet, adminListWeeklySets"
         };
     }
   } catch (err) {
@@ -997,6 +999,127 @@ function handleLogin(p) {
   }
 
   return { success: true, user: user, token: sessionToken };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PASSWORD RESET — request a token via email, then consume it
+   ═══════════════════════════════════════════════════════════════ */
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const RESET_REQUEST_COOLDOWN_MS = 5 * 60 * 1000; // don't let one account's inbox get bombed by repeated requests
+
+function resetTokenKey_(token) { return "pwreset_" + token; }
+function resetCooldownKey_(username) { return "pwreset_cd_" + String(username).toLowerCase().trim(); }
+
+// Accepts a username OR the email on file for that account (whichever
+// the person actually remembers), generates a one-time token, and
+// emails a reset link containing it via MailApp — no third-party email
+// service needed, Apps Script's free MailApp quota (roughly 100/day on
+// a consumer Google account) is enough at this app's current scale.
+//
+// ALWAYS returns success:true regardless of whether a matching account
+// was actually found — this is deliberate, standard practice for
+// password-reset endpoints: an error message that reveals "no account
+// with that email" lets anyone enumerate which emails/usernames are
+// registered. The person only ever sees "if that account exists, an
+// email was sent", whether it was or wasn't.
+function requestPasswordReset(p) {
+  const identifier = String(p.identifier || p.username || p.email || "").trim();
+  if (!identifier) return { success: false, error: "Enter your username or email." };
+
+  const genericResponse = { success: true, message: "If that account exists, a reset link has been sent to its email address." };
+
+  const sheet = getUsersSheet_();
+  let found = findUserRow_(sheet, identifier); // try as username first
+  if (!found) found = findUserByField_(sheet, 3, identifier); // then as email (column 3)
+  if (!found) return genericResponse; // deliberately identical response — see comment above
+
+  const username = found.row[0];
+  const email = found.row[3];
+  if (!email) return genericResponse; // account has no email on file to send to
+
+  const cooldownKey = resetCooldownKey_(username);
+  const props = PropertiesService.getScriptProperties();
+  const lastRequestAt = Number(props.getProperty(cooldownKey) || 0);
+  if (Date.now() - lastRequestAt < RESET_REQUEST_COOLDOWN_MS) {
+    return genericResponse; // silently no-op on cooldown — same generic response, doesn't confirm/deny anything to a possible abuser
+  }
+
+  const token = Utilities.getUuid();
+  props.setProperty(resetTokenKey_(token), JSON.stringify({ username, expiresAt: Date.now() + RESET_TOKEN_TTL_MS }));
+  props.setProperty(cooldownKey, String(Date.now()));
+
+  const resetUrl = ScriptApp.getService().getUrl().replace(/\/exec$/, "") + "/exec?resetToken=" + token;
+  // NOTE: the link above points at THIS Apps Script web app URL, not the
+  // actual hosted index.html — this app has no server-rendered pages to
+  // redirect through. The email body below instead tells the person to
+  // open the app and paste the code, which index.html's client-side
+  // resetToken handling (checks both a pasted code AND a ?resetToken=
+  // URL param, in case a future deploy does host index.html at a fixed
+  // domain) already supports either way.
+  try {
+    MailApp.sendEmail({
+      to: email,
+      subject: "Reset your Abhyas password",
+      body: `Hi ${found.row[2] || username},\n\n` +
+        `Someone (hopefully you) requested a password reset for your Abhyas account (${username}).\n\n` +
+        `Open the Abhyas app and paste this reset code when prompted:\n\n${token}\n\n` +
+        `This code expires in 1 hour. If you didn't request this, you can safely ignore this email — your password hasn't been changed.`
+    });
+  } catch (err) {
+    console.error("requestPasswordReset: MailApp send failed:", err);
+    // Still return the generic success response — from the requester's
+    // perspective this genuinely is indistinguishable from "no matching
+    // account", and a specific "email failed to send" error would leak
+    // the same account-existence signal this function otherwise protects.
+  }
+
+  return genericResponse;
+}
+
+// Consumes a reset token (one-time use — deleted immediately on success
+// OR failure past this point, so a token can't be retried after a wrong
+// attempt) and sets a new password for the account it was issued to.
+function resetPassword(p) {
+  const token = String(p.token || "").trim();
+  const newPassword = p.newPassword || "";
+  if (!token) return { success: false, error: "Reset code required." };
+  if (!newPassword || newPassword.length < 6) {
+    return { success: false, error: "New password must be at least 6 characters." };
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const key = resetTokenKey_(token);
+  const raw = props.getProperty(key);
+  if (!raw) return { success: false, error: "This reset code is invalid or has already been used." };
+
+  let state;
+  try { state = JSON.parse(raw); } catch (e) { props.deleteProperty(key); return { success: false, error: "This reset code is invalid." }; }
+  props.deleteProperty(key); // one-time use, consumed regardless of what happens next
+
+  if (!state.expiresAt || Date.now() > state.expiresAt) {
+    return { success: false, error: "This reset code has expired — request a new one." };
+  }
+
+  return withLock_(() => {
+    const sheet = getUsersSheet_();
+    const found = findUserRow_(sheet, state.username);
+    if (!found) return { success: false, error: "Account not found." };
+
+    const salt = makeSalt_();
+    sheet.getRange(found.rowIndex, 2).setValue(salt + ":" + hashPassSalted_(newPassword, salt));
+    // Invalidate any existing session so a device that had the OLD
+    // password's session token doesn't stay logged in indefinitely
+    // after a reset that was presumably triggered by losing control of
+    // the account (or just forgetting the password) — force a fresh
+    // login with the new password everywhere.
+    sheet.getRange(found.rowIndex, 17).setValue("");
+    sheet.getRange(found.rowIndex, 18).setValue("");
+    clearLoginLock_("user", state.username); // a forgotten-password lockout shouldn't persist through a successful reset
+
+    logAction_("system", "Password Reset", state.username, "Self-service reset via emailed code");
+    return { success: true, username: state.username, message: "Password reset — please log in with your new password." };
+  });
 }
 
 function handleSignup(p) {

@@ -1389,10 +1389,16 @@ const QUIZ = {
   _doStart(qsArr, mode, chapterName, doShuffle=true, scope=null){
     const modeLabel = mode==='exam' ? '📝 Exam' : '⚡ Flashcard';
     toast(`${modeLabel} — ${qsArr.length} question${qsArr.length!==1?'s':''} · ${chapterName||'Study'}`, 2500);
+    const examSeconds = mode==='exam' ? qsArr.length*90 : 0;
     S.quiz = {
       qs: doShuffle ? shuf(qsArr) : [...qsArr], ans: new Array(qsArr.length).fill(null),
       mode, idx:0, timer:null, elapsed:0,
-      left: mode==='exam' ? qsArr.length*90 : 0,
+      left: examSeconds,
+      // Absolute end-of-exam timestamp, computed once here. The ticking
+      // countdown below recalculates `left` from THIS on every tick
+      // instead of decrementing a counter — see _startTimer's comment
+      // for why that distinction matters.
+      examEndAt: mode==='exam' ? Date.now() + examSeconds*1000 : 0,
       active:true, ch: chapterName||'Study', scope, skipped:new Set(), shown:new Set()
     };
     document.getElementById('quiz-wrap').style.display='';
@@ -1490,7 +1496,18 @@ const QUIZ = {
     S.quiz.timer = setInterval(()=>{
       if(!S.quiz.active)return;
       if(S.quiz.mode==='exam'){
-        S.quiz.left--;
+        // Wall-clock based, not a decrementing counter: if this tab was
+        // backgrounded/suspended (phone screen locked, browser minimized)
+        // for any stretch of time, the browser may skip or throttle
+        // intervals while hidden — a counter-based `left--` would then
+        // simply not have counted down during that gap, effectively
+        // pausing the exam clock for however long the student was away.
+        // Recomputing from the fixed examEndAt timestamp on every tick
+        // means the FIRST tick after returning immediately reflects the
+        // true remaining time, however long that gap actually was —
+        // same principle the reload-resume path (checkResumableExam)
+        // already uses, just applied to the live in-tab countdown too.
+        S.quiz.left = Math.max(0, Math.round((S.quiz.examEndAt - Date.now())/1000));
         const tEl=document.getElementById('ex-tmr'); if(tEl) tEl.textContent=fmt(S.quiz.left);
         if(S.quiz.left<=0){ toast('⏰ Time\'s up!'); QUIZ.submitExam(); return; }
         if(S.quiz.left % 15 === 0) QUIZ._snapshotExam();
@@ -1551,6 +1568,7 @@ const QUIZ = {
       QUIZ._resumeSnapshot(snap, adjustedLeft);
     };
     document.getElementById('exam-discard-btn').onclick = ()=>{
+      if(!confirm(`Discard this exam? You'll lose ${answered}/${snap.qs.length} answered question${answered!==1?'s':''} — this can't be undone.`)) return;
       modal.remove();
       QUIZ._clearExamSnapshot();
     };
@@ -1558,7 +1576,9 @@ const QUIZ = {
   _resumeSnapshot(snap, adjustedLeft){
     S.quiz = {
       qs: snap.qs, ans: snap.ans, mode:'exam', idx:0, timer:null, elapsed:0,
-      left: adjustedLeft, active:true, ch: snap.ch, skipped:new Set(), shown:new Set()
+      left: adjustedLeft,
+      examEndAt: Date.now() + adjustedLeft*1000,
+      active:true, ch: snap.ch, skipped:new Set(), shown:new Set()
     };
     document.getElementById('quiz-wrap').style.display='';
     document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
