@@ -54,7 +54,31 @@ if(!S.tt.reminders) S.tt.reminders = {enabled:false, leadMinutes:5};
 /* ═══════════════ 3. UTILITIES ═══════════════ */
 function _load(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch{return d}}
 const PSYNC_KEYS = new Set([LS.BK, LS.FL, LS.WR, LS.PROG, LS.STK]);
-function _save(k,v){try{localStorage.setItem(k,JSON.stringify(v));if(PSYNC_KEYS.has(k)) PSYNC.scheduleSync();return true}catch{toast('⚠️ Storage full — some data not saved');return false}}
+let _lastStorageWarnAt = 0;
+function _save(k,v){
+  try{
+    localStorage.setItem(k,JSON.stringify(v));
+    if(PSYNC_KEYS.has(k)) PSYNC.scheduleSync();
+    return true;
+  }catch(e){
+    // A single quiz session can trigger many _save() calls in quick
+    // succession (each answer, each bookmark, progress tracking) — if
+    // storage is genuinely full, EVERY one of those would otherwise
+    // fire its own toast. Cap it to once every 30s so the user gets
+    // told once, not spammed, while the underlying saves keep failing
+    // silently in between (same as before — this only changes how
+    // often they're told, not whether the save itself succeeds).
+    const now = Date.now();
+    if(now - _lastStorageWarnAt > 30000){
+      _lastStorageWarnAt = now;
+      const isQuota = e && (e.name==='QuotaExceededError' || e.code===22 || e.code===1014);
+      toast(isQuota
+        ? '⚠️ Device storage is full — new progress/bookmarks may not be saved. Try removing some old bookmarks or flagged questions to free space.'
+        : '⚠️ Could not save — some data may not have been saved.', 5000);
+    }
+    return false;
+  }
+}
 
 /* ── QDB: IndexedDB-backed question-set cache ── */
 const QDB = (() => {
@@ -1040,11 +1064,29 @@ const REV = {
   _lsKey(kind){ return kind==='bk'?LS.BK : kind==='fl'?LS.FL : LS.WR; },
   _listEl(kind){ return kind==='bk'?'bk-list' : kind==='fl'?'fl-list' : 'wr-list'; },
 
+  // Bookmarks/flags/wrong-answer-bank are persisted to localStorage
+  // (5-10MB quota, shared across the whole app), NOT IndexedDB (where
+  // the actual question cache lives, with a much higher limit) — so
+  // storing a full question snapshot here is fine for text, but an
+  // embedded base64 img field can easily be 100-300KB PER QUESTION.
+  // A handful of bookmarked image-heavy questions could exhaust the
+  // entire localStorage quota on their own. The image itself isn't
+  // needed to review a bookmarked/flagged/missed question's text and
+  // options, so it's dropped here rather than duplicated — this is
+  // the single highest-leverage fix for localStorage quota pressure,
+  // since every other locally-stored array (sessions, timetable, etc.)
+  // is already small and bounded.
+  _stripHeavy(q){
+    if(!q || !q.img) return q;
+    const {img, imgCaption, ...rest} = q;
+    return rest;
+  },
+
   toggle(kind, question){
     const arr = REV._store(kind);
     const i = arr.findIndex(x=>x.uid===question.uid);
     if(i>-1){ arr.splice(i,1); toast(kind==='bk'?'⭐ Removed bookmark':'🚩 Removed flag'); }
-    else { arr.push(kind==='bk' ? {...question, tag:''} : question); toast(kind==='bk'?'⭐ Bookmarked':'🚩 Flagged'); }
+    else { arr.push(kind==='bk' ? {...REV._stripHeavy(question), tag:''} : REV._stripHeavy(question)); toast(kind==='bk'?'⭐ Bookmarked':'🚩 Flagged'); }
     _save(REV._lsKey(kind), arr);
     HOME.updateBadges();
     return i===-1;
@@ -1053,7 +1095,7 @@ const REV = {
   getTag(uid){ return S.bk.find(x=>x.uid===uid)?.tag || ''; },
   setTag(uid, tag, questionObj){
     let item = S.bk.find(x=>x.uid===uid);
-    if(!item && questionObj){ item = {...questionObj, tag: ''}; S.bk.push(item); }
+    if(!item && questionObj){ item = {...REV._stripHeavy(questionObj), tag: ''}; S.bk.push(item); }
     if(!item) return;
     item.tag = tag;
     _save(LS.BK, S.bk);
@@ -1064,7 +1106,7 @@ const REV = {
   addWrong(question){
     const existing = S.wr.find(x=>x.uid===question.uid);
     if(existing){ existing._streak = 0; existing._nextDue = Date.now(); _save(LS.WR, S.wr); HOME.updateBadges(); return; }
-    S.wr.push({...question, _streak:0, _nextDue: Date.now()});
+    S.wr.push({...REV._stripHeavy(question), _streak:0, _nextDue: Date.now()});
     _save(LS.WR, S.wr);
     HOME.updateBadges();
   },

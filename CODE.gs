@@ -1595,6 +1595,34 @@ function getFcmAccessToken_() {
 // invalid token (UNREGISTERED, from an uninstalled PWA or revoked
 // permission) is treated as a normal "nothing to do" case, not an error
 // worth surfacing — FCM returns that as a 404/400 from the send call.
+// Raw FCM send to a single already-known token — no sheet lookup, no
+// username involved. Factored out of sendPushNotification_ so a
+// broadcast-to-everyone job (see broadcastPushToAll_ below, used for
+// weekly-set unlock notifications) doesn't have to re-scan PushTokens
+// once per recipient just to get back to this same HTTP call.
+function _fcmSendToToken(accessToken, projectId, token, title, body) {
+  const resp = UrlFetchApp.fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+    method: "post",
+    contentType: "application/json",
+    headers: { Authorization: "Bearer " + accessToken },
+    payload: JSON.stringify({
+      message: {
+        token,
+        notification: { title, body },
+        webpush: { fcm_options: { link: "/" } }
+      }
+    }),
+    muteHttpExceptions: true
+  });
+  const result = JSON.parse(resp.getContentText() || "{}");
+  if (resp.getResponseCode() >= 400) {
+    const isUnregistered = result.error && result.error.details &&
+      result.error.details.some(d => d.errorCode === "UNREGISTERED");
+    return { success: false, unregistered: !!isUnregistered, error: (result.error && result.error.message) || resp.getContentText() };
+  }
+  return { success: true };
+}
+
 function sendPushNotification_(username, title, body) {
   const sheet = getPushTokensSheet_();
   const found = findPushTokenRow_(sheet, username);
@@ -1611,31 +1639,65 @@ function sendPushNotification_(username, title, body) {
     return { success: false, error: err.message || String(err) };
   }
 
-  const resp = UrlFetchApp.fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
-    method: "post",
-    contentType: "application/json",
-    headers: { Authorization: "Bearer " + accessToken },
-    payload: JSON.stringify({
-      message: {
-        token: found.row[1],
-        notification: { title, body },
-        webpush: { fcm_options: { link: "/" } } // opens/focuses the PWA on click
-      }
-    }),
-    muteHttpExceptions: true
-  });
-
-  const result = JSON.parse(resp.getContentText() || "{}");
-  if (resp.getResponseCode() >= 400) {
+  const result = _fcmSendToToken(accessToken, projectId, found.row[1], title, body);
+  if (!result.success) {
     // UNREGISTERED means the token is dead (uninstalled, permission revoked,
     // browser data cleared) — clean it up so future attempts don't keep
     // hitting the same dead end.
-    const isUnregistered = result.error && result.error.details &&
-      result.error.details.some(d => d.errorCode === "UNREGISTERED");
-    if (isUnregistered) sheet.deleteRow(found.rowIndex);
-    return { success: false, error: (result.error && result.error.message) || resp.getContentText() };
+    if (result.unregistered) sheet.deleteRow(found.rowIndex);
+    return { success: false, error: result.error };
   }
   return { success: true };
+}
+
+// Sends the same notification to EVERY registered device — used for
+// announcements that aren't about one specific user's account state
+// (unlike checkTrialExpiryWarnings, which is inherently per-user). A
+// weekly set unlocking is the first thing that needs this, but it's
+// written generically since any future "tell everyone" notification
+// can reuse it as-is.
+//
+// Runs sequentially rather than in parallel — Apps Script's
+// UrlFetchApp has no built-in concurrency primitive, and FCM's
+// messages:send endpoint is one-token-per-call, so this is the
+// straightforward approach at the scale this app runs at. If the
+// registered-device count ever grows large enough for this to risk
+// the 6-minute execution ceiling, this would need batching (FCM does
+// support a batch send endpoint) — not implemented here since it's
+// not a real risk yet at this app's current scale.
+function broadcastPushToAll_(title, body) {
+  const sheet = getPushTokensSheet_();
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { success: true, sent: 0, failed: 0 };
+
+  const projectId = PropertiesService.getScriptProperties().getProperty("FCM_PROJECT_ID");
+  if (!projectId) return { success: false, error: "Push notifications not configured: missing FCM_PROJECT_ID." };
+
+  let accessToken;
+  try {
+    accessToken = getFcmAccessToken_();
+  } catch (err) {
+    console.error("broadcastPushToAll_ auth failed:", err);
+    return { success: false, error: err.message || String(err) };
+  }
+
+  let sent = 0, failed = 0;
+  const deadRows = []; // collect first, delete after the loop — deleteRow mid-iteration would shift indices out from under us
+  for (let i = 1; i < data.length; i++) {
+    const token = data[i][1];
+    if (!token) continue;
+    const result = _fcmSendToToken(accessToken, projectId, token, title, body);
+    if (result.success) sent++;
+    else {
+      failed++;
+      if (result.unregistered) deadRows.push(i + 1);
+    }
+  }
+  // Delete highest row index first so earlier indices in this same
+  // batch stay valid as each deleteRow shifts everything below it up.
+  deadRows.sort((a, b) => b - a).forEach(rowIndex => sheet.deleteRow(rowIndex));
+
+  return { success: true, sent, failed };
 }
 
 // Called from the client right after the browser grants Notification
@@ -1708,6 +1770,45 @@ function checkTrialExpiryWarnings() {
   return "Checked. Sent " + sent + " warning(s).";
 }
 
+// Scans WeeklySets for anything that just crossed its releaseAt since
+// the last check, and broadcasts one notification per newly-unlocked
+// set to every registered device. "Just crossed" is tracked the same
+// way trial warnings are — a PropertiesService flag per set id — so
+// this can safely run every few minutes without re-notifying everyone
+// each time it runs; each set fires exactly once, the first check
+// after its release moment passes.
+function checkWeeklySetUnlocks_() {
+  const sheet = getWeeklySetsSheet_();
+  const data = sheet.getDataRange().getValues();
+  const props = PropertiesService.getScriptProperties();
+  const now = Date.now();
+  let notified = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const s = rowToWeeklySet_(data[i]);
+    if (s.status !== "active") continue; // an archived-before-release set was cancelled — never notify for it
+    const releaseTime = new Date(s.releaseAt).getTime();
+    if (isNaN(releaseTime) || now < releaseTime) continue; // not released yet
+
+    const notifyKey = "wsnotified_" + s.id;
+    if (props.getProperty(notifyKey)) continue; // already notified for this set
+
+    try {
+      const result = broadcastPushToAll_("New weekly set unlocked! 🎉",
+        s.title + (s.chapterLabel ? " — " + s.chapterLabel : "") + " is now available to solve.");
+      if (result.success) {
+        props.setProperty(notifyKey, "1");
+        notified++;
+        logAction_("system", "Weekly Set Unlock Notification", s.title, `Sent to ${result.sent}, failed ${result.failed}`);
+      }
+    } catch (err) {
+      console.error("checkWeeklySetUnlocks_ failed for " + s.id + ":", err);
+    }
+  }
+  if (notified) console.log("Sent unlock notifications for " + notified + " weekly set(s).");
+  return "Checked. Notified for " + notified + " newly-unlocked set(s).";
+}
+
 // Creates the time-driven trigger for checkTrialExpiryWarnings if one
 // doesn't already exist — called from setup() so a fresh deploy gets
 // this automatically, but safe to re-run any time without creating
@@ -1715,8 +1816,11 @@ function checkTrialExpiryWarnings() {
 function ensurePushTriggers_() {
   const already = ScriptApp.getProjectTriggers()
     .some(t => t.getHandlerFunction() === "checkTrialExpiryWarnings");
-  if (already) return;
-  ScriptApp.newTrigger("checkTrialExpiryWarnings").timeBased().everyMinutes(30).create();
+  if (!already) ScriptApp.newTrigger("checkTrialExpiryWarnings").timeBased().everyMinutes(30).create();
+
+  const weeklyAlready = ScriptApp.getProjectTriggers()
+    .some(t => t.getHandlerFunction() === "checkWeeklySetUnlocks_");
+  if (!weeklyAlready) ScriptApp.newTrigger("checkWeeklySetUnlocks_").timeBased().everyMinutes(15).create();
 }
 
 /* ═══════════════════════════════════════════════════════════════
