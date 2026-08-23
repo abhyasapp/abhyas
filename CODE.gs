@@ -407,40 +407,52 @@ function applyTableFormat_(sheet, headers, headerColor, bandTheme, maxWidthPx) {
   // Sheets throws — on a brand-new sheet maxRows can be 0 rows tall in
   // practice-safe terms, so guard rather than let this throw on setup.
   const fullRange = sheet.getRange(1, 1, maxRows + 1, numCols);
-  try {
-    // Remove any existing banding on this sheet that overlaps our
-    // target range — NOT just fullRange.getBandings() (which only
-    // reliably catches bandings whose range exactly matches this call's
-    // range). A previous run's banding can persist at a slightly
-    // different extent (e.g. this same function running twice in one
-    // setup() — once via getXSheet_() creating the sheet, once via
-    // fixSheetFormatting()'s retrofit pass right after), and Sheets
-    // refuses to apply new banding anywhere it thinks old banding still
-    // overlaps, throwing "Unexpected error...on object
-    // SpreadsheetApp.Range" — a generic, unhelpful message for what is
-    // actually just "banding already exists here".
-    sheet.getBandings().forEach(b => {
-      const r = b.getRange();
-      const overlaps = r.getSheet().getSheetId() === sheet.getSheetId() &&
-        r.getRow() <= fullRange.getLastRow() && r.getLastRow() >= fullRange.getRow() &&
-        r.getColumn() <= fullRange.getLastColumn() && r.getLastColumn() >= fullRange.getColumn();
-      if (overlaps) b.remove();
-    });
-    // Removing a banding doesn't take effect synchronously — without
-    // this flush, applyRowBanding() below can still see the
-    // just-removed banding as present and throw the same error this
-    // whole block exists to fix.
-    SpreadsheetApp.flush();
-    if (maxRows >= 1) {
-      const banding = fullRange.applyRowBanding(bandTheme, true, false);
-      banding.setHeaderRowColor(headerColor);
+  if (maxRows >= 1) {
+    // Up to 2 attempts. A single flush isn't always enough to fully
+    // settle a remove-then-reapply when many sheets are being created
+    // and banded back-to-back in one execution (setup() creates and
+    // bands all 8 sheets twice — once via getXSheet_(), once via
+    // fixSheetFormatting()'s retrofit pass — in well under a minute,
+    // which is enough rapid-fire structural activity that Sheets'
+    // backend occasionally needs a second attempt to catch up, even
+    // after a flush). The 400ms sleep only ever runs on a retry, not
+    // on the normal/successful path, so this adds no delay when
+    // banding just works the first time.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        // Remove any existing banding on this sheet that overlaps our
+        // target range — NOT just fullRange.getBandings() (which only
+        // reliably catches bandings whose range exactly matches this
+        // call's range). A previous run's banding can persist at a
+        // slightly different extent, and Sheets refuses to apply new
+        // banding anywhere it thinks old banding still overlaps,
+        // throwing "Unexpected error...on object SpreadsheetApp.Range"
+        // — a generic, unhelpful message for what is actually just
+        // "banding already exists here".
+        sheet.getBandings().forEach(b => {
+          const r = b.getRange();
+          const overlaps = r.getSheet().getSheetId() === sheet.getSheetId() &&
+            r.getRow() <= fullRange.getLastRow() && r.getLastRow() >= fullRange.getRow() &&
+            r.getColumn() <= fullRange.getLastColumn() && r.getLastColumn() >= fullRange.getColumn();
+          if (overlaps) b.remove();
+        });
+        SpreadsheetApp.flush();
+        const banding = fullRange.applyRowBanding(bandTheme, true, false);
+        banding.setHeaderRowColor(headerColor);
+        break; // success — don't consume the second attempt
+      } catch (err) {
+        if (attempt === 2) {
+          // Banding is purely cosmetic — never let it abort setup()/
+          // fixSheetFormatting(), which also seed the first admin
+          // account and create every other sheet in the same run. Log
+          // and move on; the sheet is still fully usable without
+          // banding, just less pretty.
+          console.error("applyTableFormat_: banding failed for '" + sheet.getName() + "' after 2 attempts — continuing without it:", err);
+        } else {
+          Utilities.sleep(400);
+        }
+      }
     }
-  } catch (err) {
-    // Banding is purely cosmetic — never let it abort setup()/
-    // fixSheetFormatting(), which also seed the first admin account and
-    // create every other sheet in the same run. Log and move on; the
-    // sheet is still fully usable without banding, just less pretty.
-    console.error("applyTableFormat_: banding failed for '" + sheet.getName() + "' — continuing without it:", err);
   }
   fullRange.setBorder(true, true, true, true, true, true, "#d0d0d0", SpreadsheetApp.BorderStyle.SOLID);
 
