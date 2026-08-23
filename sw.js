@@ -84,6 +84,8 @@ const SHELL = [
   './firebase-config.js',
   './chapters-data.js',
   './shared.js',
+  './cloud-sync.js',
+  './design-system.css',
   './manifest.json',
   './vendor/phosphor/phosphor-regular.css',
   './vendor/phosphor/Phosphor.woff2'

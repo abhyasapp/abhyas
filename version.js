@@ -11,4 +11,4 @@
    Keep in sync with CODE.gs's own APP_VERSION constant (the backend
    runs in a different runtime and can't import this file directly).
    ═══════════════════════════════════════════════════════════════ */
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
