@@ -256,7 +256,7 @@ button{font-family:var(--ff)}
 .sc::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px}
 .sc:not([class*=sc-])::after,.sc.sc-c::after{background:linear-gradient(90deg,var(--vio),var(--sky))}.sc.sc-g::after{background:var(--grn)}.sc.sc-r::after{background:var(--ros)}.sc.sc-a::after{background:var(--amb)}
 .sv{font-family:var(--fm);font-size:1.45rem;font-weight:700;line-height:1}
-.sl{font-size:.58rem;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);margin-top:.24rem}
+.stat-lbl{font-size:.58rem;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);margin-top:.24rem}
 .tcy{color:var(--sky)}.tc2{color:var(--grn)}.tb2{color:var(--ros)}.ta2{color:var(--amb)}
 
 /* Quick tiles */
@@ -550,10 +550,10 @@ input[type=file]:hover{border-color:var(--amb)}
         </div>
         <div class="sb-lbl" style="margin-bottom:.4rem">Today's Overview</div>
         <div class="stats-row">
-          <div class="scard sc-c"><div class="sv tcy" id="hs-tot">0</div><div class="sl">Answered</div></div>
-          <div class="scard sc-g"><div class="sv tc2" id="hs-cor">0</div><div class="sl">Correct</div></div>
-          <div class="scard sc-r"><div class="sv tb2" id="hs-wrg">0</div><div class="sl">Wrong</div></div>
-          <div class="scard sc-a"><div class="sv ta2" id="hs-pct">0%</div><div class="sl">Accuracy</div></div>
+          <div class="scard sc-c"><div class="sv tcy" id="hs-tot">0</div><div class="stat-lbl">Answered</div></div>
+          <div class="scard sc-g"><div class="sv tc2" id="hs-cor">0</div><div class="stat-lbl">Correct</div></div>
+          <div class="scard sc-r"><div class="sv tb2" id="hs-wrg">0</div><div class="stat-lbl">Wrong</div></div>
+          <div class="scard sc-a"><div class="sv ta2" id="hs-pct">0%</div><div class="stat-lbl">Accuracy</div></div>
         </div>
         <div class="sb-lbl" style="margin:.7rem 0 .4rem">Quick Actions</div>
         <div class="qa-row">

@@ -1831,10 +1831,10 @@ const QUIZ = {
     document.getElementById('res-grade').textContent = grade;
 
     document.getElementById('res-stats').innerHTML = `
-      <div class="sc"><div class="sv tcy">${total}</div><div class="sl">Total</div></div>
-      <div class="sc"><div class="sv tc2">${correct}</div><div class="sl">Correct</div></div>
-      <div class="sc"><div class="sv tb2">${wrong}</div><div class="sl">Wrong</div></div>
-      <div class="sc"><div class="sv ta2">${skipped}</div><div class="sl">Skipped</div></div>
+      <div class="sc"><div class="sv tcy">${total}</div><div class="stat-lbl">Total</div></div>
+      <div class="sc"><div class="sv tc2">${correct}</div><div class="stat-lbl">Correct</div></div>
+      <div class="sc"><div class="sv tb2">${wrong}</div><div class="stat-lbl">Wrong</div></div>
+      <div class="sc"><div class="sv ta2">${skipped}</div><div class="stat-lbl">Skipped</div></div>
     `;
 
     document.getElementById('res-review').innerHTML = S.quiz.qs.map((q,i)=>{
@@ -1952,10 +1952,10 @@ const PROG = {
     const total=S.prog.total, correct=S.prog.correct, wrong=total-correct;
     const pct = total ? Math.round((correct/total)*100) : 0;
     document.getElementById('prog-stats').innerHTML = `
-      <div class="sc"><div class="sv tcy">${total}</div><div class="sl">Answered</div></div>
-      <div class="sc"><div class="sv tc2">${correct}</div><div class="sl">Correct</div></div>
-      <div class="sc"><div class="sv tb2">${wrong}</div><div class="sl">Wrong</div></div>
-      <div class="sc"><div class="sv ta2">${pct}%</div><div class="sl">Accuracy</div></div>
+      <div class="sc"><div class="sv tcy">${total}</div><div class="stat-lbl">Answered</div></div>
+      <div class="sc"><div class="sv tc2">${correct}</div><div class="stat-lbl">Correct</div></div>
+      <div class="sc"><div class="sv tb2">${wrong}</div><div class="stat-lbl">Wrong</div></div>
+      <div class="sc"><div class="sv ta2">${pct}%</div><div class="stat-lbl">Accuracy</div></div>
     `;
     const byChap = {};
     S.prog.sessions.forEach(s=>{
@@ -2180,9 +2180,9 @@ const ONPROG = {
       const pct = total ? Math.round((correct/total)*100) : 0;
       bodyEl.innerHTML = `
         <div class="prog-grid">
-          <div class="sc"><div class="sv tcy">${total}</div><div class="sl">Attempted</div></div>
-          <div class="sc"><div class="sv tc2">${correct}</div><div class="sl">Correct</div></div>
-          <div class="sc"><div class="sv tb2">${wrong}</div><div class="sl">Wrong</div></div>
+          <div class="sc"><div class="sv tcy">${total}</div><div class="stat-lbl">Attempted</div></div>
+          <div class="sc"><div class="sv tc2">${correct}</div><div class="stat-lbl">Correct</div></div>
+          <div class="sc"><div class="sv tb2">${wrong}</div><div class="stat-lbl">Wrong</div></div>
         </div>
         <div class="pb-w" style="margin-top:.6rem"><div class="pb-l"><span>Accuracy</span><span>${pct}%</span></div><div class="pb"><div class="pb-f" style="width:${pct}%"></div></div></div>
         <div style="font-size:.68rem;color:var(--t3);margin-top:.5rem">Pick a Level, Chapter, Book or Subtopic above to see coverage for that scope.</div>`;
@@ -2246,10 +2246,10 @@ const ONPROG = {
 
       bodyEl.innerHTML = `
         <div class="prog-grid">
-          <div class="sc"><div class="sv tcy">${scoped.practised}</div><div class="sl">Practised</div></div>
-          <div class="sc"><div class="sv ta2">${scoped.attempted}</div><div class="sl">Attempted</div></div>
-          <div class="sc"><div class="sv tc2">${scoped.correct}</div><div class="sl">Correct</div></div>
-          <div class="sc"><div class="sv tb2">${scoped.wrong}</div><div class="sl">Wrong</div></div>
+          <div class="sc"><div class="sv tcy">${scoped.practised}</div><div class="stat-lbl">Practised</div></div>
+          <div class="sc"><div class="sv ta2">${scoped.attempted}</div><div class="stat-lbl">Attempted</div></div>
+          <div class="sc"><div class="sv tc2">${scoped.correct}</div><div class="stat-lbl">Correct</div></div>
+          <div class="sc"><div class="sv tb2">${scoped.wrong}</div><div class="stat-lbl">Wrong</div></div>
         </div>
         ${info.needsConfirm ? confirmBtn : `
           <div class="pb-w" style="margin-top:.65rem">
