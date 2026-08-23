@@ -34,6 +34,7 @@ const LOGS_SHEET      = "Logs";
 const ADMINS_SHEET    = "Admins";
 const PROGRESS_SHEET  = "Progress";
 const PUSHTOKENS_SHEET = "PushTokens";
+const WEEKLYSETS_SHEET = "WeeklySets";
 
 /* ── BRUTE-FORCE LOGIN PROTECTION ────────────────────────────────
    Tracks failed attempts per-username in PropertiesService (not a sheet
@@ -152,6 +153,23 @@ const PROGRESS_HEADERS = ["username", "data", "updatedAt"];
 // token to reach a user, never their subscription history.
 const PUSHTOKENS_HEADERS = ["username", "fcmToken", "updatedAt"];
 
+// Admin uploads a question-bank fileId (same Drive fileId shape as
+// chapters-data.js — read through the SAME handleGetFile proxy, so it
+// gets the same rate limiting and read-only guarantees) together with a
+// releaseAt timestamp, typically over the weekend, for a set that should
+// only become solvable partway through the following week. status lets
+// an admin retire a set from the user-facing list (listWeeklySets)
+// without losing its row history — deleting is still available via
+// adminDeleteWeeklySet for a genuine mistake, but archiving is the
+// normal path once a set is no longer current.
+//
+// Deliberately does NOT store the question content itself — same
+// reasoning as chapters-data.js: one Drive file is the single source of
+// truth for a given set's questions, referenced by id everywhere else,
+// so re-uploading a corrected file to the same Drive fileId propagates
+// instantly without touching this sheet at all.
+const WEEKLYSET_HEADERS = ["id", "title", "fileId", "chapterLabel", "status", "uploadedBy", "uploadedAt", "releaseAt"];
+
 const TRIAL_HOURS = 24;
 
 /* ═══════════════════════════════════════════════════════════════
@@ -187,6 +205,7 @@ function doGet(e) {
       case "saveprogress":       result = saveProgress(e.parameter); break;
       case "getprogress":        result = getProgress(e.parameter); break;
       case "savepushtoken":      result = savePushToken(e.parameter); break;
+      case "listweeklysets":     result = listWeeklySets(e.parameter); break;
 
       // ── PAYMENT ──
       case "submitpayment":      result = submitPayment(e.parameter); break;
@@ -215,11 +234,16 @@ function doGet(e) {
       case "adminupdatesettingsbatch": result = adminUpdateSettingsBatch(e.parameter); break;
       case "adminstats":         result = adminStats(e.parameter); break;
       case "adminlistlogs":      result = adminListLogs(e.parameter); break;
+      case "admincreateweeklyset": result = adminCreateWeeklySet(e.parameter); break;
+      case "adminuploadweeklysetfile": result = adminUploadWeeklySetFile(e.parameter); break;
+      case "adminupdateweeklyset": result = adminUpdateWeeklySet(e.parameter); break;
+      case "admindeleteweeklyset": result = adminDeleteWeeklySet(e.parameter); break;
+      case "adminlistweeklysets":  result = adminListWeeklySets(e.parameter); break;
 
       default:
         result = {
           success: false,
-          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, saveProgress, getProgress, savePushToken, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs"
+          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, saveProgress, getProgress, savePushToken, listWeeklySets, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs, adminCreateWeeklySet, adminUploadWeeklySetFile, adminUpdateWeeklySet, adminDeleteWeeklySet, adminListWeeklySets"
         };
     }
   } catch (err) {
@@ -294,6 +318,7 @@ function setup() {
   getAdminsSheet_(); // seeds the first admin login (see ADMIN_SEED_USERNAME/PASSWORD above)
   getProgressSheet_();
   getPushTokensSheet_();
+  getWeeklySetsSheet_();
   initDefaultSettings_();
   ensurePushTriggers_();
   // Idempotent — guarantees every sheet has the correct text-formatting
@@ -525,6 +550,47 @@ function findProgressRow_(sheet, username) {
     }
   }
   return null;
+}
+
+function getWeeklySetsSheet_() {
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(WEEKLYSETS_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(WEEKLYSETS_SHEET);
+    sheet.appendRow(WEEKLYSET_HEADERS);
+    const maxRows = sheet.getMaxRows() - 1;
+    // id=1 and fileId=3 are both opaque tokens (a UUID and a Drive fileId)
+    // that can start with digits — same all-digits protection as every
+    // other id/fileId-shaped column elsewhere in this file.
+    [1, 3].forEach(col => sheet.getRange(2, col, maxRows, 1).setNumberFormat("@"));
+    applyTableFormat_(sheet, WEEKLYSET_HEADERS, "#00acc1", SpreadsheetApp.BandingTheme.CYAN, 320);
+  }
+  return sheet;
+}
+
+function findWeeklySetRow_(sheet, id) {
+  if (!id) return null;
+  const data = sheet.getDataRange().getValues();
+  const target = String(id).trim();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === target) {
+      return { rowIndex: i + 1, row: data[i] };
+    }
+  }
+  return null;
+}
+
+function rowToWeeklySet_(row) {
+  return {
+    id: row[0] || "",
+    title: row[1] || "",
+    fileId: row[2] || "",
+    chapterLabel: row[3] || "",
+    status: row[4] || "active",
+    uploadedBy: row[5] || "",
+    uploadedAt: row[6] || "",
+    releaseAt: row[7] || ""
+  };
 }
 
 function getPushTokensSheet_() {
@@ -2336,6 +2402,211 @@ function adminStats(p) {
   };
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   WEEKLY SETS — admin uploads a fileId over the weekend, scheduled to
+   unlock on a specific date/time (typically the following Wednesday).
+   ═══════════════════════════════════════════════════════════════ */
+
+// Uploads the actual question-bank JSON to a dedicated Drive folder and
+// hands back the resulting fileId — the admin panel calls this FIRST
+// (from a plain <input type=file>, base64-encoded client-side), then
+// passes the returned fileId into adminCreateWeeklySet below. This
+// means an admin no longer needs to separately upload to Drive by hand
+// and copy a fileId over — same pattern as submitPayment's screenshot
+// upload (getOrCreateFolder_ + createFile), except the resulting file
+// is set to ANYONE_WITH_LINK so it reads through handleGetFile exactly
+// like every chapters-data.js fileId already does.
+//
+// Deliberately validates the upload is parseable JSON before it ever
+// reaches Drive — an admin fat-fingering the wrong file (a screenshot,
+// a .docx) fails immediately with a clear error instead of silently
+// creating a WeeklySets row that points at unreadable content.
+function adminUploadWeeklySetFile(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+
+  const fileData = String(p.fileData || "");
+  const filename = String(p.filename || "weeklyset.json").trim();
+  if (!fileData) return { success: false, error: "No file data provided." };
+
+  let jsonText;
+  try {
+    // Accept either a raw data: URI (from <input type=file> + FileReader)
+    // or already-decoded plain text, so this also works for a future
+    // "paste JSON directly" admin UI path without changing this function.
+    jsonText = fileData.startsWith("data:")
+      ? Utilities.newBlob(Utilities.base64Decode(fileData.split(",")[1])).getDataAsString("UTF-8")
+      : fileData;
+    JSON.parse(jsonText); // validate only — never modify/re-serialize the student's original file
+  } catch (e) {
+    return { success: false, error: "That file isn't valid JSON — check it's the same format as other question-bank files before uploading." };
+  }
+
+  try {
+    const blob = Utilities.newBlob(jsonText, "application/json", filename);
+    const folder = getOrCreateFolder_("WeeklySets");
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    logAction_(actor, "Upload Weekly Set File", filename, "fileId: " + file.getId());
+    return { success: true, fileId: file.getId(), filename: file.getName() };
+  } catch (e) {
+    return { success: false, error: "Drive upload failed: " + (e.message || e) };
+  }
+}
+
+// fileId here is normally the RESULT of adminUploadWeeklySetFile above
+// (upload-then-create, two calls from the admin panel) — kept as a
+// separate parameter rather than folding the upload into this function
+// so an admin can still paste an existing chapters-data.js-style fileId
+// directly here too, without a redundant re-upload of content that's
+// already on Drive.
+function adminCreateWeeklySet(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+
+  const title = String(p.title || "").trim();
+  const fileId = String(p.fileId || "").trim();
+  const chapterLabel = String(p.chapterLabel || "").trim();
+  const releaseAtRaw = String(p.releaseAt || "").trim();
+
+  if (!title) return { success: false, error: "Title required." };
+  if (!fileId) return { success: false, error: "Drive fileId required." };
+
+  const releaseAt = new Date(releaseAtRaw);
+  if (!releaseAtRaw || isNaN(releaseAt)) {
+    return { success: false, error: "A valid release date/time is required." };
+  }
+
+  return withLock_(() => {
+    const sheet = getWeeklySetsSheet_();
+    const id = Utilities.getUuid();
+    const now = new Date().toISOString();
+    sheet.appendRow([id, title, fileId, chapterLabel, "active", actor, now, releaseAt.toISOString()]);
+    logAction_(actor, "Create Weekly Set", title, "Releases: " + releaseAt.toISOString());
+    return { success: true, id, title, releaseAt: releaseAt.toISOString() };
+  });
+}
+
+// Partial update — only fields present in p are changed, so the admin
+// panel can send just {id, status:'archived'} to retire a set without
+// having to resend title/fileId/releaseAt it already had.
+function adminUpdateWeeklySet(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+  const id = String(p.id || "").trim();
+  if (!id) return { success: false, error: "id required." };
+
+  return withLock_(() => {
+    const sheet = getWeeklySetsSheet_();
+    const found = findWeeklySetRow_(sheet, id);
+    if (!found) return { success: false, error: "Weekly set not found." };
+
+    const changes = [];
+    if (p.title !== undefined) { sheet.getRange(found.rowIndex, 2).setValue(String(p.title).trim()); changes.push("title"); }
+    if (p.fileId !== undefined) { sheet.getRange(found.rowIndex, 3).setValue(String(p.fileId).trim()); changes.push("fileId"); }
+    if (p.chapterLabel !== undefined) { sheet.getRange(found.rowIndex, 4).setValue(String(p.chapterLabel).trim()); changes.push("chapterLabel"); }
+    if (p.status !== undefined && ["active", "archived"].includes(p.status)) { sheet.getRange(found.rowIndex, 5).setValue(p.status); changes.push("status→" + p.status); }
+    if (p.releaseAt !== undefined) {
+      const d = new Date(p.releaseAt);
+      if (isNaN(d)) return { success: false, error: "Invalid release date/time." };
+      sheet.getRange(found.rowIndex, 8).setValue(d.toISOString());
+      changes.push("releaseAt→" + d.toISOString());
+    }
+
+    logAction_(actor, "Update Weekly Set", id, changes.join(", "));
+    return { success: true, id };
+  });
+}
+
+function adminDeleteWeeklySet(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+  const id = String(p.id || "").trim();
+  if (!id) return { success: false, error: "id required." };
+
+  return withLock_(() => {
+    const sheet = getWeeklySetsSheet_();
+    const found = findWeeklySetRow_(sheet, id);
+    if (!found) return { success: false, error: "Weekly set not found." };
+    sheet.deleteRow(found.rowIndex);
+    logAction_(actor, "Delete Weekly Set", id, "");
+    return { success: true, deleted: id };
+  });
+}
+
+// Admin-facing list — returns EVERY set (active or archived, released or
+// not yet) with its full fileId, so the admin panel can show and edit
+// what's actually scheduled. Contrast with listWeeklySets() below, which
+// is what students see and deliberately withholds fileId pre-release.
+function adminListWeeklySets(p) {
+  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const sheet = getWeeklySetsSheet_();
+  const data = sheet.getDataRange().getValues();
+  const sets = [];
+  for (let i = 1; i < data.length; i++) sets.push(rowToWeeklySet_(data[i]));
+  // Soonest-releasing first, so an admin managing several upcoming sets
+  // sees what's next without having to scan/sort themselves.
+  sets.sort((a, b) => new Date(a.releaseAt) - new Date(b.releaseAt));
+  return { success: true, sets };
+}
+
+// Student-facing list. Requires the same proof-of-identity as
+// getProgress/checkSession (a valid session token) — not because the
+// list itself is sensitive, but so a logged-out visitor can't probe it
+// for upcoming fileIds before release the same way handleGetFile's rate
+// limiter exists to slow down direct scraping.
+//
+// A set that has ALREADY been released stays visible here forever,
+// even after an admin later archives it — "archived" only ever means
+// "stop featuring this as current/upcoming", never "take this away
+// from students who could already solve it". That's deliberate: once a
+// weekly set unlocks, it becomes a permanent part of the library
+// exactly like any other chapters-data.js file, reachable through the
+// same Online Study flow indefinitely, not a one-off that disappears
+// once the next week's set replaces it as "current". Only a genuine
+// adminDeleteWeeklySet removes a set from this list entirely.
+//
+// A set that has NOT yet been released and gets archived (an admin
+// cancelling something before it ever went live) is correctly hidden —
+// there's nothing to preserve access to yet. Active-but-not-yet-
+// released sets ARE included (as a teaser — title/chapterLabel/
+// releaseAt only, so students see what's coming and when) but fileId
+// is stripped, since handing it out early would let anyone bypass the
+// schedule by calling handleGetFile directly with a fileId lifted from
+// the response.
+function listWeeklySets(p) {
+  const username = String(p.username || "").trim();
+  if (!username) return { success: false, error: "Username required." };
+  const userSheet = getUsersSheet_();
+  const userFound = findUserRow_(userSheet, username);
+  if (!userFound) return { success: false, error: "User not found." };
+  if (!verifyUserToken_(userFound, p.token)) {
+    return { success: false, error: "Session expired. Please log in again.", sessionInvalid: true };
+  }
+
+  const sheet = getWeeklySetsSheet_();
+  const data = sheet.getDataRange().getValues();
+  const now = Date.now();
+  const sets = [];
+  for (let i = 1; i < data.length; i++) {
+    const s = rowToWeeklySet_(data[i]);
+    const releaseTime = new Date(s.releaseAt).getTime();
+    const released = !isNaN(releaseTime) && now >= releaseTime;
+    if (s.status !== "active" && !(s.status === "archived" && released)) continue;
+    sets.push({
+      id: s.id,
+      title: s.title,
+      chapterLabel: s.chapterLabel,
+      releaseAt: s.releaseAt,
+      released: released,
+      fileId: released ? s.fileId : undefined
+    });
+  }
+  // Soonest-releasing (or most recently released) first.
+  sets.sort((a, b) => new Date(a.releaseAt) - new Date(b.releaseAt));
+  return { success: true, sets };
+}
+
 /**
  * Run this ONCE from the Apps Script editor if your spreadsheet already
  * existed before this update — the text-formatting fixes in
@@ -2388,7 +2659,12 @@ function fixSheetFormatting() {
   pt.getRange(2, 1, maxRows, 1).setNumberFormat("@");
   applyTableFormat_(pt, PUSHTOKENS_HEADERS, "#e67c00", SpreadsheetApp.BandingTheme.ORANGE, 300);
 
-  console.log("✅ Sheet formatting fixed/retrofitted on all seven sheets.");
+  const ws = getWeeklySetsSheet_();
+  maxRows = ws.getMaxRows() - 1;
+  [1, 3].forEach(col => ws.getRange(2, col, maxRows, 1).setNumberFormat("@"));
+  applyTableFormat_(ws, WEEKLYSET_HEADERS, "#00acc1", SpreadsheetApp.BandingTheme.CYAN, 320);
+
+  console.log("✅ Sheet formatting fixed/retrofitted on all eight sheets.");
   return "Sheet formatting fixed. Check View → Logs for details.";
 }
 

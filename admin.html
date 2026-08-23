@@ -295,6 +295,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
       <div class="sb-item active" id="nav-dashboard" onclick="UI.nav('dashboard')"><div class="sb-ic"><i class="ph ph-chart-bar"></i></div>Dashboard</div>
       <div class="sb-item" id="nav-users" onclick="UI.nav('users')"><div class="sb-ic"><i class="ph ph-user"></i></div>Users</div>
       <div class="sb-item" id="nav-payments" onclick="UI.nav('payments')"><div class="sb-ic"><i class="ph ph-credit-card"></i></div>Payments</div>
+      <div class="sb-item" id="nav-weeklysets" onclick="UI.nav('weeklysets')"><div class="sb-ic"><i class="ph ph-calendar-check"></i></div>Weekly Sets</div>
       <div class="sb-item" id="nav-logs" onclick="UI.nav('logs')"><div class="sb-ic"><i class="ph ph-clipboard-text"></i></div>Activity Logs</div>
       <div class="sb-item" id="nav-settings" onclick="UI.nav('settings')"><div class="sb-ic"><i class="ph ph-gear"></i></div>Settings</div>
       <div class="sb-div"></div>
@@ -381,6 +382,37 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           <th>User</th><th>TXN ID</th><th>Amount</th><th>Status</th><th>Submitted</th><th style="text-align:right">Actions</th>
         </tr></thead><tbody id="payments-body"><tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-tray"></i></div><p>No payments found</p></td></tr></tbody></table></div>
         <div class="pg" id="p-pg"></div>
+      </div>
+
+      <!-- WEEKLY SETS -->
+      <div class="view" id="view-weeklysets">
+        <div class="ph"><h2><i class="ph ph-calendar-check"></i> Weekly Sets</h2><p>Upload a question set now, scheduled to unlock for students later — typically upload over the weekend, unlock the following Wednesday.</p></div>
+
+        <div class="card">
+          <div class="card-hd"><h3>Add Weekly Set</h3></div>
+          <div class="sf"><label for="ws-title">Title</label><input type="text" id="ws-title" placeholder="e.g. Week 12 — Structural Analysis"></div>
+          <div class="sf">
+            <label for="ws-file">Question Bank File (.json)</label>
+            <input type="file" id="ws-file" accept="application/json,.json" onchange="WEEKLYSETS.onFilePicked()">
+            <div id="ws-upload-status" style="font-size:.7rem;margin-top:.3rem;opacity:.7"></div>
+          </div>
+          <details style="margin:.2rem 0 .6rem">
+            <summary style="font-size:.72rem;opacity:.7;cursor:pointer">Or paste an existing Drive fileId instead</summary>
+            <div class="sf" style="margin-top:.4rem"><input type="text" id="ws-fileid" placeholder="Same fileId format as chapters-data.js"></div>
+          </details>
+          <div class="sf"><label for="ws-chapter">Chapter / Label (optional)</label><input type="text" id="ws-chapter" placeholder="e.g. Structural Engineering"></div>
+          <div class="sf">
+            <label for="ws-release">Release Date &amp; Time</label>
+            <input type="datetime-local" id="ws-release">
+            <button type="button" class="btn-s btn-c btn-sm" style="margin-top:.4rem" onclick="WEEKLYSETS.fillNextWednesday()"><i class="ph ph-calendar-plus"></i> Use next Wednesday, 8:00 AM</button>
+          </div>
+          <button class="btn-s btn-g" onclick="WEEKLYSETS.create()"><i class="ph ph-plus"></i> Add Weekly Set</button>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><h3>Scheduled &amp; Live Sets</h3></div>
+          <div id="weeklysets-list" style="display:flex;flex-direction:column;gap:.5rem"></div>
+        </div>
       </div>
 
       <!-- ACTIVITY LOGS -->
@@ -600,7 +632,7 @@ const ADMIN = {
     }
   },
 
-  ALL_SCOPES: ['stats','users','payments','settings','logs','admins'],
+  ALL_SCOPES: ['stats','users','payments','settings','logs','admins','weeklysets'],
 
   // scope: optional array of which pieces to reload, e.g. ['stats','users']
   // after granting one user access. Omit it (or pass nothing) for the full
@@ -618,7 +650,8 @@ const ADMIN = {
         payments: () => this.post('adminListPayments'),
         settings: () => this.post('getSettings'),
         logs:     () => this.post('adminListLogs').catch(() => ({success:false, logs:[]})),
-        admins:   () => this.post('adminListAdmins').catch(() => ({success:false, admins:[]}))
+        admins:   () => this.post('adminListAdmins').catch(() => ({success:false, admins:[]})),
+        weeklysets: () => this.post('adminListWeeklySets').catch(() => ({success:false, sets:[]}))
       };
       const results = await Promise.all(want.map(k => fetchers[k]()));
       const failures = [];
@@ -630,6 +663,7 @@ const ADMIN = {
         else if (k === 'settings') { if (r.success) { this.data.settings = r.settings; SETTINGS.load(); } }
         else if (k === 'logs') { if (r.success) { this.data.logs = r.logs; LOGS.render(); } }
         else if (k === 'admins') { if (r.success) ADMINS.render(r.admins); }
+        else if (k === 'weeklysets') { if (r.success) WEEKLYSETS.render(r.sets); }
       });
       if (failures.length) {
         this.toast('❌ Some data failed to load — ' + failures[0] + (failures.length>1 ? ` (+${failures.length-1} more)` : ''));
@@ -780,6 +814,161 @@ const ADMINS = {
         ADMIN.toast('✅ Admin removed');
         const r = await ADMIN.post('adminListAdmins');
         if (r.success) this.render(r.admins);
+      } else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// WEEKLY SETS — upload now, unlock for students on a scheduled date
+// ═══════════════════════════════════════════════════════════════
+const WEEKLYSETS = {
+  list: [],
+  uploadedFileId: '', // set by onFilePicked() once a Drive upload succeeds
+
+  // Pre-fills the release-date input with next Wednesday at 8:00 AM —
+  // a convenience default matching the "upload over the weekend, unlock
+  // Wednesday" workflow this feature was built for. Still just a
+  // starting point in a normal datetime-local input, so an admin can
+  // freely pick any other date/time instead.
+  fillNextWednesday() {
+    const now = new Date();
+    const day = now.getDay(); // 0=Sun..6=Sat
+    let daysUntilWed = (3 - day + 7) % 7; // 3 = Wednesday
+    if (daysUntilWed === 0) daysUntilWed = 7; // if today IS Wednesday, jump to next week's, not "in 0 days"
+    const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilWed, 8, 0, 0);
+    const pad = n => String(n).padStart(2, '0');
+    const local = `${target.getFullYear()}-${pad(target.getMonth()+1)}-${pad(target.getDate())}T${pad(target.getHours())}:${pad(target.getMinutes())}`;
+    document.getElementById('ws-release').value = local;
+  },
+
+  // Reads the picked .json file client-side, uploads it to Drive via
+  // adminUploadWeeklySetFile (which validates it's real JSON and stores
+  // it in a dedicated "WeeklySets" Drive folder — same pattern as
+  // payment-screenshot uploads), then writes the resulting fileId into
+  // the (now fallback/advanced) ws-fileid field so create() below picks
+  // it up the exact same way whether it came from an upload or a pasted
+  // id. This is what makes "upload a file" the normal path instead of
+  // requiring an admin to separately manage Drive and copy fileIds.
+  async onFilePicked() {
+    const input = document.getElementById('ws-file');
+    const status = document.getElementById('ws-upload-status');
+    const file = input.files && input.files[0];
+    if (!file) return;
+    status.textContent = '⏳ Uploading to Drive…';
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Could not read file'));
+        reader.readAsDataURL(file);
+      });
+      const res = await ADMIN.post('adminUploadWeeklySetFile', {fileData: dataUrl, filename: file.name});
+      if (!res.success) throw new Error(res.error || 'Upload failed');
+      this.uploadedFileId = res.fileId;
+      document.getElementById('ws-fileid').value = res.fileId;
+      status.textContent = '✅ Uploaded — fileId: ' + res.fileId;
+    } catch (e) {
+      status.textContent = '❌ ' + e.message;
+      input.value = '';
+    }
+  },
+
+  render(sets) {
+    this.list = sets || [];
+    const box = document.getElementById('weeklysets-list');
+    if (!box) return;
+    if (!this.list.length) { box.innerHTML = '<p style="font-size:.8rem;opacity:.6">No weekly sets yet — add one above.</p>'; return; }
+    const now = Date.now();
+    box.innerHTML = this.list.map(s => {
+      const releaseTime = new Date(s.releaseAt).getTime();
+      const released = !isNaN(releaseTime) && now >= releaseTime;
+      const isArchived = s.status === 'archived';
+      // An archived set that's already released stays permanently in
+      // students' Online Study library (see listWeeklySets' comment on
+      // the backend) — "Archived" here means "no longer featured as
+      // this week's set", not "no longer accessible", so the badge says
+      // so explicitly rather than implying it's been taken away.
+      const statusBadge = isArchived
+        ? (released
+            ? '<span class="ctag" style="background:var(--b0);color:var(--t3)">Archived · still in library</span>'
+            : '<span class="ctag" style="background:var(--b0);color:var(--t3)">Archived</span>')
+        : released
+          ? '<span class="ctag" style="background:var(--ok-bg);color:var(--grn)">Live</span>'
+          : '<span class="ctag ta">Scheduled</span>';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.55rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:8px;flex-wrap:wrap">
+        <div style="min-width:0">
+          <div style="font-weight:600;font-size:.85rem">${esc(s.title)} ${statusBadge}</div>
+          <div style="font-size:.68rem;opacity:.6">${s.chapterLabel ? esc(s.chapterLabel) + ' · ' : ''}${released ? 'Released' : 'Unlocks'} ${s.releaseAt ? new Date(s.releaseAt).toLocaleString() : '—'} · fileId: ${esc(s.fileId)}</div>
+        </div>
+        <div style="display:flex;gap:.35rem;flex-shrink:0">
+          ${isArchived
+            ? `<button class="btn-s btn-g btn-sm" onclick="WEEKLYSETS.setStatus('${escAttrJs(s.id)}','active')" title="Reactivate as this week's featured set" aria-label="Reactivate"><i class="ph ph-arrow-counter-clockwise"></i></button>`
+            : `<button class="btn-s btn-c btn-sm" onclick="WEEKLYSETS.setStatus('${escAttrJs(s.id)}','archived')" title="${released ? 'Stop featuring (stays accessible to students)' : 'Archive (cancel before release)'}" aria-label="Archive"><i class="ph ph-archive"></i></button>`}
+          <button class="btn-s btn-r btn-sm" onclick="WEEKLYSETS.del('${escAttrJs(s.id)}','${escAttrJs(s.title)}')" title="Delete permanently" aria-label="Delete"><i class="ph ph-trash"></i></button>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  async create() {
+    const title = document.getElementById('ws-title').value.trim();
+    const fileId = document.getElementById('ws-fileid').value.trim();
+    const chapterLabel = document.getElementById('ws-chapter').value.trim();
+    const releaseLocal = document.getElementById('ws-release').value;
+    if (!title) return ADMIN.toast('❌ Title is required');
+    if (!fileId) return ADMIN.toast('❌ Upload a question-bank file, or paste an existing Drive fileId');
+    if (!releaseLocal) return ADMIN.toast('❌ Pick a release date & time');
+    // datetime-local gives a value with no timezone — new Date() parses
+    // that as the ADMIN'S OWN local time, which is what we want here
+    // (an admin scheduling "Wednesday 8am" means their own morning, not
+    // UTC 8am) — then .toISOString() below converts it to a real instant
+    // before this ever leaves the browser.
+    const releaseAt = new Date(releaseLocal);
+    if (isNaN(releaseAt)) return ADMIN.toast('❌ Invalid release date/time');
+
+    ADMIN.showLoading('Creating weekly set…');
+    try {
+      const res = await ADMIN.post('adminCreateWeeklySet', {title, fileId, chapterLabel, releaseAt: releaseAt.toISOString()});
+      if (res.success) {
+        ADMIN.toast('✅ Weekly set "' + title + '" scheduled for ' + releaseAt.toLocaleString());
+        document.getElementById('ws-title').value = '';
+        document.getElementById('ws-fileid').value = '';
+        document.getElementById('ws-file').value = '';
+        document.getElementById('ws-upload-status').textContent = '';
+        this.uploadedFileId = '';
+        document.getElementById('ws-chapter').value = '';
+        document.getElementById('ws-release').value = '';
+        const r = await ADMIN.post('adminListWeeklySets');
+        if (r.success) this.render(r.sets);
+      } else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  },
+
+  async setStatus(id, status) {
+    ADMIN.showLoading(status === 'archived' ? 'Archiving…' : 'Reactivating…');
+    try {
+      const res = await ADMIN.post('adminUpdateWeeklySet', {id, status});
+      if (res.success) {
+        ADMIN.toast(status === 'archived' ? '✅ Set archived' : '✅ Set reactivated');
+        const r = await ADMIN.post('adminListWeeklySets');
+        if (r.success) this.render(r.sets);
+      } else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  },
+
+  async del(id, title) {
+    if (!confirm(`Delete weekly set "${title}"? This can't be undone — archiving is usually the better option if you just want to retire it.`)) return;
+    ADMIN.showLoading('Deleting weekly set…');
+    try {
+      const res = await ADMIN.post('adminDeleteWeeklySet', {id});
+      if (res.success) {
+        ADMIN.toast('✅ Weekly set deleted');
+        const r = await ADMIN.post('adminListWeeklySets');
+        if (r.success) this.render(r.sets);
       } else throw new Error(res.error);
     } catch(e) { ADMIN.toast('❌ ' + e.message); }
     ADMIN.hideLoading();

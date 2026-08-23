@@ -533,6 +533,10 @@ input[type=file]:hover{border-color:var(--amb)}
           <p class="daily-desc">30 mixed questions every day — keep the streak alive!</p>
           <button class="daily-btn" onclick="QUIZ.daily()"><i class="ph ph-rocket-launch"></i> Start Today's Challenge</button>
         </div>
+        <div class="card" id="weekly-sets-outer" style="margin-bottom:1rem;display:none" data-show-if-sets>
+          <div class="card-hd"><h3><i class="ph ph-calendar-check"></i> Weekly Sets</h3><span class="ctag ta">New content, on schedule</span></div>
+          <div id="weekly-sets-card" style="display:flex;flex-direction:column;gap:.4rem"></div>
+        </div>
         <div class="card" style="margin-bottom:1rem">
           <div class="card-hd"><h3><i class="ph ph-target"></i> Adaptive Practice</h3><span class="ctag ta">Weak-topic focused</span></div>
           <p style="font-size:.78rem;color:var(--t3);margin:.2rem 0 .7rem">Pulls questions you're actually struggling with first — due Wrong Bank items and anything you've tagged Confusing — then fills the rest with fresh content.</p>

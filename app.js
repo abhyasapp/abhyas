@@ -377,6 +377,7 @@ const AUTH = {
     PSYNC.pullIfEmpty();
     TT._startReminderChecker();
     if(typeof PUSH!=='undefined') PUSH.silentRefresh();
+    WEEKLY.init();
   },
   _updateSidebarCard(user){
     const nameEl = document.getElementById('sb-uname');
@@ -661,6 +662,85 @@ const PWA = {
   toggleFullscreen(){
     if(!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(()=>toast('Fullscreen not supported here'));
     else document.exitFullscreen?.();
+  }
+};
+
+/* ═══════════════ 5b. WEEKLY SETS ═══════════════
+   Fetches the admin-scheduled weekly sets and does two things with
+   them: (1) merges every RELEASED one into ChapterData under the
+   existing "old_question" level (CH_NAMES.old_question / DRIVE.old_question
+   were already present as an empty "Old Questions / Sets" slot before
+   this feature existed) so it becomes a normal, permanent part of the
+   Online Study chapter picker forever — reachable the exact same way
+   as any chapters-data.js file, with no separate "weekly" concept the
+   student has to remember once it's live; and (2) renders a compact
+   card list (locked-with-countdown / unlocked-with-open-button) so
+   there's still a direct, visible place to see what's new and what's
+   still to come, without having to already know to look under
+   "Old Questions / Sets" for it. */
+const WEEKLY = {
+  sets: [],
+
+  async init(){
+    if(!S.online || S.forcedOffline) return; // nothing new to merge while offline — cached merges from the last online session (if any) remain in memory for this tab
+    try{
+      const r = await netFetch(`${APPS}?${qs({action:'listWeeklySets', username:S.user.username, token:S.user.token})}`, {redirect:'follow'}, 15000);
+      const res = await r.json();
+      if(!res.success) return;
+      this.sets = res.sets || [];
+      this._mergeIntoChapterData();
+      this._renderHomeCard();
+    }catch(e){ /* best-effort — Online Study still works normally from chapters-data.js alone if this fails */ }
+  },
+
+  // Injects every released set as one subtopic under a single standing
+  // "Weekly Sets" chapter inside the old_question level. Re-running this
+  // (e.g. on a later WEEKLY.init() this same session) safely overwrites
+  // rather than duplicates, since it rebuilds the whole subtopic map
+  // from the latest server response each time.
+  _mergeIntoChapterData(){
+    const released = this.sets.filter(s=>s.released && s.fileId);
+    if(!released.length) return;
+    CH_NAMES.old_question = CH_NAMES.old_question || {};
+    DRIVE.old_question = DRIVE.old_question || {};
+    CH_NAMES.old_question['weekly'] = 'Weekly Sets';
+    const subtopics = {};
+    released.forEach(s=>{
+      // Two sets can share a title (e.g. an admin re-uses "Week 12" after
+      // editing) — suffix with a short id fragment on collision so both
+      // stay individually selectable instead of one silently overwriting
+      // the other in this subtopic map.
+      let label = s.title || 'Untitled Set';
+      if(subtopics[label] !== undefined) label = `${label} (${String(s.id).slice(0,4)})`;
+      subtopics[label] = s.fileId;
+    });
+    DRIVE.old_question['weekly'] = { 'Weekly Sets': subtopics };
+  },
+
+  _renderHomeCard(){
+    const outer = document.getElementById('weekly-sets-outer');
+    const box = document.getElementById('weekly-sets-card');
+    if(!box || !outer) return;
+    if(!this.sets.length){ outer.style.display = 'none'; box.innerHTML = ''; return; }
+    outer.style.display = '';
+    box.innerHTML = this.sets.map(s=>{
+      if(s.released){
+        return `<div class="qb-btn ok" style="cursor:pointer;width:100%;justify-content:flex-start" onclick="WEEKLY.open('${esc(s.id)}')">
+          <i class="ph ph-check-circle"></i> ${esc(s.title)}${s.chapterLabel?` <span style="opacity:.6">— ${esc(s.chapterLabel)}</span>`:''}
+        </div>`;
+      }
+      const when = s.releaseAt ? new Date(s.releaseAt) : null;
+      const whenTxt = when ? when.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : 'soon';
+      return `<div class="qb-btn" style="width:100%;justify-content:flex-start;opacity:.6;cursor:default">
+        <i class="ph ph-lock-simple"></i> ${esc(s.title)} <span style="opacity:.7">— unlocks ${whenTxt}</span>
+      </div>`;
+    }).join('');
+  },
+
+  open(id){
+    const s = this.sets.find(x=>x.id===id);
+    if(!s || !s.released || !s.fileId){ toast('Not unlocked yet.'); return; }
+    QUIZ.load(s.fileId, `weekly_${s.id}`, 'exam', s.title, null);
   }
 };
 
@@ -2812,4 +2892,5 @@ window.CACHE = CACHE;
 window.DATA = DATA;
 window.TUTORIAL = TUTORIAL;
 window.APP = APP;
+window.WEEKLY = WEEKLY;
 // CLOUD is exposed from cloud-sync.js
