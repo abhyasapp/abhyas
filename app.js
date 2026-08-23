@@ -214,7 +214,8 @@ function _resolveQImg(raw){
 // per question), but resolves the same q.img field.
 function qImgHtml(q){
   if(!q.img) return '';
-  return `<div style="margin:.4rem 0"><img src="${esc(q.img)}" alt="Question figure" style="max-width:100%;border-radius:8px;border:1px solid var(--b1);display:block" loading="lazy" onerror="this.parentElement.style.display='none'"></div>`;
+  const alt = q.imgCaption || 'Question figure';
+  return `<div style="margin:.4rem 0"><img src="${esc(q.img)}" alt="${esc(alt)}" style="max-width:100%;border-radius:8px;border:1px solid var(--b1);display:block" loading="lazy" onerror="this.parentElement.style.display='none'"></div>`;
 }
 function normQ(raw,fid){
   if(raw && typeof raw === 'object' && !Array.isArray(raw) && raw.success === false){
@@ -266,6 +267,12 @@ function normQ(raw,fid){
       // whichever one shows up into something an <img src> can use
       // directly, or null if the field is absent/unrecognized.
       img: _resolveQImg(q.img || q.image || q.Image || q.figure || q.diagram || ''),
+      // Optional per-image description, so a screen-reader user gets
+      // something meaningful ("Simply supported beam with point load at
+      // midspan") instead of the generic "Question figure" fallback.
+      // Purely optional — a question-bank file with no caption field
+      // still works exactly as before.
+      imgCaption: String(q.imgCaption || q.imgAlt || q.figureCaption || q.caption || '').trim(),
       fileId: fid||'local',
       uid: `${fid||'local'}_${i}`
     });
@@ -1573,7 +1580,7 @@ const QUIZ = {
       document.getElementById('fc-q').textContent = q.q;
       const fcImgWrap = document.getElementById('fc-img-wrap');
       const fcImg = document.getElementById('fc-img');
-      if(q.img && fcImgWrap && fcImg){ fcImg.src = q.img; fcImgWrap.style.display = ''; }
+      if(q.img && fcImgWrap && fcImg){ fcImg.src = q.img; fcImg.alt = q.imgCaption || 'Question figure'; fcImgWrap.style.display = ''; }
       else if(fcImgWrap){ fcImgWrap.style.display = 'none'; }
 
       const isStarred = REV.has('bk', q.uid), isFlagged = REV.has('fl', q.uid);

@@ -400,6 +400,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             <summary style="font-size:.72rem;opacity:.7;cursor:pointer">Or paste an existing Drive fileId instead</summary>
             <div class="sf" style="margin-top:.4rem"><input type="text" id="ws-fileid" placeholder="Same fileId format as chapters-data.js"></div>
           </details>
+          <button type="button" class="btn-s btn-c btn-sm" style="margin:.2rem 0 .6rem" onclick="WEEKLYSETS.preview(document.getElementById('ws-fileid').value.trim(), document.getElementById('ws-title').value.trim())"><i class="ph ph-eye"></i> Preview before publishing</button>
           <div class="sf"><label for="ws-chapter">Chapter / Label (optional)</label><input type="text" id="ws-chapter" placeholder="e.g. Structural Engineering"></div>
           <div class="sf">
             <label for="ws-release">Release Date &amp; Time</label>
@@ -490,6 +491,14 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
   <div class="mbox wide" onclick="event.stopPropagation()">
     <div class="mhd"><h3 id="mtitle-user">User Details</h3><button class="mcl" onclick="MODAL.close('user')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
     <div class="mbody" id="mbody-user"></div>
+  </div>
+</div>
+
+<!-- WEEKLY SET PREVIEW MODAL -->
+<div class="mbg" id="mbg-wspreview" onclick="MODAL.close('wspreview')">
+  <div class="mbox wide" onclick="event.stopPropagation()">
+    <div class="mhd"><h3 id="mtitle-wspreview">Preview</h3><button class="mcl" onclick="MODAL.close('wspreview')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
+    <div class="mbody" id="mbody-wspreview"></div>
   </div>
 </div>
 
@@ -856,6 +865,23 @@ const WEEKLYSETS = {
     const status = document.getElementById('ws-upload-status');
     const file = input.files && input.files[0];
     if (!file) return;
+
+    // 2MB is well beyond a text-only question set (even a few hundred
+    // questions is normally under 200KB) — a file this large is almost
+    // always many embedded base64 images. Not blocked, since a
+    // genuinely image-heavy set might be intentional, but flagged so
+    // an admin who fat-fingered the wrong file (or didn't realize how
+    // much base64 images bloat size) notices before publishing
+    // something slow to download on a student's connection.
+    const LARGE_FILE_WARN_BYTES = 2 * 1024 * 1024;
+    if (file.size > LARGE_FILE_WARN_BYTES) {
+      const mb = (file.size / (1024*1024)).toFixed(1);
+      if (!confirm(`This file is ${mb}MB — likely several embedded images. That's fine, but it'll be slower to download for students on weak connections. Continue uploading?`)) {
+        input.value = '';
+        return;
+      }
+    }
+
     status.textContent = '⏳ Uploading to Drive…';
     try {
       const dataUrl = await new Promise((resolve, reject) => {
@@ -903,6 +929,7 @@ const WEEKLYSETS = {
           <div style="font-size:.68rem;opacity:.6">${s.chapterLabel ? esc(s.chapterLabel) + ' · ' : ''}${released ? 'Released' : 'Unlocks'} ${s.releaseAt ? new Date(s.releaseAt).toLocaleString() : '—'} · fileId: ${esc(s.fileId)}</div>
         </div>
         <div style="display:flex;gap:.35rem;flex-shrink:0">
+          <button class="btn-s btn-c btn-sm" onclick="WEEKLYSETS.preview('${escAttrJs(s.fileId)}','${escAttrJs(s.title)}')" title="Preview questions" aria-label="Preview questions"><i class="ph ph-eye"></i></button>
           ${isArchived
             ? `<button class="btn-s btn-g btn-sm" onclick="WEEKLYSETS.setStatus('${escAttrJs(s.id)}','active')" title="Reactivate as this week's featured set" aria-label="Reactivate"><i class="ph ph-arrow-counter-clockwise"></i></button>`
             : `<button class="btn-s btn-c btn-sm" onclick="WEEKLYSETS.setStatus('${escAttrJs(s.id)}','archived')" title="${released ? 'Stop featuring (stays accessible to students)' : 'Archive (cancel before release)'}" aria-label="Archive"><i class="ph ph-archive"></i></button>`}
@@ -910,6 +937,45 @@ const WEEKLYSETS = {
         </div>
       </div>`;
     }).join('');
+  },
+
+  // Fetches the raw question JSON (same read-only handleGetFile proxy
+  // every chapter file already goes through — public, rate-limited, no
+  // admin auth required) and shows a quick sanity-check view: total
+  // question count plus the first few questions with their options, so
+  // an admin can catch a wrong file, a bad format, or missing options
+  // BEFORE students ever see it — rather than finding out from a
+  // support message after the set is already live.
+  async preview(fileId, title) {
+    if (!fileId) return ADMIN.toast('❌ No fileId to preview yet — upload a file or paste one first');
+    document.getElementById('mtitle-wspreview').textContent = 'Preview: ' + (title || fileId);
+    document.getElementById('mbody-wspreview').innerHTML = '<p style="font-size:.8rem;opacity:.7"><i class="ph ph-circle-notch" style="animation:spin 1s linear infinite"></i> Loading…</p>';
+    document.getElementById('mbg-wspreview').classList.add('show');
+    try {
+      const res = await ADMIN.post('getFile', {fileId});
+      if (!res.success) throw new Error(res.error || 'Could not load file');
+      const raw = res.result;
+      const qs = Array.isArray(raw) ? raw : (raw?.questions || raw?.data || raw?.quiz || raw?.items || []);
+      if (!Array.isArray(qs) || !qs.length) {
+        document.getElementById('mbody-wspreview').innerHTML = '<p style="font-size:.8rem;color:var(--ros)">⚠️ No questions found in this file — check the format matches other question-bank files.</p>';
+        return;
+      }
+      const sample = qs.slice(0, 5);
+      document.getElementById('mbody-wspreview').innerHTML = `
+        <p style="font-size:.8rem;margin-bottom:.7rem"><strong>${qs.length}</strong> questions found. Showing first ${sample.length}:</p>
+        ${sample.map((q,i) => {
+          const text = q.q || q.question || q.Question || q.stem || q.ques || q.text || '(no question text found)';
+          const opts = q.options || q.opts || q.choices || q.Options || [];
+          const hasImg = !!(q.img || q.image || q.Image || q.figure || q.diagram);
+          return `<div style="background:var(--b0);border:1px solid var(--b1);border-radius:8px;padding:.6rem;margin-bottom:.5rem">
+            <div style="font-size:.78rem;font-weight:600">${i+1}. ${esc(String(text).slice(0,200))} ${hasImg?'<span class="ctag ta" style="margin-left:.3rem"><i class="ph ph-image"></i> has image</span>':''}</div>
+            ${Array.isArray(opts) && opts.length ? `<div style="font-size:.72rem;opacity:.7;margin-top:.3rem">${opts.map((o,oi)=>String.fromCharCode(65+oi)+') '+esc(String(o))).join(' &nbsp; ')}</div>` : '<div style="font-size:.72rem;color:var(--ros);margin-top:.3rem">⚠️ No options found on this question</div>'}
+          </div>`;
+        }).join('')}
+      `;
+    } catch (e) {
+      document.getElementById('mbody-wspreview').innerHTML = `<p style="font-size:.8rem;color:var(--ros)">❌ ${esc(e.message)}</p>`;
+    }
   },
 
   async create() {
@@ -933,6 +999,7 @@ const WEEKLYSETS = {
       const res = await ADMIN.post('adminCreateWeeklySet', {title, fileId, chapterLabel, releaseAt: releaseAt.toISOString()});
       if (res.success) {
         ADMIN.toast('✅ Weekly set "' + title + '" scheduled for ' + releaseAt.toLocaleString());
+        if (res.duplicateWarning) setTimeout(() => ADMIN.toast('⚠️ ' + res.duplicateWarning), 1200);
         document.getElementById('ws-title').value = '';
         document.getElementById('ws-fileid').value = '';
         document.getElementById('ws-file').value = '';

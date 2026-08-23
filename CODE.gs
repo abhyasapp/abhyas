@@ -104,15 +104,27 @@ function checkGetFileRateLimit_() {
   const props = PropertiesService.getScriptProperties();
   const key = "getfile_rl";
   const bucket = Math.floor(Date.now() / 60000); // one 60-second window
-  let state = { bucket, count: 0 };
+  let state = { bucket, count: 0, logged: false };
   const raw = props.getProperty(key);
   if (raw) {
     try { state = JSON.parse(raw); } catch (e) {}
-    if (state.bucket !== bucket) state = { bucket, count: 0 }; // new window — reset
+    if (state.bucket !== bucket) state = { bucket, count: 0, logged: false }; // new window — reset
   }
   state.count = (state.count || 0) + 1;
+  const withinLimit = state.count <= GETFILE_RATE_LIMIT_PER_MINUTE;
+  // Log the FIRST rejection per minute-bucket only — a sustained
+  // scraping attempt would otherwise generate one log row per rejected
+  // request (potentially hundreds/minute), which would itself flood the
+  // Logs sheet and bury everything else in it. One entry per minute is
+  // enough to make the pattern visible in Activity Logs without that
+  // cost. logAction_ is already best-effort/never-throws, so this can't
+  // break the rate limit check itself if logging fails.
+  if (!withinLimit && !state.logged) {
+    state.logged = true;
+    logAction_("system", "GetFile Rate Limited", "", "Exceeded " + GETFILE_RATE_LIMIT_PER_MINUTE + " req/min — possible scraping. Further rejections this minute are not individually logged.");
+  }
   props.setProperty(key, JSON.stringify(state));
-  return state.count <= GETFILE_RATE_LIMIT_PER_MINUTE;
+  return withinLimit;
 }
 
 const USER_HEADERS = [
@@ -2479,11 +2491,30 @@ function adminCreateWeeklySet(p) {
 
   return withLock_(() => {
     const sheet = getWeeklySetsSheet_();
+    // Non-blocking check, same philosophy as adminListPayments' duplicate
+    // txId flag: a re-used fileId is USUALLY a genuine mistake (an admin
+    // accidentally re-uploading, or copy-pasting the wrong existing
+    // fileId under "advanced") rather than something to actively
+    // prevent, so this warns rather than rejects — an admin might
+    // legitimately want the same file to appear as two differently-
+    // timed sets in rare cases.
+    const existing = sheet.getDataRange().getValues();
+    let duplicateOf = null;
+    for (let i = 1; i < existing.length; i++) {
+      if (String(existing[i][2]).trim() === fileId) { duplicateOf = existing[i][1]; break; } // column 3 (index 2) = fileId, column 2 (index 1) = title
+    }
+
     const id = Utilities.getUuid();
     const now = new Date().toISOString();
     sheet.appendRow([id, title, fileId, chapterLabel, "active", actor, now, releaseAt.toISOString()]);
-    logAction_(actor, "Create Weekly Set", title, "Releases: " + releaseAt.toISOString());
-    return { success: true, id, title, releaseAt: releaseAt.toISOString() };
+    logAction_(actor, "Create Weekly Set", title, "Releases: " + releaseAt.toISOString() + (duplicateOf ? " — WARNING: fileId already used by \"" + duplicateOf + "\"" : ""));
+    return {
+      success: true,
+      id,
+      title,
+      releaseAt: releaseAt.toISOString(),
+      duplicateWarning: duplicateOf ? `This fileId is already used by weekly set "${duplicateOf}" — double check this wasn't a mistake.` : null
+    };
   });
 }
 
