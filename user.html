@@ -317,6 +317,16 @@ button{font-family:var(--ff)}
 .qb-ctr{font-family:var(--fm);font-size:.9rem;font-weight:700;color:var(--t1);letter-spacing:.2px;line-height:1;margin-bottom:.24rem}
 .qb-ctr em{font-style:normal;color:var(--t3);font-size:.7rem}
 .qb-btn{display:inline-flex;align-items:center;gap:.18rem;border-radius:7px;padding:.18rem .5rem;font-size:.65rem;font-weight:700;cursor:pointer;font-family:var(--ff);border:1px solid;line-height:1;white-space:nowrap;transition:all var(--ease)}
+/* Custom file-upload control — same pattern as admin.html's .file-up.
+   Hides the native <input type=file> (still fully functional, just
+   invisible and stretched over the label) behind a themed button +
+   filename, instead of the browser's OS-native "Choose File" control
+   clashing with every other styled input on the page. */
+.file-up{position:relative;display:flex;align-items:center;gap:.6rem;background:var(--c1);border:1.5px dashed var(--b2);border-radius:var(--r1);padding:.6rem .75rem;cursor:pointer;transition:border-color var(--ease)}
+.file-up:hover{border-color:var(--amb)}
+.file-up input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.file-up .file-up-btn{flex-shrink:0;display:inline-flex;align-items:center;gap:.3rem;background:var(--c2);border:1px solid var(--b1);border-radius:7px;padding:.3rem .6rem;font-size:.7rem;font-weight:700;color:var(--t2)}
+.file-up .file-up-name{font-size:.75rem;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qb-btn.ok{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--grn)}.qb-btn.ok:hover{background:var(--grn);color:#fff;box-shadow:var(--ggrn)}
 .qb-btn.quit{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--ros)}.qb-btn.quit:hover{background:var(--ros);color:#fff;box-shadow:var(--gros)}
 .qb-tiles{display:flex;gap:.24rem;align-items:center}
@@ -623,7 +633,11 @@ input[type=file]:hover{border-color:var(--amb)}
         <div class="card">
           <div class="card-hd"><h3>Upload File</h3><span class="ctag tp">JSON</span></div>
           <p style="font-size:.74rem;color:var(--t3);margin-bottom:.6rem">Format: <span class="mono" style="font-size:.69rem">[{"q":"…","options":[],"correct":0,"explanation":"…"}]</span></p>
-          <input type="file" id="loc-file" accept=".json" onchange="LOC.onFile()" aria-label="Import local question file (JSON)">
+          <label class="file-up" for="loc-file">
+            <input type="file" id="loc-file" accept=".json" onchange="LOC.onFile()" aria-label="Import local question file (JSON)">
+            <span class="file-up-btn"><i class="ph ph-upload-simple"></i> Choose File</span>
+            <span class="file-up-name" id="loc-file-name">No file chosen</span>
+          </label>
           <div id="loc-info" style="font-size:.72rem;color:var(--grn);margin:.42rem 0;display:none"></div>
           <hr>
           <div class="bg">

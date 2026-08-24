@@ -484,7 +484,11 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           <div class="sf"><label for="set-name">App Name</label><input type="text" id="set-name" placeholder="Abhyas"></div>
           <div class="sf">
             <label for="set-qr-file">Payment QR Code</label>
-            <input type="file" id="set-qr-file" accept="image/*" onchange="SETTINGS.onQrFile(event)">
+            <label class="file-up" for="set-qr-file">
+              <input type="file" id="set-qr-file" accept="image/*" onchange="SETTINGS.onQrFile(event)">
+              <span class="file-up-btn"><i class="ph ph-upload-simple"></i> Choose Image</span>
+              <span class="file-up-name">Click to upload a QR code</span>
+            </label>
             <div style="display:flex;align-items:center;gap:.6rem;margin-top:.5rem">
               <img id="set-qr-preview" alt="Payment QR code preview" style="display:none;width:90px;height:90px;object-fit:contain;border-radius:8px;border:1px solid var(--b1);background:#fff">
               <span id="set-qr-status" style="font-size:.85rem;opacity:.7">No QR uploaded yet</span>

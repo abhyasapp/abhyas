@@ -968,6 +968,8 @@ const ON = {
 const LOC = {
   onFile(){
     const f=document.getElementById('loc-file').files[0];if(!f)return;
+    const nameEl=document.getElementById('loc-file-name');
+    if(nameEl) nameEl.textContent=f.name;
     const r=new FileReader();
     r.onload=e=>{
       try{
