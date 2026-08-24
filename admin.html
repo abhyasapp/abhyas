@@ -120,7 +120,7 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
 .view.on{display:block;animation:vfade .16s var(--eout)}
 @keyframes vfade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
-.ph{margin-bottom:1rem}
+.pg-head{margin-bottom:1rem}
 .ph h2{font-family:var(--fd);font-size:1.1rem;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:.4rem}
 .ph p{font-size:.74rem;color:var(--t2);margin-top:.15rem;line-height:1.5}
 
@@ -338,7 +338,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
     <div id="main">
       <!-- DASHBOARD -->
       <div class="view on" id="view-dashboard">
-        <div class="ph"><h2><i class="ph ph-chart-bar"></i> Dashboard</h2><p>Overview of your study platform</p></div>
+        <div class="pg-head"><h2><i class="ph ph-chart-bar"></i> Dashboard</h2><p>Overview of your study platform</p></div>
         <div class="stats-grid" id="dash-stats">
           <div class="stat-card c-vio" onclick="UI.nav('users')"><div class="stat-v" id="st-users">0</div><div class="stat-l">Total Users</div></div>
           <div class="stat-card c-sky" onclick="USERS.filterBy('trial')"><div class="stat-v" id="st-trial">0</div><div class="stat-l">Trial Users</div></div>
@@ -364,7 +364,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 
       <!-- USERS -->
       <div class="view" id="view-users">
-        <div class="ph"><h2><i class="ph ph-user"></i> Users</h2><p>Manage all registered accounts</p></div>
+        <div class="pg-head"><h2><i class="ph ph-user"></i> Users</h2><p>Manage all registered accounts</p></div>
         <div class="toolbar">
           <input type="text" id="u-search" placeholder="Search username, name, email…" oninput="USERS.debouncedFilter()">
           <select id="u-filter" onchange="USERS.filter()" aria-label="Filter users">
@@ -392,7 +392,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 
       <!-- PAYMENTS -->
       <div class="view" id="view-payments">
-        <div class="ph"><h2><i class="ph ph-credit-card"></i> Payments</h2><p>Verify or reject payment submissions</p></div>
+        <div class="pg-head"><h2><i class="ph ph-credit-card"></i> Payments</h2><p>Verify or reject payment submissions</p></div>
         <div class="toolbar">
           <input type="text" id="p-search" placeholder="Search username, TXN ID…" oninput="PAYMENTS.debouncedFilter()">
           <select id="p-filter" onchange="PAYMENTS.filter()" aria-label="Filter payments">
@@ -418,7 +418,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 
       <!-- WEEKLY SETS -->
       <div class="view" id="view-weeklysets">
-        <div class="ph"><h2><i class="ph ph-calendar-check"></i> Weekly Sets</h2><p>Upload a question set now, scheduled to unlock for students later — typically upload over the weekend, unlock the following Wednesday.</p></div>
+        <div class="pg-head"><h2><i class="ph ph-calendar-check"></i> Weekly Sets</h2><p>Upload a question set now, scheduled to unlock for students later — typically upload over the weekend, unlock the following Wednesday.</p></div>
 
         <div class="card">
           <div class="card-hd"><h3>Add Weekly Set</h3></div>
@@ -456,7 +456,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 
       <!-- ACTIVITY LOGS -->
       <div class="view" id="view-logs">
-        <div class="ph"><h2><i class="ph ph-clipboard-text"></i> Activity Logs</h2><p>Track all admin actions</p></div>
+        <div class="pg-head"><h2><i class="ph ph-clipboard-text"></i> Activity Logs</h2><p>Track all admin actions</p></div>
         <div class="toolbar">
           <input type="text" id="l-search" placeholder="Search action, admin, target…" oninput="LOGS.filter()">
           <select id="l-filter" onchange="LOGS.filter()" aria-label="Filter activity logs">
@@ -478,7 +478,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 
       <!-- SETTINGS -->
       <div class="view" id="view-settings">
-        <div class="ph"><h2><i class="ph ph-gear"></i> Settings</h2><p>Configure payment, QR, and app info</p></div>
+        <div class="pg-head"><h2><i class="ph ph-gear"></i> Settings</h2><p>Configure payment, QR, and app info</p></div>
         <div class="card">
           <div class="card-hd"><h3>Payment Configuration</h3></div>
           <div class="sf"><label for="set-name">App Name</label><input type="text" id="set-name" placeholder="Abhyas"></div>

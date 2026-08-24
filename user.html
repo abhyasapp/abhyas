@@ -196,7 +196,7 @@ button{font-family:var(--ff)}
 .view{display:none}
 .view.on{display:block;animation:vfade .16s var(--eout)}
 @keyframes vfade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.ph{margin-bottom:1rem}
+.pg-head{margin-bottom:1rem}
 .ph h2{font-family:var(--fd);font-size:1.15rem;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:.42rem;color:var(--t1)}
 .ph p{font-size:.74rem;color:var(--t2);margin-top:.18rem;line-height:1.5}
 
@@ -588,7 +588,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
       <!-- ONLINE STUDY -->
       <div class="view" id="view-online">
-        <div class="ph"><h2><i class="ph ph-cloud"></i> Online Study</h2><p>Level → Chapter → Book → Subtopic → Mode</p></div>
+        <div class="pg-head"><h2><i class="ph ph-cloud"></i> Online Study</h2><p>Level → Chapter → Book → Subtopic → Mode</p></div>
         <div class="on-card-banner"><span><i class="ph ph-broadcast"></i></span> Questions stream from Google Drive and cache automatically for offline use.</div>
         <div id="on-offline-warn" style="display:none;background:var(--bad-bg);border:1px solid var(--bad-bd);border-radius:var(--r2);padding:.65rem .9rem;margin-bottom:.75rem;font-size:.74rem;color:var(--ros)">
           <i class="ph ph-broadcast"></i> <strong>You're offline.</strong> Only cached question sets will load. <a onclick="UI.go('offline')" style="color:var(--amb);cursor:pointer;text-decoration:underline">Go to Offline Cache →</a>
@@ -629,7 +629,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
       <!-- LOCAL FILE -->
       <div class="view" id="view-local">
-        <div class="ph"><h2><i class="ph ph-folder-open"></i> Local File</h2><p>Load a JSON question bank — works fully offline</p></div>
+        <div class="pg-head"><h2><i class="ph ph-folder-open"></i> Local File</h2><p>Load a JSON question bank — works fully offline</p></div>
         <div class="card">
           <div class="card-hd"><h3>Upload File</h3><span class="ctag tp">JSON</span></div>
           <p style="font-size:.74rem;color:var(--t3);margin-bottom:.6rem">Format: <span class="mono" style="font-size:.69rem">[{"q":"…","options":[],"correct":0,"explanation":"…"}]</span></p>
@@ -649,7 +649,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
       <!-- PSYCHO MODE -->
       <div class="view" id="view-psycho">
-        <div class="ph"><h2><i class="ph ph-lightning"></i> Psycho Mode</h2><p>Mix chapters · randomise · target weak spots</p></div>
+        <div class="pg-head"><h2><i class="ph ph-lightning"></i> Psycho Mode</h2><p>Mix chapters · randomise · target weak spots</p></div>
         <div class="psy-hero"><div class="psy-hero-ic"><i class="ph ph-lightning"></i></div><div class="psy-hero-text"><h4>Multi-chapter Gauntlet</h4><p>Crunch-time training — mix levels, exam pressure, weak-area targeting.</p></div></div>
         <div class="card">
           <div class="card-hd"><h3>Select Chapters</h3>
@@ -668,7 +668,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
       <!-- BOOKMARKS -->
       <div class="view" id="view-bookmarks">
-        <div class="ph"><h2><i class="ph ph-star"></i> Bookmarks</h2><p>Questions saved for focused revision</p></div>
+        <div class="pg-head"><h2><i class="ph ph-star"></i> Bookmarks</h2><p>Questions saved for focused revision</p></div>
         <div class="card"><div class="card-hd"><h3>Saved Questions</h3>
           <div class="bg"><button class="btn btn-sm btn-a" onclick="REV.start('bk','flashcard')"><i class="ph ph-lightning"></i> Flash</button><button class="btn btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="REV.start('bk','exam')"><i class="ph ph-note-pencil"></i> Exam</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('bk')"><i class="ph ph-trash"></i></button></div>
         </div><div id="bk-list"></div></div>
@@ -676,7 +676,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
       <!-- FLAGGED -->
       <div class="view" id="view-flagged">
-        <div class="ph"><h2><i class="ph ph-flag"></i> Flagged</h2><p>Questions marked for follow-up</p></div>
+        <div class="pg-head"><h2><i class="ph ph-flag"></i> Flagged</h2><p>Questions marked for follow-up</p></div>
         <div class="card"><div class="card-hd"><h3>Flagged Questions</h3>
           <div class="bg"><button class="btn btn-sm btn-a" onclick="REV.start('fl','flashcard')"><i class="ph ph-lightning"></i> Flash</button><button class="btn btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="REV.start('fl','exam')"><i class="ph ph-note-pencil"></i> Exam</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('fl')"><i class="ph ph-trash"></i></button></div>
         </div><div id="fl-list"></div></div>
@@ -684,7 +684,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
       <!-- WRONG BANK -->
       <div class="view" id="view-wrong">
-        <div class="ph"><h2><i class="ph ph-x-circle"></i> Wrong Bank</h2><p>Spaced repetition: <span id="wrc-due">0</span> due for review right now</p></div>
+        <div class="pg-head"><h2><i class="ph ph-x-circle"></i> Wrong Bank</h2><p>Spaced repetition: <span id="wrc-due">0</span> due for review right now</p></div>
         <div class="card"><div class="card-hd"><h3>Wrong Answers</h3>
           <div class="bg"><button class="btn btn-sm btn-r" onclick="REV.start('wr','flashcard',true)"><i class="ph ph-repeat"></i> Retry Due</button><button class="btn btn-sm btn-p" onclick="REV.start('wr','flashcard')"><i class="ph ph-lightning"></i> Retry All</button><button class="btn btn-sm btn-a" onclick="REV.start('wr','exam')"><i class="ph ph-note-pencil"></i> Exam All</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('wr')"><i class="ph ph-trash"></i></button></div>
         </div><div id="wr-list"></div></div>
@@ -692,7 +692,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
       <!-- TIMETABLE -->
       <div class="view" id="view-timetable">
-        <div class="ph"><h2><i class="ph ph-calendar-blank"></i> Timetable</h2><p>Plan your weekly study sessions</p></div>
+        <div class="pg-head"><h2><i class="ph ph-calendar-blank"></i> Timetable</h2><p>Plan your weekly study sessions</p></div>
         <div class="g2" style="align-items:start">
           <div>
             <div class="card"><div class="tt-clock" id="tt-clock">00:00:00</div><div class="tt-date" id="tt-date"></div><div id="tt-now"></div></div>
@@ -727,7 +727,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
       <!-- PROGRESS -->
       <div class="view" id="view-progress">
-        <div class="ph"><h2><i class="ph ph-chart-bar"></i> Progress</h2><p>Overall performance &amp; chapter breakdown</p></div>
+        <div class="pg-head"><h2><i class="ph ph-chart-bar"></i> Progress</h2><p>Overall performance &amp; chapter breakdown</p></div>
         <div class="g4" id="prog-stats" style="margin-bottom:.85rem"></div>
         <div id="predict-card" style="margin-bottom:.85rem"></div>
         <div class="card"><div class="card-hd"><h3>Chapter Accuracy</h3><span class="ctag tp">Breakdown</span></div><div id="chap-acc"></div></div>
@@ -757,7 +757,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
       <!-- OFFLINE CACHE -->
       <div class="view" id="view-offline">
-        <div class="ph"><h2><i class="ph ph-package"></i> Offline Cache</h2><p>Download all question sets for offline study</p></div>
+        <div class="pg-head"><h2><i class="ph ph-package"></i> Offline Cache</h2><p>Download all question sets for offline study</p></div>
         <div class="card">
           <div class="card-hd"><h3>Cache Status</h3><span class="ctag" id="cache-tag">Checking…</span></div>
           <div id="cache-txt" style="font-size:.76rem;color:var(--t3);margin-bottom:.65rem"></div>
