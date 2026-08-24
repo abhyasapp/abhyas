@@ -519,7 +519,7 @@ const AUTH = {
           AUTH._bounce();
         }
       }
-    }catch{}
+    }catch(e){ console.warn('[AUTH] periodic session recheck failed, will retry next interval:', e); }
   }
 };
 

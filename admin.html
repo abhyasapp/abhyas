@@ -290,7 +290,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
     <div class="fld"><label for="ad-user">Admin Username</label><input type="text" id="ad-user" placeholder="admin" autocomplete="username" autocapitalize="none"></div>
     <div class="fld"><label for="ad-pass">Password</label><input type="password" id="ad-pass" placeholder="••••••••" autocomplete="current-password"></div>
     <button class="btn" id="btn-login" onclick="ADMIN.login()">Enter Admin Panel →</button>
-    <div class="link-row"><a onclick="localStorage.removeItem('abhyas_admin'); localStorage.removeItem('abhyas_session'); location.href='index.html'">← Back to User Login</a></div>
+    <div class="link-row"><a onclick="localStorage.removeItem('abhyas_admin'); location.href='index.html'">← Back to User Login</a></div>
   </div>
 </div>
 
@@ -331,7 +331,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
       <div class="sb-item" id="nav-logs" onclick="UI.nav('logs')"><div class="sb-ic"><i class="ph ph-clipboard-text"></i></div>Activity Logs</div>
       <div class="sb-item" id="nav-settings" onclick="UI.nav('settings')"><div class="sb-ic"><i class="ph ph-gear"></i></div>Settings</div>
       <div class="sb-div"></div>
-      <div class="sb-item" onclick="localStorage.removeItem('abhyas_admin'); localStorage.removeItem('abhyas_session'); location.href='index.html'"><div class="sb-ic"><i class="ph ph-house"></i></div>User Portal</div>
+      <div class="sb-item" onclick="localStorage.removeItem('abhyas_admin'); location.href='index.html'"><div class="sb-ic"><i class="ph ph-house"></i></div>User Portal</div>
       <div style="text-align:center;font-size:.62rem;color:var(--t3);opacity:.6;padding:.6rem 0 .2rem">Abhyas V1</div>
     </div>
 
@@ -621,7 +621,6 @@ const ADMIN = {
 
   logout() {
     localStorage.removeItem('abhyas_admin');
-    localStorage.removeItem('abhyas_session');
     location.href = 'index.html';
   },
 

@@ -690,7 +690,7 @@ const APP = {
         const when = p.submittedAt ? new Date(p.submittedAt).toLocaleString() : '';
         msgEl.textContent = `TXN ${p.txId} submitted${when ? ' on ' + when : ''} — waiting for admin verification. You'll get full access as soon as it's approved.`;
       }
-    } catch (e) {}
+    } catch (e) { console.warn('[APP] getPaymentStatus poll failed, status display may be stale:', e); }
   },
 
   async resumeUserSession(saved) {
