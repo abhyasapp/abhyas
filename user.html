@@ -1000,43 +1000,7 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='f'&&S.quiz?.active&&S.quiz?.mode!=='exam'){e.preventDefault();SRCH.toggle();}
 });
 
-/* 15. PWA install — show a one-tap banner the moment the browser
-   offers it, instead of only a small hidden toolbar icon. */
-function _showInstallBanner(){
-  if($('pwa-install-banner')) return;
-  const bar = document.createElement('div');
-  bar.id = 'pwa-install-banner';
-  bar.style.cssText = 'position:fixed;left:.75rem;right:.75rem;bottom:calc(var(--bn-h,0px) + .75rem + var(--safe-b,0px));background:var(--c2);border:1px solid var(--bd);border-radius:var(--r2);padding:.7rem .9rem;display:flex;align-items:center;gap:.6rem;z-index:9997;box-shadow:var(--sh3)';
-  bar.innerHTML = `
-    <div style="font-size:1.3rem"><i class="ph ph-device-mobile"></i></div>
-    <div style="flex:1;font-size:.76rem;color:var(--t2);line-height:1.3">Install this app for faster, offline access</div>
-    <button id="pwa-install-go" style="padding:.4rem .75rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r1);color:#0F0A00;font-weight:700;font-size:.76rem;cursor:pointer;font-family:var(--ff)">Install</button>
-    <button id="pwa-install-x" aria-label="Dismiss install prompt" style="background:none;border:none;color:var(--t3);font-size:.9rem;cursor:pointer;padding:.2rem"><i class="ph ph-x"></i></button>
-  `;
-  document.body.appendChild(bar);
-  $('pwa-install-go').onclick = ()=>{
-    if(window._dpi){ window._dpi.prompt(); window._dpi.userChoice.then(()=>{ window._dpi=null; }); }
-    bar.remove();
-  };
-  $('pwa-install-x').onclick = ()=> bar.remove();
-}
-window.addEventListener('beforeinstallprompt',e=>{
-  e.preventDefault(); window._dpi=e;
-  const b=$('installBtn'); if(b){b.style.display='';b.title='Install App';}
-  _showInstallBanner();
-});
-window.addEventListener('appinstalled',()=>{
-  window._dpi=null; const b=$('installBtn'); if(b) b.style.display='none';
-  const bar=$('pwa-install-banner'); if(bar) bar.remove();
-  if(typeof toast==='function') toast('📲 App installed successfully!');
-});
-const _origInstall=PWA.install.bind(PWA);
-PWA.install=function(){
-  if(window._dpi){window._dpi.prompt();window._dpi.userChoice.then(()=>{window._dpi=null;});return;}
-  _origInstall();
-};
-
-/* 16. Bottom nav helpers */
+/* 15. Bottom nav helpers */
 window._bnav=function(id){
   document.querySelectorAll('.bn-item').forEach(e=>e.classList.remove('active'));
   const b=$('bn-'+id); if(b) b.classList.add('active');

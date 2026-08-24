@@ -729,19 +729,47 @@ const PWA = {
     window.addEventListener('beforeinstallprompt', e=>{
       e.preventDefault(); S.dpi=e;
       const btn=document.getElementById('installBtn');
-      if(btn) btn.style.display='';
+      if(btn){ btn.style.display=''; btn.title='Install App'; }
+      PWA._showInstallBanner();
     });
     window.addEventListener('appinstalled', ()=>{
+      S.dpi=null;
       toast('📲 App installed!');
       const btn=document.getElementById('installBtn');
       if(btn) btn.style.display='none';
+      const bar=document.getElementById('pwa-install-banner');
+      if(bar) bar.remove();
     });
     if('serviceWorker' in navigator){
       navigator.serviceWorker.register('./sw.js', {scope:'./'}).catch(()=>{});
     }
   },
+  // One-tap install banner shown the moment the browser offers it,
+  // instead of only a small toolbar icon a student might not notice.
+  // Was previously duplicated in user.html's own inline script with a
+  // SEPARATE window._dpi variable tracking the same event as S.dpi
+  // here — the two only stayed in sync because both listeners always
+  // fired together off the same native event; the moment one consumed
+  // its copy without the other knowing, the unconsumed one would hold
+  // a stale, already-used prompt that throws if ever called. Moved
+  // here so S.dpi is the only place this state lives.
+  _showInstallBanner(){
+    if(document.getElementById('pwa-install-banner')) return;
+    const bar = document.createElement('div');
+    bar.id = 'pwa-install-banner';
+    bar.style.cssText = 'position:fixed;left:.75rem;right:.75rem;bottom:calc(var(--bn-h,0px) + .75rem + var(--safe-b,0px));background:var(--c2);border:1px solid var(--bd);border-radius:var(--r2);padding:.7rem .9rem;display:flex;align-items:center;gap:.6rem;z-index:9997;box-shadow:var(--sh3)';
+    bar.innerHTML = `
+      <div style="font-size:1.3rem"><i class="ph ph-device-mobile"></i></div>
+      <div style="flex:1;font-size:.76rem;color:var(--t2);line-height:1.3">Install this app for faster, offline access</div>
+      <button id="pwa-install-go" style="padding:.4rem .75rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r1);color:var(--on-accent,#0F0A00);font-weight:700;font-size:.76rem;cursor:pointer;font-family:var(--ff)">Install</button>
+      <button id="pwa-install-x" aria-label="Dismiss install prompt" style="background:none;border:none;color:var(--t3);font-size:.9rem;cursor:pointer;padding:.2rem"><i class="ph ph-x"></i></button>
+    `;
+    document.body.appendChild(bar);
+    document.getElementById('pwa-install-go').onclick = ()=> { PWA.install(); bar.remove(); };
+    document.getElementById('pwa-install-x').onclick = ()=> bar.remove();
+  },
   install(){
-    if(S.dpi){ S.dpi.prompt(); S.dpi=null; const b=document.getElementById('installBtn'); if(b) b.style.display='none'; }
+    if(S.dpi){ S.dpi.prompt(); S.dpi.userChoice.then(()=>{ S.dpi=null; }); const b=document.getElementById('installBtn'); if(b) b.style.display='none'; }
     else toast('Install option not available — try your browser\'s "Add to Home Screen" menu.');
   },
   toggleFullscreen(){
