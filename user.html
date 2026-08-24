@@ -377,7 +377,7 @@ button{font-family:var(--ff)}
 .mtabs{display:flex;gap:.32rem;flex-wrap:wrap}
 .mtab{background:var(--b0);border:1px solid var(--b1);color:var(--t2);font-size:.64rem;font-weight:600;padding:.26rem .58rem;border-radius:20px;cursor:pointer;font-family:var(--ff);transition:all var(--ease);white-space:nowrap}
 .mtab:hover{background:var(--b1);color:var(--t1)}
-.mtab.active{background:var(--warn-bg);color:var(--amb);border-color:var(--warn-bd)}
+.mtab.active{background:var(--amb);color:#fff;border-color:var(--amb);font-weight:700;box-shadow:0 1px 4px rgba(var(--amb-rgb),.35)}
 .prog-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
 @media (max-width:420px){.prog-grid{grid-template-columns:repeat(2,1fr)}}
 .fw-toggle{margin-top:.7rem;font-size:.68rem;font-weight:600;color:var(--t3);cursor:pointer;display:flex;align-items:center;gap:.35rem;user-select:none;padding:.3rem 0}
@@ -473,8 +473,8 @@ input[type=file]:hover{border-color:var(--amb)}
     </div>
     <div class="tb-r">
       <div class="uchip" id="uchip">👤 —</div>
-      <button class="tb-btn" id="net-mode-btn" onclick="NET.toggle()" title="Online mode — click to force offline" aria-label="Online mode — click to force offline" style="font-size:.8rem;min-width:32px;justify-content:center;color:var(--grn);border-color:rgba(var(--grn-rgb),.35);background:rgba(var(--grn-rgb),.08)">🟢</button>
-      <button class="tb-btn" id="tb-sync-btn" onclick="UI.go('progress')" title="Not synced yet this session" style="min-width:32px;justify-content:center;padding:.28rem"><span id="tb-sync-dot" style="display:block;width:9px;height:9px;border-radius:50%;background:var(--t3);transition:background .3s"></span></button>
+      <button class="tb-btn" id="net-mode-btn" onclick="NET.toggle()" title="Online mode — click to force offline" aria-label="Online mode — click to force offline" style="font-size:.8rem;min-width:32px;justify-content:center;color:var(--grn);border-color:rgba(var(--grn-rgb),.35);background:rgba(var(--grn-rgb),.08)"><i class="ph ph-wifi-high"></i></button>
+      <button class="tb-btn" id="tb-sync-btn" onclick="UI.go('progress')" title="Not synced yet this session" aria-label="Sync status — not synced yet this session" style="min-width:32px;justify-content:center;padding:.28rem;position:relative"><i class="ph ph-cloud-check"></i><span id="tb-sync-dot" style="position:absolute;bottom:5px;right:5px;display:block;width:7px;height:7px;border-radius:50%;background:var(--t3);border:1.5px solid var(--c0);transition:background .3s"></span></button>
       <button class="tb-btn" onclick="UI.theme()" title="Toggle theme" aria-label="Toggle theme"><i class="ph ph-circle-half"></i></button>
       <button class="tb-btn" onclick="PWA.toggleFullscreen()" title="Fullscreen" aria-label="Toggle fullscreen"><i class="ph ph-corners-out"></i></button>
       <button class="tb-btn" id="installBtn" style="display:none" onclick="PWA.install()" title="Install App" aria-label="Install app"><i class="ph ph-device-mobile"></i></button>

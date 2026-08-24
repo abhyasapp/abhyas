@@ -197,6 +197,18 @@ tr:last-child td{border-bottom:none}
 .sf input:focus,.sf textarea:focus,.sf select:focus{border-color:var(--amb);box-shadow:0 0 0 3px rgba(54,139,79,.12)}
 .sf textarea{resize:vertical;min-height:80px}
 .sf .hint{font-size:.68rem;color:var(--t3);margin-top:.25rem}
+/* Custom file-upload control — the raw native <input type=file> renders
+   in the browser's OS-native style (a plain "Choose File" button with
+   system font/colors), which visually clashes with every other themed
+   input on this page. This hides the native control (still fully
+   functional — clicks/keyboard/drag-drop all still work, it's just
+   invisible and stretched over the styled label) and shows a themed
+   button + filename in its place instead. */
+.file-up{position:relative;display:flex;align-items:center;gap:.6rem;background:var(--c1);border:1.5px dashed var(--b2);border-radius:var(--r1);padding:.6rem .75rem;cursor:pointer;transition:border-color var(--ease),background var(--ease)}
+.file-up:hover{border-color:var(--amb)}
+.file-up input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.file-up .file-up-btn{flex-shrink:0;display:inline-flex;align-items:center;gap:.3rem;background:var(--c2);border:1px solid var(--b1);border-radius:7px;padding:.3rem .6rem;font-size:.7rem;font-weight:700;color:var(--t2)}
+.file-up .file-up-name{font-size:.75rem;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Modal */
 .mbg{position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;padding:1rem}
@@ -413,26 +425,32 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           <div class="sf"><label for="ws-title">Title</label><input type="text" id="ws-title" placeholder="e.g. Week 12 — Structural Analysis"></div>
           <div class="sf">
             <label for="ws-file">Question Bank File (.json)</label>
-            <input type="file" id="ws-file" accept="application/json,.json" onchange="WEEKLYSETS.onFilePicked()">
+            <label class="file-up" for="ws-file">
+              <input type="file" id="ws-file" accept="application/json,.json" onchange="WEEKLYSETS.onFilePicked()">
+              <span class="file-up-btn"><i class="ph ph-upload-simple"></i> Choose File</span>
+              <span class="file-up-name" id="ws-file-name">No file chosen</span>
+            </label>
             <div id="ws-upload-status" style="font-size:.7rem;margin-top:.3rem;opacity:.7"></div>
           </div>
           <details style="margin:.2rem 0 .6rem">
             <summary style="font-size:.72rem;opacity:.7;cursor:pointer">Or paste an existing Drive fileId instead</summary>
             <div class="sf" style="margin-top:.4rem"><input type="text" id="ws-fileid" placeholder="Same fileId format as chapters-data.js"></div>
           </details>
-          <button type="button" class="btn-s btn-c btn-sm" style="margin:.2rem 0 .6rem" onclick="WEEKLYSETS.preview(document.getElementById('ws-fileid').value.trim(), document.getElementById('ws-title').value.trim())"><i class="ph ph-eye"></i> Preview before publishing</button>
           <div class="sf"><label for="ws-chapter">Chapter / Label (optional)</label><input type="text" id="ws-chapter" placeholder="e.g. Structural Engineering"></div>
           <div class="sf">
             <label for="ws-release">Release Date &amp; Time</label>
             <input type="datetime-local" id="ws-release">
             <button type="button" class="btn-s btn-c btn-sm" style="margin-top:.4rem" onclick="WEEKLYSETS.fillNextWednesday()"><i class="ph ph-calendar-plus"></i> Use next Wednesday, 8:00 AM</button>
           </div>
-          <button class="btn-s btn-g" onclick="WEEKLYSETS.create()"><i class="ph ph-plus"></i> Add Weekly Set</button>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.7rem">
+            <button type="button" class="btn-s btn-c" onclick="WEEKLYSETS.preview(document.getElementById('ws-fileid').value.trim(), document.getElementById('ws-title').value.trim())"><i class="ph ph-eye"></i> Preview before publishing</button>
+            <button class="btn-s btn-g" onclick="WEEKLYSETS.create()"><i class="ph ph-plus"></i> Add Weekly Set</button>
+          </div>
         </div>
 
         <div class="card">
           <div class="card-hd"><h3>Scheduled &amp; Live Sets</h3></div>
-          <div id="weeklysets-list" style="display:flex;flex-direction:column;gap:.5rem"></div>
+          <div id="weeklysets-list" style="display:flex;flex-direction:column;gap:.5rem"><p style="font-size:.8rem;opacity:.6">No weekly sets yet — add one above.</p></div>
         </div>
       </div>
 
@@ -883,8 +901,10 @@ const WEEKLYSETS = {
   async onFilePicked() {
     const input = document.getElementById('ws-file');
     const status = document.getElementById('ws-upload-status');
+    const nameEl = document.getElementById('ws-file-name');
     const file = input.files && input.files[0];
     if (!file) return;
+    if (nameEl) nameEl.textContent = file.name;
 
     // 2MB is well beyond a text-only question set (even a few hundred
     // questions is normally under 200KB) — a file this large is almost
@@ -898,6 +918,7 @@ const WEEKLYSETS = {
       const mb = (file.size / (1024*1024)).toFixed(1);
       if (!confirm(`This file is ${mb}MB — likely several embedded images. That's fine, but it'll be slower to download for students on weak connections. Continue uploading?`)) {
         input.value = '';
+        if (nameEl) nameEl.textContent = 'No file chosen';
         return;
       }
     }
@@ -1023,6 +1044,7 @@ const WEEKLYSETS = {
         document.getElementById('ws-title').value = '';
         document.getElementById('ws-fileid').value = '';
         document.getElementById('ws-file').value = '';
+        document.getElementById('ws-file-name').textContent = 'No file chosen';
         document.getElementById('ws-upload-status').textContent = '';
         this.uploadedFileId = '';
         document.getElementById('ws-chapter').value = '';

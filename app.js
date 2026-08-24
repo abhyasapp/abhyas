@@ -551,7 +551,8 @@ const PSYNC = {
     }[state] || {color:'var(--t3)', title:'', anim:false};
     dot.style.background = cfg.color;
     dot.style.animation = cfg.anim ? 'pulse 1s ease-in-out infinite' : 'none';
-    btn.title = cfg.title;
+    btn.title = 'Sync status — ' + cfg.title;
+    btn.setAttribute('aria-label', btn.title);
   },
   scheduleSync(){
     if(!S.user || !S.user.token) return;
@@ -2676,12 +2677,12 @@ const CACHE = {
     const cachedKeys = new Set(await QDB.keys());
     const missing = ChapterData.allFileRefs().filter(r=>!cachedKeys.has(r.key));
     if(!missing.length) return;
-    CACHE._badge(`📦 Syncing 0/${missing.length}…`);
+    CACHE._badge(`📦 Downloading 0/${missing.length}…`);
     let done=0;
     for(const ref of missing){
       try{ await QUIZ._fetch(ref.fid, ref.key); }catch{ /* skip failures quietly */ }
       done++;
-      CACHE._badge(`📦 Syncing ${done}/${missing.length}…`);
+      CACHE._badge(`📦 Downloading ${done}/${missing.length}…`);
     }
     CACHE._badge(null);
     if(UI.cur==='offline') CACHE.render();
@@ -2692,7 +2693,7 @@ const CACHE = {
     if(!el){
       el = document.createElement('div');
       el.id = 'cache-autobadge';
-      el.style.cssText = 'position:fixed;bottom:calc(var(--bn-h,0px) + 1rem + var(--safe-b,0px));right:1rem;background:var(--c2);border:1px solid var(--bd);border-radius:999px;padding:.4rem .8rem;font-size:.7rem;color:var(--t2);z-index:9998;box-shadow:var(--sh3);display:flex;align-items:center;gap:.4rem';
+      el.style.cssText = 'position:fixed;bottom:calc(var(--bn-h,0px) + 1rem + var(--safe-b,0px));left:1rem;background:var(--c2);border:1px solid var(--bd);border-radius:999px;padding:.4rem .8rem;font-size:.7rem;color:var(--t2);z-index:9998;box-shadow:var(--sh3);display:flex;align-items:center;gap:.4rem';
       document.body.appendChild(el);
     }
     el.textContent = msg;
@@ -2939,7 +2940,12 @@ function _updateNetBtn(){
   const btn = document.getElementById('net-mode-btn');
   if(!btn) return;
   const effectivelyOnline = S.online && !S.forcedOffline;
-  btn.textContent = effectivelyOnline ? '🟢' : '🔴';
+  // A colored icon SHAPE (wifi vs wifi-off), not just a colored dot —
+  // two similarly-sized colored circles sitting next to each other in
+  // the header (this button + the sync-status dot) were only
+  // distinguishable by hue, which is both an accessibility problem and
+  // a genuine "which one is which" recognition problem at a glance.
+  btn.innerHTML = `<i class="ph ${effectivelyOnline ? 'ph-wifi-high' : 'ph-wifi-slash'}"></i>`;
   btn.title = effectivelyOnline ? 'Online mode — click to force offline' : S.forcedOffline ? 'Forced offline mode — click to go online' : 'Network offline — no connection';
   btn.setAttribute('aria-label', btn.title);
   btn.style.color = effectivelyOnline ? 'var(--grn)' : 'var(--ros)';
