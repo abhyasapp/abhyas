@@ -2311,34 +2311,41 @@ function adminReviewPaymentsBatch(p) {
 
     const nowIso = new Date().toISOString();
     const results = [];
+    let paymentsChanged = false, usersChanged = false;
 
+    // Same optimization as adminGrantAccessBatch: mutate the
+    // already-loaded 2D arrays in memory instead of a getRange()+
+    // setValue() round-trip per column per row (up to 9 individual API
+    // calls per user here — 3 on Payments, up to 6 on Users), then
+    // write each sheet back ONCE at the end regardless of batch size.
     usernames.forEach(rawUsername => {
       const username = String(rawUsername || "").trim();
       const payRow = payRowByUser[username.toLowerCase()];
       if (!payRow) { results.push({ username, success: false, error: "Payment not found." }); return; }
 
-      paymentSheet.getRange(payRow, 7).setValue(status);
-      if (rejectionReason && status === "rejected") paymentSheet.getRange(payRow, 8).setValue(rejectionReason);
-      paymentSheet.getRange(payRow, 11).setValue(nowIso);
+      const pRow = payData[payRow - 1];
+      pRow[6] = status;                                              // column 7
+      if (rejectionReason && status === "rejected") pRow[7] = rejectionReason; // column 8
+      pRow[10] = nowIso;                                             // column 11
+      paymentsChanged = true;
 
       const userRow = userRowByUser[username.toLowerCase()];
       if (userRow) {
+        const uRow = userData[userRow - 1];
         if (status === "verified") {
-          userSheet.getRange(userRow, 8).setValue("active");
-          userSheet.getRange(userRow, 13).setValue("verified");
-          userSheet.getRange(userRow, 14).setValue("true");
-          userSheet.getRange(userRow, 10).setValue(nowIso);
-          userSheet.getRange(userRow, 15).setValue("permanent");
-          userSheet.getRange(userRow, 16).setValue("");
+          uRow[7] = "active"; uRow[12] = "verified"; uRow[13] = "true";
+          uRow[9] = nowIso; uRow[14] = "permanent"; uRow[15] = "";
         } else if (status === "rejected") {
-          userSheet.getRange(userRow, 8).setValue("expired");
-          userSheet.getRange(userRow, 13).setValue("rejected");
-          userSheet.getRange(userRow, 14).setValue("false");
+          uRow[7] = "expired"; uRow[12] = "rejected"; uRow[13] = "false";
         }
+        usersChanged = true;
       }
 
       results.push({ username, success: true });
     });
+
+    if (paymentsChanged) paymentSheet.getRange(1, 1, payData.length, payData[0].length).setValues(payData);
+    if (usersChanged) userSheet.getRange(1, 1, userData.length, userData[0].length).setValues(userData);
 
     const okCount = results.filter(r => r.success).length;
     logAction_(actor, "Bulk Review Payment", usernames.join(", "),
@@ -2445,21 +2452,34 @@ function adminGrantAccessBatch(p) {
     }
     const nowIso = new Date().toISOString();
     const results = [];
+    let anyChanged = false;
 
+    // Mutate the already-loaded 2D array in memory (zero API cost per
+    // access) instead of one getRange()+setValue() round-trip per
+    // column per user — for a 50-user batch that was up to 300
+    // individual Sheets API calls; this is the same 300 mutations
+    // against a plain JS array, then ONE setValues() write for the
+    // whole sheet at the end, regardless of batch size.
     usernames.forEach(rawUsername => {
       const username = String(rawUsername || "").trim();
       const rowIndex = rowByUser[username.toLowerCase()];
       if (!rowIndex) { results.push({ username, success: false, error: "User not found." }); return; }
 
-      sheet.getRange(rowIndex, 8).setValue("active");
-      sheet.getRange(rowIndex, 10).setValue(nowIso);
-      sheet.getRange(rowIndex, 13).setValue("verified");
-      sheet.getRange(rowIndex, 14).setValue("true");
-      sheet.getRange(rowIndex, 15).setValue(duration === "year" ? "yearly" : "permanent");
-      sheet.getRange(rowIndex, 16).setValue(expiresAtIso);
+      const row = data[rowIndex - 1]; // data is 0-indexed, sheet rows are 1-indexed
+      row[7] = "active";              // column 8
+      row[9] = nowIso;                // column 10
+      row[12] = "verified";           // column 13
+      row[13] = "true";               // column 14
+      row[14] = duration === "year" ? "yearly" : "permanent"; // column 15
+      row[15] = expiresAtIso;         // column 16
+      anyChanged = true;
 
       results.push({ username, success: true });
     });
+
+    if (anyChanged) {
+      sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+    }
 
     const okCount = results.filter(r => r.success).length;
     logAction_(actor, "Bulk Grant Access", usernames.join(", "),
