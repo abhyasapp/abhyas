@@ -1005,10 +1005,10 @@ const LOC = {
         if(!qs2.length){toast('❌ No valid questions found in file');return}
         S.localQs=qs2;
         const info=document.getElementById('loc-info');
-        info.style.display='';info.textContent=`✅ ${qs2.length} questions loaded from "${f.name}"`;
+        info.style.display='';info.textContent=`✅ ${pluralize(qs2.length,'question')} loaded from "${f.name}"`;
         document.getElementById('loc-pr').disabled=false;
         document.getElementById('loc-ex').disabled=false;
-        toast(`✅ ${qs2.length} questions ready`);
+        toast(`✅ ${pluralize(qs2.length,'question')} ready`);
       }catch{toast('❌ Invalid JSON file')}
     };
     r.onerror=()=>toast('❌ Could not read file');
@@ -1390,7 +1390,7 @@ const QUIZ = {
       <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)">
         <div style="font-size:1.2rem;margin-bottom:.35rem">${mode==='exam'?'<i class="ph ph-note-pencil"></i>':'<i class="ph ph-lightning"></i>'}</div>
         <div style="font-family:var(--fd);font-size:.92rem;font-weight:700;color:var(--t1);margin-bottom:.2rem">${esc(chapterName||'Quiz')}</div>
-        <div style="font-size:.74rem;color:var(--t3);margin-bottom:1rem">${total} questions available — how many do you want to do?</div>
+        <div style="font-size:.74rem;color:var(--t3);margin-bottom:1rem">${pluralize(total,'question')} available — how many do you want to do?</div>
         <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem">
           ${presets.map(n=>`<button onclick="document.getElementById('qlm-inp').value=${n}" style="padding:.35rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.76rem;cursor:pointer;font-family:var(--ff)">${n}</button>`).join('')}
           <button onclick="document.getElementById('qlm-inp').value=${total}" style="padding:.35rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.76rem;cursor:pointer;font-family:var(--ff)">All ${total}</button>
@@ -2646,7 +2646,7 @@ const CACHE = {
     const tag=document.getElementById('cache-tag');
     tag.textContent = cachedCount===refs.length && refs.length ? 'Fully cached' : cachedCount>0 ? 'Partially cached' : 'Not cached';
     tag.className = 'ctag ' + (cachedCount===refs.length && refs.length ? 'tg' : cachedCount>0 ? 'ta' : 'tr');
-    document.getElementById('cache-txt').textContent = `${cachedCount} of ${refs.length} question sets cached on this device for offline use.`;
+    document.getElementById('cache-txt').textContent = `${cachedCount} of ${refs.length} question ${refs.length===1?'set':'sets'} cached on this device for offline use.`;
 
     const grid=document.getElementById('cache-grid');
     const levels = ChapterData.levels();

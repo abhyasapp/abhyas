@@ -32,6 +32,20 @@ function esc(s) {
 }
 
 /**
+ * "1 question" vs "5 questions" — several chapters/subtopics
+ * genuinely have exactly 1 question (e.g. Geotechnical Engineering's
+ * Rock & Earthquake subtopic, noted in chapters-data.js), so this
+ * isn't just a theoretical singular case that never happens in
+ * practice. Pass an explicit pluralWord for irregular nouns (e.g.
+ * pluralize(1, 'file', 'files') already reads fine without one, since
+ * the default is just word+'s' — only needed for words that don't
+ * pluralize by simply appending 's').
+ */
+function pluralize(n, word, pluralWord) {
+  return `${n} ${n === 1 ? word : (pluralWord || word + 's')}`;
+}
+
+/**
  * One-shot reachability check against the Apps Script backend.
  * Every page previously hand-rolled its own AbortController + timeout +
  * ping fetch; this is that logic in one place. Callers own their own
