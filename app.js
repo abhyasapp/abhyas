@@ -190,7 +190,29 @@ function renderMath(el){
 }
 function shuf(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]]}return b}
 function fmt(s){if(s<0)s=0;return`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
-function today(){return new Date().toISOString().slice(0,10)}
+// Local calendar-day string (YYYY-MM-DD), NOT UTC. toISOString() always
+// converts to UTC first — for a Nepal-based user (UTC+5:45), that meant
+// the ~5h45m right after their local midnight was still labeled as
+// "yesterday", silently breaking streak day-tracking and timetable
+// reminder de-duplication for anyone studying late into the night
+// (exactly the pattern this app's own greeting logic — "Burning
+// midnight oil?" for the 0-5am local hour range — already treats as
+// completely normal). getFullYear/getMonth/getDate are local-timezone-
+// aware, unlike toISOString().
+function today(){
+  const d=new Date();
+  const pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+// Same local-date logic, offset by N days — used by STREAK below to
+// walk backward day-by-day without re-deriving the pad/format logic,
+// and without the UTC bug a naive d.toISOString() would reintroduce.
+function localDateOffset(baseDate, daysOffset){
+  const d=new Date(baseDate);
+  d.setDate(d.getDate()+daysOffset);
+  const pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
 function isOk(sel,cor){
   if(sel===null||sel===undefined||cor===null||cor===undefined)return false;
   const s=String(sel).trim(),c=String(cor).trim();
@@ -2330,10 +2352,10 @@ const STREAK = {
     HOME.render();
   },
   currentStreak(){
-    let n=0; let d=new Date();
+    let n=0; const base=new Date();
     while(true){
-      const ds=d.toISOString().slice(0,10);
-      if(S.stk.days.includes(ds)){ n++; d.setDate(d.getDate()-1); }
+      const ds=localDateOffset(base,-n);
+      if(S.stk.days.includes(ds)){ n++; }
       else break;
     }
     return n;
@@ -2344,13 +2366,19 @@ const STREAK = {
     const days=[];
     const d=new Date();
     for(let i=6;i>=0;i--){
-      const dd=new Date(d); dd.setDate(d.getDate()-i);
-      days.push(dd.toISOString().slice(0,10));
+      days.push(localDateOffset(d,-i));
     }
     el.innerHTML = days.map(ds=>{
       const done = S.stk.days.includes(ds);
       const isToday = ds===today();
-      const label = new Date(ds).toLocaleDateString(undefined,{weekday:'short'})[0];
+      // new Date("YYYY-MM-DD") parses as UTC midnight per spec, not
+      // local time — harmless for Nepal specifically (ahead of UTC,
+      // so it never rolls back to the previous local day) but would
+      // silently mislabel the weekday for anyone west of UTC. Parsing
+      // the components explicitly and building a LOCAL Date sidesteps
+      // the pitfall regardless of the viewer's timezone.
+      const [yy,mm,dd] = ds.split('-').map(Number);
+      const label = new Date(yy,mm-1,dd).toLocaleDateString(undefined,{weekday:'short'})[0];
       return `<div class="sk-d ${done?'done':''} ${isToday?'today':''}">${label}</div>`;
     }).join('');
     document.getElementById('stk-tag').textContent = `🔥 ${STREAK.currentStreak()} day streak`;
@@ -2491,7 +2519,7 @@ const TT = {
     TT._reminderTimer = setInterval(TT._checkReminders, 20000);
   },
 
-  _todayKey(){ return new Date().toISOString().slice(0,10); },
+  _todayKey(){ return today(); },
 
   _loadNotifiedToday(){
     const saved = _load(LS.TT_NOTIFIED, {date:'', ids:[]});
