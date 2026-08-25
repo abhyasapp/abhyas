@@ -518,7 +518,20 @@ const AUTH = {
         } else {
           AUTH._bounce();
         }
+      } else if(res.sessionInvalid){
+        // Token genuinely expired/invalid — every backend endpoint that
+        // requires auth sends this flag for exactly this case, but this
+        // was the ONE place meant to actively watch for it while a
+        // session is already inside user.html, and it never checked.
+        // Without this, an expired session just sat dead: every
+        // background call (saveProgress, listWeeklySets, etc.) would
+        // keep silently failing with no path back to login short of the
+        // user happening to fully reload the page themselves.
+        localStorage.removeItem(LS.USER);
+        AUTH._bounce();
       }
+      // Any OTHER failure (network blip, server error) is left alone —
+      // not a reason to force a re-login; next interval retries.
     }catch(e){ console.warn('[AUTH] periodic session recheck failed, will retry next interval:', e); }
   }
 };
