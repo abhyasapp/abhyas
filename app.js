@@ -1465,7 +1465,8 @@ const QUIZ = {
       // instead of decrementing a counter — see _startTimer's comment
       // for why that distinction matters.
       examEndAt: mode==='exam' ? Date.now() + examSeconds*1000 : 0,
-      active:true, ch: chapterName||'Study', scope, skipped:new Set(), shown:new Set()
+      active:true, ch: chapterName||'Study', scope, skipped:new Set(), shown:new Set(),
+      startedAt: Date.now()
     };
     document.getElementById('quiz-wrap').style.display='';
     document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
@@ -1926,8 +1927,16 @@ const QUIZ = {
       .map((q,i)=> S.quiz.ans[i]===null ? null : {uid:q.uid, ok:isOk(S.quiz.ans[i], q.correct)})
       .filter(Boolean);
     const scope = S.quiz.scope || {};
+    // Studying isn't always continuous (tab backgrounded, phone locked,
+    // a break mid-session) — capping at a generous 3 hours prevents a
+    // multi-day-old forgotten-open tab from reporting an absurd
+    // duration if a session somehow never got properly closed out.
+    const durationSec = S.quiz.startedAt
+      ? Math.min(3*60*60, Math.round((Date.now()-S.quiz.startedAt)/1000))
+      : 0;
     PROG.recordSession({
       chapter:S.quiz.ch, mode:S.quiz.mode, total, correct, wrong, skipped, pct, at:Date.now(),
+      durationSec,
       lv:scope.lv||'', ch:scope.ch||'', book:scope.book||'', sub:scope.sub||'', fid:scope.fid||'',
       qres
     });
@@ -2411,6 +2420,23 @@ const HOME = {
     const pct = total ? Math.round((correct/total)*100) : 0;
     const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
     set('hs-tot', total); set('hs-cor', correct); set('hs-wrg', wrong); set('hs-pct', pct+'%');
+    HOME._updateStudyTime();
+  },
+  // Sums durationSec across sessions recorded in the last 7 days.
+  // Sessions predating this feature have no durationSec field
+  // (undefined) — treated as 0 rather than excluded, so old sessions
+  // don't skew anything, they just don't contribute time that was
+  // never actually measured.
+  _updateStudyTime(){
+    const el = document.getElementById('hs-time');
+    if(!el) return;
+    const weekAgo = Date.now() - 7*24*60*60*1000;
+    const totalSec = (S.prog.sessions||[])
+      .filter(s=>s.at >= weekAgo)
+      .reduce((sum,s)=>sum + (s.durationSec||0), 0);
+    const hrs = Math.floor(totalSec/3600);
+    const mins = Math.round((totalSec%3600)/60);
+    el.textContent = hrs>0 ? `${hrs}h ${mins}m` : `${mins}m`;
   },
   updateBadges(){
     const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};

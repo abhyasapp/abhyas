@@ -247,6 +247,7 @@ function doGet(e) {
       case "adminupdatesettings":result = adminUpdateSettings(e.parameter); break;
       case "adminupdatesettingsbatch": result = adminUpdateSettingsBatch(e.parameter); break;
       case "adminstats":         result = adminStats(e.parameter); break;
+      case "adminmostmissedquestions": result = adminMostMissedQuestions(e.parameter); break;
       case "adminlistlogs":      result = adminListLogs(e.parameter); break;
       case "admincreateweeklyset": result = adminCreateWeeklySet(e.parameter); break;
       case "adminuploadweeklysetfile": result = adminUploadWeeklySetFile(e.parameter); break;
@@ -257,7 +258,7 @@ function doGet(e) {
       default:
         result = {
           success: false,
-          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, requestPasswordReset, resetPassword, checkSession, saveProgress, getProgress, savePushToken, listWeeklySets, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs, adminCreateWeeklySet, adminUploadWeeklySetFile, adminUpdateWeeklySet, adminDeleteWeeklySet, adminListWeeklySets"
+          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, requestPasswordReset, resetPassword, checkSession, saveProgress, getProgress, savePushToken, listWeeklySets, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminMostMissedQuestions, adminListLogs, adminCreateWeeklySet, adminUploadWeeklySetFile, adminUpdateWeeklySet, adminDeleteWeeklySet, adminListWeeklySets"
         };
     }
   } catch (err) {
@@ -2701,6 +2702,82 @@ function adminStats(p) {
       payments: { total: totalPayments, pending: pendingPayments, verified: verifiedPayments, rejected: rejectedPayments }
     }
   };
+}
+
+// Aggregates per-question wrong/total attempt counts across EVERY
+// user's synced progress data, to surface which specific questions
+// are tripping students up most often — the single most actionable
+// signal for improving question quality, and previously invisible
+// entirely (per-user wrong-answer data existed, but nothing ever
+// aggregated it across students).
+//
+// Deliberately stays Drive-free: this only reads the Progress sheet
+// and parses each row's already-stored JSON blob, tallying by the
+// question uid string (fileId_index — see normQ() in app.js) without
+// ever resolving what that uid actually IS. Resolving a uid into
+// readable question text requires reading the source Drive file,
+// which is comparatively expensive (network I/O) and only worth
+// doing for the tiny number of TOP results an admin will actually
+// look at — that resolution happens client-side in admin.html,
+// reusing the existing getFile action, once per unique fileId among
+// the top results actually shown.
+//
+// A session's qres[] only exists on sessions recorded after this
+// feature shipped, and each user's sessions array is capped at their
+// most recent 50 — so this is a rolling recent-activity signal, not a
+// complete historical record. Still highly actionable: it reflects
+// what students are struggling with lately, which is exactly the
+// window that matters for deciding what to fix or clarify next.
+function adminMostMissedQuestions(p) {
+  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const minAttempts = Math.max(1, Number(p.minAttempts) || 3);
+  const limit = Math.min(100, Math.max(1, Number(p.limit) || 30));
+
+  const sheet = getProgressSheet_();
+  const data = sheet.getDataRange().getValues();
+  const tally = {}; // uid -> {wrong, total}
+
+  for (let i = 1; i < data.length; i++) {
+    const raw = data[i][1]; // data column
+    if (!raw) continue;
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch (e) { continue; } // one corrupted row shouldn't kill the whole aggregate
+    const sessions = (parsed && parsed.prog && Array.isArray(parsed.prog.sessions)) ? parsed.prog.sessions : [];
+    sessions.forEach(sess => {
+      if (!Array.isArray(sess.qres)) return;
+      sess.qres.forEach(qr => {
+        if (!qr || !qr.uid) return;
+        if (!tally[qr.uid]) tally[qr.uid] = { wrong: 0, total: 0 };
+        tally[qr.uid].total++;
+        if (!qr.ok) tally[qr.uid].wrong++;
+      });
+    });
+  }
+
+  const results = Object.keys(tally)
+    .map(uid => {
+      const t = tally[uid];
+      // uid = fileId_index — index is always a plain integer with no
+      // extra characters, but Drive fileIds can themselves contain
+      // underscores, so splitting on the FIRST underscore would break.
+      // Matching a trailing _<digits> and treating everything before
+      // it as the fileId is unambiguous regardless of how many
+      // underscores the fileId itself contains.
+      const m = uid.match(/^(.+)_(\d+)$/);
+      return {
+        uid,
+        fileId: m ? m[1] : uid,
+        index: m ? Number(m[2]) : null,
+        wrong: t.wrong,
+        total: t.total,
+        wrongRate: t.total ? Math.round((t.wrong / t.total) * 100) : 0
+      };
+    })
+    .filter(r => r.total >= minAttempts && r.fileId !== 'local') // exclude locally-imported files — no shared fileId to resolve text from
+    .sort((a, b) => b.wrongRate - a.wrongRate || b.total - a.total)
+    .slice(0, limit);
+
+  return { success: true, results, minAttempts };
 }
 
 /* ═══════════════════════════════════════════════════════════════

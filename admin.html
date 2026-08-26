@@ -360,6 +360,15 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             <button class="btn-s btn-r" onclick="ADMIN.changePassword()"><i class="ph ph-lock-key"></i> Change Password</button>
           </div>
         </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <h3><i class="ph ph-target"></i> Most Missed Questions</h3>
+            <button class="btn-s btn-c btn-sm" onclick="MISSED.load()"><i class="ph ph-arrow-clockwise"></i> Load</button>
+          </div>
+          <p style="font-size:.72rem;opacity:.65;margin-bottom:.6rem">Based on students' recent quiz activity (rolling window, not full history) — the questions most worth reviewing for clarity or correctness.</p>
+          <div id="missed-list" style="display:flex;flex-direction:column;gap:.5rem"><p style="font-size:.8rem;opacity:.6">Click Load to fetch — this aggregates data across every student, so it's not auto-refreshed with the rest of the dashboard.</p></div>
+        </div>
       </div>
 
       <!-- USERS -->
@@ -873,6 +882,57 @@ const ADMINS = {
 // ═══════════════════════════════════════════════════════════════
 // WEEKLY SETS — upload now, unlock for students on a scheduled date
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// MOST MISSED QUESTIONS — aggregate wrong-rate across all students,
+// resolved to readable text on-demand (only for the top results
+// actually shown, never server-side for the whole question bank).
+// ═══════════════════════════════════════════════════════════════
+const MISSED = {
+  async load() {
+    const box = document.getElementById('missed-list');
+    box.innerHTML = '<p style="font-size:.8rem;opacity:.7"><i class="ph ph-circle-notch" style="animation:spin 1s linear infinite"></i> Aggregating…</p>';
+    try {
+      const res = await ADMIN.post('adminMostMissedQuestions', { minAttempts: 3, limit: 20 });
+      if (!res.success) throw new Error(res.error || 'Failed to load');
+      if (!res.results.length) {
+        box.innerHTML = `<p style="font-size:.8rem;opacity:.6">No questions with ${res.minAttempts}+ recent attempts yet — check back once more students have been active.</p>`;
+        return;
+      }
+
+      // Resolve each UNIQUE fileId once, not once per result — several
+      // top-missed questions often come from the same file.
+      const fileCache = {};
+      const uniqueFileIds = [...new Set(res.results.map(r => r.fileId))];
+      await Promise.all(uniqueFileIds.map(async fid => {
+        try {
+          const fres = await ADMIN.post('getFile', { fileId: fid });
+          if (fres.success) {
+            const raw = fres.result;
+            fileCache[fid] = Array.isArray(raw) ? raw : (raw?.questions || raw?.data || raw?.quiz || raw?.items || []);
+          }
+        } catch (e) { /* leave uncached — that result falls back to showing the raw uid below */ }
+      }));
+
+      box.innerHTML = res.results.map(r => {
+        const qs = fileCache[r.fileId];
+        const q = (qs && r.index != null) ? qs[r.index] : null;
+        const text = q ? (q.q || q.question || q.Question || q.stem || q.ques || q.text) : null;
+        return `<div style="background:var(--b0);border:1px solid var(--b1);border-radius:8px;padding:.6rem .7rem">
+          <div style="display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start">
+            <div style="font-size:.8rem;flex:1;min-width:0">${text ? esc(String(text).slice(0,220)) : `<span style="opacity:.5;font-family:var(--fm)">${esc(r.uid)}</span> <span style="opacity:.5">(couldn't load question text)</span>`}</div>
+            <div style="flex-shrink:0;text-align:right">
+              <div style="font-weight:700;color:var(--ros);font-size:.85rem">${r.wrongRate}%</div>
+              <div style="font-size:.62rem;opacity:.6">${r.wrong}/${r.total} wrong</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    } catch (e) {
+      box.innerHTML = `<p style="font-size:.8rem;color:var(--ros)">❌ ${esc(e.message)}</p>`;
+    }
+  }
+};
+
 const WEEKLYSETS = {
   list: [],
   uploadedFileId: '', // set by onFilePicked() once a Drive upload succeeds
