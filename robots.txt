@@ -1,0 +1,16 @@
+# Abhyas — Loksewa Civil Engineering exam prep app
+# https://app.mku.name.np/
+
+User-agent: *
+Allow: /
+Allow: /index.html
+
+# user.html and admin.html are login-gated app views with no unique
+# public content — a crawler would only ever see an empty "Loading…"
+# shell (everything is rendered client-side after authentication), so
+# indexing them provides no SEO value and could look like thin/broken
+# content in search results.
+Disallow: /user.html
+Disallow: /admin.html
+
+Sitemap: https://app.mku.name.np/sitemap.xml

@@ -1,7 +1,7 @@
 {
-  "name": "Abhyas — Your path to mastery",
+  "name": "Abhyas — Loksewa Civil Engineering Exam Prep",
   "short_name": "Abhyas",
-  "description": "Offline-first PSC & Engineering exam prep for Nepal",
+  "description": "Loksewa Civil Engineering exam prep for Nepal — practice Level 7 Engineering, General Knowledge, and IQ questions online or fully offline.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#FAFAFA",
