@@ -61,15 +61,24 @@
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{height:100%}
-body{font-family:var(--ff);background:var(--c-bg);color:var(--t1);min-height:100vh;display:flex;align-items:center;justify-content:center;overflow-x:hidden}
+body{font-family:var(--ff);background:var(--c-bg);color:var(--t1);display:block;min-height:100vh;overflow-x:hidden}
 
 /* Background — calm, no blobs/grid in the fintech direction: a plain,
    spacious off-white field lets the card carry all the visual weight. */
 .bg-blobs,.grid{display:none}
 
 /* Card */
-.card{position:relative;z-index:1;width:100%;max-width:440px;margin:1.2rem;background:var(--c-surface);border-radius:var(--r-xl);padding:2.25rem 2rem;box-shadow:var(--ne-lg);max-height:96vh;overflow-y:auto;animation:enter .35s var(--ease-spring)}
+.card{position:relative;z-index:1;width:100%;max-width:440px;margin:1.2rem auto 3rem;background:var(--c-surface);border-radius:var(--r-xl);padding:2.25rem 2rem;box-shadow:var(--ne-lg);max-height:none;overflow:visible;animation:enter .35s var(--ease-spring)}
 @keyframes enter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* Intro/FAQ sections sit below the login card, wider than it so the
+   explanatory content has room to breathe, but still comfortably
+   readable (760px caps line length on desktop). */
+.wide-section{position:relative;z-index:1;max-width:760px;width:calc(100% - 2rem);margin:0 auto 2.5rem}
+.about-card{background:var(--c-surface);border-radius:var(--r-sm);padding:.9rem 1.1rem;box-shadow:var(--ne-sm);margin-bottom:.6rem}
+.about-card h3{font-size:.82rem;color:var(--c-text);margin-bottom:.35rem;display:flex;align-items:center;gap:.4rem}
+.about-card p{font-size:.78rem;color:var(--c-text-soft);line-height:1.55}
+.section-heading{font-size:1rem;color:var(--c-text);margin-bottom:.9rem;text-align:center;font-weight:700}
 
 /* Logo */
 .logo{text-align:center;margin-bottom:1.5rem}
@@ -204,6 +213,8 @@ body{font-family:var(--ff);background:var(--c-bg);color:var(--t1);min-height:100
 
 <div class="bg-motif" aria-hidden="true"></div>
 
+<main>
+<section class="login-section">
 <div class="card" id="main-card">
   <div class="logo">
     <div class="l-icon brand-mark"><img src="icon-192.png" alt="Abhyas"></div>
@@ -342,13 +353,43 @@ body{font-family:var(--ff);background:var(--c-bg);color:var(--t1);min-height:100
     </div>
   </div>
 </div>
+</section>
 
-<footer style="max-width:440px;margin:0 auto 2rem;padding:0 1.5rem;text-align:center;font-size:.7rem;line-height:1.6;color:var(--c-text-faint)">
-  <p>Abhyas is a Loksewa Civil Engineering exam preparation app for Nepal, covering Level 7 Engineering, General Knowledge, and IQ for the Lok Sewa Aayog exam. Practice thousands of questions online, or download them once and study fully offline — on the bus, during a power cut, anywhere.</p>
-</footer>
+<section class="wide-section intro-section" id="about" aria-labelledby="about-heading">
+  <h2 id="about-heading" class="section-heading">About Abhyas</h2>
 
-<section aria-labelledby="faq-heading" style="max-width:440px;margin:0 auto 2rem;padding:0 1.5rem;font-size:.78rem;color:var(--c-text-soft);line-height:1.5">
-  <h2 id="faq-heading" style="font-size:.85rem;color:var(--c-text);margin-bottom:.6rem;text-align:center">Frequently Asked Questions</h2>
+  <div class="about-card">
+    <p>Abhyas is a Loksewa Civil Engineering exam preparation app for Nepal, designed for Level 7 Engineering candidates. It provides Civil Engineering, General Knowledge, and IQ/reasoning practice questions online and offline.</p>
+  </div>
+
+  <div class="about-card">
+    <h3>What is Loksewa?</h3>
+    <p>Lok Sewa Aayog is Nepal's Public Service Commission, which conducts the civil service examinations — including the Level 7 Civil Engineering exam — for government engineering positions.</p>
+  </div>
+
+  <div class="about-card">
+    <h3>What does Abhyas cover?</h3>
+    <p>Structural Engineering, Engineering Survey, Construction Materials, Concrete Technology, Geotechnical Engineering, Construction Management, Estimating & Costing, Engineering Drawing, Engineering Economics, and Professional Practices — plus General Knowledge and IQ/reasoning sections that appear alongside the technical paper.</p>
+  </div>
+
+  <div class="about-card">
+    <h3>Online and offline practice</h3>
+    <p>Once a chapter or subtopic has been opened while online, its questions are cached on your device for fully offline practice afterward — during load-shedding, on the bus, or anywhere without a connection.</p>
+  </div>
+
+  <div class="about-card">
+    <h3>Progress tracking</h3>
+    <p>Accuracy, attempted vs. correct counts, a daily study streak, and weak-topic detection so you always know exactly what to review next — synced across your devices whenever you're online.</p>
+  </div>
+
+  <div class="about-card">
+    <h3>Free trial / access</h3>
+    <p>New accounts get a free trial period to explore the app before deciding whether to continue with paid access.</p>
+  </div>
+</section>
+
+<section class="wide-section faq-section" id="faq" aria-labelledby="faq-heading" style="font-size:.78rem;color:var(--c-text-soft);line-height:1.5">
+  <h2 id="faq-heading" class="section-heading">Frequently Asked Questions</h2>
 
   <details style="margin-bottom:.5rem;background:var(--c-surface);border-radius:var(--r-sm);padding:.6rem .8rem;box-shadow:var(--ne-sm)">
     <summary style="cursor:pointer;font-weight:600;color:var(--c-text)">What is Loksewa (Lok Sewa Aayog)?</summary>
@@ -409,6 +450,8 @@ body{font-family:var(--ff);background:var(--c-bg);color:var(--t1);min-height:100
   ]
 }
 </script>
+
+</main>
 
 <div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
