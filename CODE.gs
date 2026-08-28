@@ -127,6 +127,44 @@ function checkGetFileRateLimit_() {
   return withinLimit;
 }
 
+/* ── SIGNUP RATE LIMIT ────────────────────────────────────────────
+   handleSignup has no email verification and no CAPTCHA — a mobile
+   number just needs to match the Nepali format regex, it's never
+   confirmed to be real. Without any throttle, a script could farm
+   unlimited free-trial accounts automatically (each needs a unique
+   username/email/mobile, but generating those programmatically is
+   trivial), defeating the entire trial-then-pay model this app is
+   built around. Same global sliding-window approach as
+   checkGetFileRateLimit_ above (Apps Script has no reliable caller
+   IP to rate-limit per-person against), but with a much lower
+   threshold — a genuine person signs up exactly once, ever, so a
+   burst of many signups in one minute is a far stronger abuse signal
+   here than it would be for a read-only action like getFile.
+   Threshold is generous enough for a realistic burst (a classroom
+   signing up together during an orientation session) while still
+   meaningfully slowing down automated mass account creation. */
+const SIGNUP_RATE_LIMIT_PER_MINUTE = 15;
+
+function checkSignupRateLimit_() {
+  const props = PropertiesService.getScriptProperties();
+  const key = "signup_rl";
+  const bucket = Math.floor(Date.now() / 60000);
+  let state = { bucket, count: 0, logged: false };
+  const raw = props.getProperty(key);
+  if (raw) {
+    try { state = JSON.parse(raw); } catch (e) {}
+    if (state.bucket !== bucket) state = { bucket, count: 0, logged: false };
+  }
+  state.count = (state.count || 0) + 1;
+  const withinLimit = state.count <= SIGNUP_RATE_LIMIT_PER_MINUTE;
+  if (!withinLimit && !state.logged) {
+    state.logged = true;
+    logAction_("system", "Signup Rate Limited", "", "Exceeded " + SIGNUP_RATE_LIMIT_PER_MINUTE + " signups/min — possible automated account farming. Further rejections this minute are not individually logged.");
+  }
+  props.setProperty(key, JSON.stringify(state));
+  return withinLimit;
+}
+
 const USER_HEADERS = [
   "username", "passHash", "name", "email", "mobile",
   "contact", "contactType", "status", "createdAt", "approvedAt",
@@ -1166,6 +1204,9 @@ function resetPassword(p) {
 }
 
 function handleSignup(p) {
+  if (!checkSignupRateLimit_()) {
+    return { success: false, error: "Too many signups right now, please try again in a minute." };
+  }
   const username = String(p.username || "").trim();
   const password = p.password || "";
   const name = String(p.name || "").trim();

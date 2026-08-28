@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="theme-color" content="#F2F4F3">
+<!-- Clickjacking mitigation — see admin.html for the full rationale.
+     GitHub Pages doesn't support custom HTTP headers, so this
+     client-side frame-bust is the best available option. -->
+<script>if(window.top!==window.self){window.top.location=window.self.location;}</script>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 

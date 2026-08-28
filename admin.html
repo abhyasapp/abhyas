@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="theme-color" content="#F2F4F3">
+<!-- Clickjacking mitigation: break out of any iframe immediately.
+     GitHub Pages doesn't support custom HTTP response headers, so
+     X-Frame-Options and CSP's frame-ancestors (header-only per spec —
+     never settable via a <meta> tag) aren't available here. This
+     client-side check is the best mitigation possible under that
+     hosting constraint — placed first, before anything else runs, so
+     the admin UI never renders inside someone else's page even
+     momentarily. Not as airtight as a real header, but meaningfully
+     better than nothing for a page with one-click destructive actions
+     (delete user, grant access, review payment). -->
+<script>if(window.top!==window.self){window.top.location=window.self.location;}</script>
 <title>Abhyas — Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="vendor/phosphor/phosphor-regular.css">
