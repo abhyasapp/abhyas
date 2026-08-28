@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
    CHAPTER DATA.js
-   ───────────────────────────────────────────────────────────────
-   Updated 2026-08-19 (v7).
+   ──────────────────────────────────────────────────────────────
+   Updated 2026-08-25 (v8).
 
    Chapters "1" (Structural Engineering), "2" (Engineering Survey),
    "3" (Construction Materials), "4" (Concrete Technology), "5"
@@ -45,6 +45,15 @@
    user's older Drive archive (LEVEL 7 / survey folder, 5 source
    files covering Q1-455), re-sorted into the 11 official subtopics,
    and uploaded fresh here — none of the old fileIds were reused.
+
+   Professional Practices (Chapter 10) content: ethics.json (111
+   questions) was fully classified into 4 of its 6 official
+   subtopics — Ethics & Integrity, NEC Act, Client & Contractor
+   Relations, and Public Procurement (all 111 questions accounted
+   for, none left over). NBC (12.5) and Building Bylaws (12.6) have
+   no matching content in ethics.json and still point to their old
+   placeholder stub files — a separate source is needed for those
+   two subtopics.
 
    HIERARCHY (4 levels, same shape as before):
      Level (level7 / gk)
@@ -189,10 +198,10 @@ const DRIVE = {
     },
     "10": {
       "Abhyas": {
-        "12.1 ETHICS&INTEGRITY": "1JtVtoN-z3_fHW9VrMUyTkQg_nzmD3lw2",
-        "12.2 NEC ACT": "1xipAp3_uux-3H4ms0bxX3_f7aQOLZTO-",
-        "12.3 CLIENT&CONTRACTOR REL": "1ekwh7abKFvBy4ZBhrrFakCjXXWtevw-e",
-        "12.4 PUBLIC PROCUREMENT": "1uDwPTlSpubLowyxKB5Bty0yclG_aKyH8",
+        "12.1 ETHICS&INTEGRITY": "1n0iZ2dKnUYjv1AtjMmQyndEWHNY52-0g",
+        "12.2 NEC ACT": "1As0-bXhVE4B0av_iSdQhgnPi8DA3WAsw",
+        "12.3 CLIENT&CONTRACTOR REL": "1JJZwp5_uUx1CmOS4vgbeZkl_aF0bQnKG",
+        "12.4 PUBLIC PROCUREMENT": "1oVdr1E2GWPvS-cpSohUjeNgIcd7DP7r3",
         "12.5 NBC": "1_JEkzhm07SmcKejscg5hkCB44sQqknR1",
         "12.6 BUILDING BYLAWS": "17mDJyHSvDCYjwnlsAvAoPptHQzss9TWU"
       }
