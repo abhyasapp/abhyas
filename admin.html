@@ -301,7 +301,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
     <div class="fld"><label for="ad-user">Admin Username</label><input type="text" id="ad-user" placeholder="admin" autocomplete="username" autocapitalize="none"></div>
     <div class="fld"><label for="ad-pass">Password</label><input type="password" id="ad-pass" placeholder="••••••••" autocomplete="current-password"></div>
     <button class="btn" id="btn-login" onclick="ADMIN.login()">Enter Admin Panel →</button>
-    <div class="link-row"><a onclick="localStorage.removeItem('abhyas_admin'); location.href='index.html'">← Back to User Login</a></div>
+    <div class="link-row"><a onclick="ADMIN._leaveAdminMode()">← Back to User Login</a></div>
   </div>
 </div>
 
@@ -342,7 +342,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
       <div class="sb-item" id="nav-logs" onclick="UI.nav('logs')"><div class="sb-ic"><i class="ph ph-clipboard-text"></i></div>Activity Logs</div>
       <div class="sb-item" id="nav-settings" onclick="UI.nav('settings')"><div class="sb-ic"><i class="ph ph-gear"></i></div>Settings</div>
       <div class="sb-div"></div>
-      <div class="sb-item" onclick="localStorage.removeItem('abhyas_admin'); location.href='index.html'"><div class="sb-ic"><i class="ph ph-house"></i></div>User Portal</div>
+      <div class="sb-item" onclick="ADMIN._leaveAdminMode()"><div class="sb-ic"><i class="ph ph-house"></i></div>User Portal</div>
       <div style="text-align:center;font-size:.62rem;color:var(--t3);opacity:.6;padding:.6rem 0 .2rem">Abhyas V1</div>
     </div>
 
@@ -599,6 +599,30 @@ const ADMIN = {
   data: {users:[], payments:[], settings:{}, logs:[]},
   state: {uPage:1, pPage:1, lPage:1, uPerPage:15, pPerPage:15, lPerPage:20},
 
+  // Leaving admin mode (main Logout, 'Back to User Login', 'User
+  // Portal') always clears the admin's own credentials. It also
+  // clears abhyas_session, but ONLY if that key currently holds
+  // {type:'admin'} — the routing marker index.html writes when
+  // someone logs in as an admin through its own shared login form
+  // (as opposed to logging into admin.html directly). That marker is
+  // never real student progress data, so clearing it is always safe,
+  // and it's exactly what was causing 'Back to User Login' to bounce
+  // straight back into admin.html: index.html's own boot logic sees
+  // a stale type:'admin' entry and auto-redirects into admin mode
+  // again. If abhyas_session instead holds a real {type:'user'}
+  // session — e.g. an unrelated student's saved login on a shared
+  // device — this deliberately leaves it untouched, which is the
+  // fix for the OTHER bug this code used to have (admin logout
+  // silently destroying a different student's session).
+  _leaveAdminMode() {
+    localStorage.removeItem('abhyas_admin');
+    try {
+      const raw = localStorage.getItem('abhyas_session');
+      if (raw && JSON.parse(raw).type === 'admin') localStorage.removeItem('abhyas_session');
+    } catch(e) { /* malformed abhyas_session is index.html's concern, not this cleanup's */ }
+    location.href = 'index.html';
+  },
+
   init() {
     const saved = localStorage.getItem('abhyas_admin');
     if (saved) {
@@ -640,8 +664,7 @@ const ADMIN = {
   },
 
   logout() {
-    localStorage.removeItem('abhyas_admin');
-    location.href = 'index.html';
+    this._leaveAdminMode();
   },
 
   setLoading(on) {

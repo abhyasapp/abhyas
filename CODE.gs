@@ -13,7 +13,7 @@
    that file's header — sw.js derives its cache name from it too, so
    bumping BOTH this constant and version.js's APP_VERSION together
    forces every open browser tab into a fresh session on next load). */
-const APP_VERSION = "1.2";
+const APP_VERSION = "1.00";
 
 /* ── ADMIN CREDENTIALS ───────────────────────────────────────────
    Admins now live in their own sheet (see getAdminsSheet_ / ADMIN_HEADERS
