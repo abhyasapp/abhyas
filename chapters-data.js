@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════
    CHAPTERS-DATA.JS
    ───────────────────────────────────────────────────────────────────────
-   COMPLETE COMPILED VERSION
+   COMPLETE COMPILED VERSION — CORRECTED 2026-08-29
 
    Hierarchy:
 
@@ -22,7 +22,46 @@
    • General Knowledge
    • Old Questions
 
-   ChapterData helpers are included at the bottom.
+   ─────────────────────────────────────────────────────────────────────
+   CORRECTIONS APPLIED IN THIS PASS (see chat for full detail):
+
+   1. Chapter 6 (Construction Management) → "Abhyas" book fileIds were
+      still pointing at the OLD EMPTY STUB files. Replaced all 9 with
+      the real, populated fileIds uploaded 2026-08-27 (310 questions,
+      classified from the "construction managment" source folder).
+      Old stub IDs are now in Trash — do not reuse them.
+
+   2. "5.1 MATERIAL PROPERTIES" (chapter 3) was pointing at a stale
+      fileId. Corrected to the live file.
+
+   ─────────────────────────────────────────────────────────────────────
+   STILL UNRESOLVED — FLAGGING, NOT GUESSED AT:
+
+   • "9.6 VALUATION" (chapter 7) fileId (19b5w82zFWyzfMP6GNDzMsNWs8W6gHfgA)
+     was accidentally trashed and has NOT been restored yet. The pointer
+     below is left as-is (matches what was live before the accident) but
+     will 404 until it's restored from Drive Trash within the 30-day
+     window. Restore it, then this note can be deleted.
+
+   • The GK section in the source document you pasted defines 11
+     top-level "chapters" (Periodic Plans, Sustainable Development,
+     International Affairs, Constitution, Governance, Civil Service,
+     Public Services, Charter, Public Policy, Management, Planning &
+     Accounting), each with ONE "All" fileId pointing at RAW, UNSORTED
+     source files (e.g. chapter "4" Constitution → the raw
+     constitution.json source, not a sorted subtopic file).
+
+     This does NOT match what is actually live in your app/Drive right
+     now, which has GK as just 2 chapters — "1: General Awareness and
+     Contemporary Issues" (16 fine-grained subtopics, all still empty
+     stubs) and "2: General Reasoning Test" (3 subtopics, also empty
+     stubs) — both under a single "Abhyas" book.
+
+     I have NOT touched the GK section below — it is reproduced exactly
+     as you pasted it — because I don't know if this 11-chapter shape is
+     an intentional redesign you're mid-way through, or drift from an
+     older draft. Overwriting it silently risked breaking something you
+     meant to keep. Tell me which shape is correct and I'll fix it next.
    ═══════════════════════════════════════════════════════════════════════ */
 
 
@@ -328,7 +367,7 @@ const DRIVE = {
     "3": {
 
       "Abhyas": {
-        "5.1 MATERIAL PROPERTIES": "13dxdpQPDOnP7npN1bdzsaA1OfriW_Ts3",
+        "5.1 MATERIAL PROPERTIES": "1xq0qJg_DCtEcFMa8ALVsercbpC1Wo1UL",
         "5.2 STONES": "1FeyTH5YX_oaqwkicY3EOAp_yfVSqcoh3",
         "5.3 CERAMIC MATERIALS": "1EJOdjRII6R3I1qTvGSHJxMTseUAKiMW-",
         "5.4 CEMENTING MATERIALS": "1Kn2zkXYtb8QsgrYwlw9SYBsnvNMtSkyu",
@@ -417,20 +456,22 @@ const DRIVE = {
 
     /* --------------------------------------------------------------------
        CHAPTER 6 — CONSTRUCTION MANAGEMENT
+       CORRECTED: "Abhyas" now points to the real, populated files
+       (310 questions, uploaded 2026-08-27). Old stub IDs are trashed.
        -------------------------------------------------------------------- */
 
     "6": {
 
       "Abhyas": {
-        "8.1 SCHEDULING&PLANNING": "1YsYSgyyQBCg7i-bhjgnGIrkHAxMS8SYT",
-        "8.2 CONTRACTUAL PROCEDURE": "1g5SZKQWAWTaCLcUWzI9633BU0cjlrnKX",
-        "8.3 MATERIAL MGMT": "1PaQyim1Yi-LtbzwyJIJBWJvh-OgFRNOL",
-        "8.4 COST QUALITY TIME": "1Q1PZdA93pNlYZOqjTMAVNOz-hns7HPPS",
-        "8.5 PROJECT MGMT": "14cx77ttodTVLkcEP971tvKzmpoiRo2A2",
-        "8.6 HEALTH&SAFETY": "1lpQVYz-aGUkidY1n3Ld6oCPVTiJ26KNI",
-        "8.7 MONITORING&EVAL": "1tMjk28egri_cXvYAz-U4mm7BH5hWYcXH",
-        "8.8 QA PLAN": "1J-NXDvQ-7MT57CtaQQ1CXOEsz7FC3vhL",
-        "8.9 VARIATION&ALTERATION": "1LhlLFupso6qxaHmhh40OQ_GHaeRJbN65"
+        "8.1 SCHEDULING&PLANNING": "1lsPuaKBIuAM7WRirGfVBNNU05mbOmnZl",
+        "8.2 CONTRACTUAL PROCEDURE": "1-unallplP0bXzlQZpN8uUoNxOA9w5HfK",
+        "8.3 MATERIAL MGMT": "1Isu1oOsqnLv-UE0KmwcCPOt7YbhJcU0A",
+        "8.4 COST QUALITY TIME": "117x7V5t0exDB2k4OTCC10OINNIhB9HZH",
+        "8.5 PROJECT MGMT": "1gzkQSJuV0SVTovgVDeJzY_ib0Dkddcrn",
+        "8.6 HEALTH&SAFETY": "18JlIjTuUxMVq3-mrl3vGE7wvTr4v_xns",
+        "8.7 MONITORING&EVAL": "1sXc6hx-sryLUDt-ScG9EAb9sl1r9g8Nz",
+        "8.8 QA PLAN": "18BwOWW5dpnffF17T9CC7GxIGRtpV1VZ4",
+        "8.9 VARIATION&ALTERATION": "1YNQk_Lyzg8AGMwCk5ykYKgR5tFi7-mlb"
       },
 
       "New DPARSAD": {
@@ -453,6 +494,9 @@ const DRIVE = {
 
     /* --------------------------------------------------------------------
        CHAPTER 7 — ESTIMATING & COSTING
+       NOTE: "9.6 VALUATION" fileId below was accidentally trashed and
+       is NOT yet restored — see header note. Restore it from Drive
+       Trash (within the 30-day window) to make this pointer live again.
        -------------------------------------------------------------------- */
 
     "7": {
@@ -572,6 +616,10 @@ const DRIVE = {
 
   /* ======================================================================
      GENERAL KNOWLEDGE
+     NOT MODIFIED — reproduced exactly as you pasted it. See header note:
+     this 11-chapter/"All"-fileId shape does not match what's currently
+     live in your app (which uses a 2-chapter, fine-grained-subtopic
+     shape). Confirm which is correct before this section is trusted.
      ====================================================================== */
 
   gk: {
