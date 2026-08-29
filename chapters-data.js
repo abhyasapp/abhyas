@@ -1,6 +1,6 @@
-/* ═══════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════════
    CHAPTERS-DATA.JS
-   ───────────────────────────────────────────────────────────────────────
+   ──────────────────────────────────────────────────────────────────────
    COMPLETE COMPILED VERSION — CORRECTED 2026-08-29
 
    Hierarchy:
@@ -28,13 +28,13 @@
    1. Chapter 6 (Construction Management) → "Abhyas" book fileIds were
       still pointing at the OLD EMPTY STUB files. Replaced all 9 with
       the real, populated fileIds uploaded 2026-08-27 (310 questions,
-      classified from the "construction managment" source folder).
+      classified from the "construction mangment" source folder).
       Old stub IDs are now in Trash — do not reuse them.
 
    2. "5.1 MATERIAL PROPERTIES" (chapter 3) was pointing at a stale
       fileId. Corrected to the live file.
 
-   ─────────────────────────────────────────────────────────────────────
+   ──────────────────────────────────────────────────────────────────────
    STILL UNRESOLVED — FLAGGING, NOT GUESSED AT:
 
    • "9.6 VALUATION" (chapter 7) fileId (19b5w82zFWyzfMP6GNDzMsNWs8W6gHfgA)
@@ -43,26 +43,29 @@
      will 404 until it's restored from Drive Trash within the 30-day
      window. Restore it, then this note can be deleted.
 
-   • The GK section in the source document you pasted defines 11
-     top-level "chapters" (Periodic Plans, Sustainable Development,
-     International Affairs, Constitution, Governance, Civil Service,
-     Public Services, Charter, Public Policy, Management, Planning &
-     Accounting), each with ONE "All" fileId pointing at RAW, UNSORTED
-     source files (e.g. chapter "4" Constitution → the raw
-     constitution.json source, not a sorted subtopic file).
-
-     This does NOT match what is actually live in your app/Drive right
-     now, which has GK as just 2 chapters — "1: General Awareness and
-     Contemporary Issues" (16 fine-grained subtopics, all still empty
-     stubs) and "2: General Reasoning Test" (3 subtopics, also empty
-     stubs) — both under a single "Abhyas" book.
-
-     I have NOT touched the GK section below — it is reproduced exactly
-     as you pasted it — because I don't know if this 11-chapter shape is
-     an intentional redesign you're mid-way through, or drift from an
-     older draft. Overwriting it silently risked breaking something you
-     meant to keep. Tell me which shape is correct and I'll fix it next.
-   ═══════════════════════════════════════════════════════════════════════ */
+   • GK RESTRUCTURED to the 11-chapter-by-topic shape (Periodic Plans,
+     Sustainable Development, International Affairs, Constitution,
+     Governance, Civil Service, Public Services, Charter, Public
+     Policy, Management, Planning & Accounting). Verified against
+     actual Drive files:
+       - Chapters 3-11 already pointed at the correct real source
+         files (confirmed by fileId->title lookup, 2026-08-29) - left
+         untouched.
+       - Chapters "1" and "2" were still carrying leftover data from
+         the OLD 2-chapter shape ("General Awareness" 16 subtopics /
+         "General Reasoning Test" 3 subtopics, both under a single
+         "Abhyas" book) mismatched against their new chapter names.
+         Since none of that old content was ever populated (still
+         empty stubs), it was safely replaced:
+           "1" Periodic Plans      -> Current Plan.json
+           "2" Sustainable Dev     -> Sustainable Development.json
+     NOTE: the old "General Reasoning Test" (Logical/Numerical/Spatial
+     reasoning) subtopics have NO home in this new 11-chapter scheme
+     and were dropped along with the rest of the stale chapter "1"/"2"
+     data. If you still want a Reasoning section, tell me and I'll add
+     it back as its own chapter/key once a source is found or
+     provided.
+   ══════════════════════════════════════════════════════════════════════ */
 
 
 /* ========================================================================
@@ -142,7 +145,7 @@ const DRIVE = {
 
   /* ======================================================================
      LEVEL 5
-     ====================================================================== */
+     ===================================================================== */
 
   level5: {
 
@@ -194,7 +197,7 @@ const DRIVE = {
         "1-100": "11DZsjZfw4WbmglOxGRErYh9VBNv1-yy7",
         "101-200": "1l6ZBNY7MlRItTKOsglSF9xDGEQ_hrVZI",
         "201-300": "1ZMPdpgCvJ4LNPVSr0enHKyGxVIr7QLth",
-        "301-400": "1zKOJP55egY2xSu8yxTbQZwRulKyyqwb3"
+        "301-400": "1zKOJP55egY2xSu8yxTbQzwRulKyyqwb3"
       }
     },
 
@@ -213,7 +216,7 @@ const DRIVE = {
         "1-100": "1H8b2DIcDQQ4dCDRaJctM6mYOyMMa7Rh-",
         "101-200": "1jYggTJbHhYxZDvroz5XIk-1O-I-trv5A",
         "201-300": "15f2CiEgfd0y45C6YiAujV35bpvHBpGnG",
-        "301-400": "1upPz6YXp7yLLjz73lnzUP828EFApy-Mb",
+        "301-400": "1upPz6YXp7yLLjz38lnzUP828EFApy-Mb",
         "401-500": "1eVtbEWc9LGsLty0Y2ZM6PDeIk2ykBP2b",
         "501-600": "1_tytL1YFi_8glzjswiGKelgkQrvNNAfQ",
         "601-658": "1V_Cgasu59PipCReiiMRzcqeKDHwTfDoe",
@@ -242,7 +245,7 @@ const DRIVE = {
     "9": {
       "Sunil Sah": {
         "1-100": "1SFVGZBZCmcsMlBRLuv3rKjOr-ocKuJTy",
-        "101-200": "1CeQH3i49wF9dc0e6mIznjiSA3A9Qxf3u",
+        "101-200": "1CeQH3i49wF9dc0e6mIzpiSA3A9Qxf3u",
         "201-300": "1ho8sdNzmE9YHBfUCBWg86ti4oH8w_UxE",
         "301-375": "1Zg4rlXqtmFgUctS53I_ga_gtj-u3KEPC",
         "376-454": "1rcHJY4DnOgABTsz1JrrwUlLcfU7VWKhm"
@@ -616,40 +619,26 @@ const DRIVE = {
 
   /* ======================================================================
      GENERAL KNOWLEDGE
-     NOT MODIFIED — reproduced exactly as you pasted it. See header note:
-     this 11-chapter/"All"-fileId shape does not match what's currently
-     live in your app (which uses a 2-chapter, fine-grained-subtopic
-     shape). Confirm which is correct before this section is trusted.
+     RESTRUCTURED to the 11-chapter-by-topic shape. See header note.
      ====================================================================== */
 
   gk: {
 
     "1": {
-      "Abhyas": {
-        "1.1 GEO&DEMO": "1F20fh00eQpPXs45QXW7T3gFT1xlMf734",
-        "1.2 NAT RESOURCES": "1VHUZPsulfZHy2iMPDC07kCWyAnBQy8jL",
-        "1.3 GEO DIVERSITY&CLIMATE": "1yH-DJSPVgAVRlASd1b0-nCmsPC6Wu6BF",
-        "1.4 MODERN HISTORY": "1kl_W3zRZf625Yc_WoRMx-Q552sNDLfsq",
-        "1.5 PERIODIC PLAN": "19wKOhaIw1y-yJneyUwQDDv0-fPw0i7tL",
-        "1.6 SUST DEV&ENV": "1h6TTxSnMnIcYV8riyTgsDcG4QvCfi9eW",
-        "1.7 INTL AFFAIRS": "1XpoO3NsQFwcDDdSks8xBzlTKUpb353vb",
-        "1.8 CONSTITUTION": "1ekHVTT84JW1U8xplW_SqsN5I2VDFI-K2",
-        "1.9 GOVERNANCE": "1bTztLbaAcEjy9_pJ1jDK_99utkAImae1",
-        "1.10 CIVIL SERVICE ACT": "1rnZIF8vRPmYEMXO6B3GWpeSRSz9IzS6x",
-        "1.11 FUNCTIONAL SCOPE": "16_eBtRVcS1VvLkEafwTT0ky9vf5I6rB4",
-        "1.12 PSC": "1sl2eGivffxVph_TcUTH6p6GqcDcv28Nd",
-        "1.13 PUBLIC POLICY": "1Lamc5bwUId2EEZ2eFWl80tpnb999QUQ7",
-        "1.14 MGMT FUNDAMENTALS": "1j5xcwSAZCRQ5oBm98N2R79uaOUD7SAUu",
-        "1.15 BUDGET&ACCOUNTING": "1fptEiZVBE_jzmVqoeoXzgBbTM9xcAQoY",
-        "1.16 CURRENT AFFAIRS": "1RihlAcMkOLvNjGwkFvm_q9IMNLLjlhsI"
+      "GATE": {
+        "All": "1S39S--nt9QVepKlcszdpntB8rRgAEqfd"
+      },
+      "DPARSAD": {
+        "All": ""
       }
     },
 
     "2": {
-      "Abhyas": {
-        "2.1 LOGICAL REASONING": "1bwgC1qylMuepvp52rqvW4IleuVWUpOTV",
-        "2.2 NUMERICAL REASONING": "1ZWWRRh1ZZc_B__u4cGQsk5bQZc7GKpLX",
-        "2.3 SPATIAL REASONING": "1cMGd3B5N-e9NbgShSlF1QAsW8VuYjPwx"
+      "GATE": {
+        "All": "1922CKz8p81DWUWhimygloqKDNDQXbXXF"
+      },
+      "DPARSAD": {
+        "All": ""
       }
     },
 
