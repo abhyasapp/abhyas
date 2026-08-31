@@ -339,6 +339,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
       <div class="sb-item" id="nav-users" onclick="UI.nav('users')"><div class="sb-ic"><i class="ph ph-user"></i></div>Users</div>
       <div class="sb-item" id="nav-payments" onclick="UI.nav('payments')"><div class="sb-ic"><i class="ph ph-credit-card"></i></div>Payments</div>
       <div class="sb-item" id="nav-weeklysets" onclick="UI.nav('weeklysets')"><div class="sb-ic"><i class="ph ph-calendar-check"></i></div>Weekly Sets</div>
+      <div class="sb-item" id="nav-qreports" onclick="UI.nav('qreports')"><div class="sb-ic"><i class="ph ph-warning-circle"></i></div>Question Reports</div>
       <div class="sb-item" id="nav-logs" onclick="UI.nav('logs')"><div class="sb-ic"><i class="ph ph-clipboard-text"></i></div>Activity Logs</div>
       <div class="sb-item" id="nav-settings" onclick="UI.nav('settings')"><div class="sb-ic"><i class="ph ph-gear"></i></div>Settings</div>
       <div class="sb-div"></div>
@@ -471,6 +472,26 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
         <div class="card">
           <div class="card-hd"><h3>Scheduled &amp; Live Sets</h3></div>
           <div id="weeklysets-list" style="display:flex;flex-direction:column;gap:.5rem"><p style="font-size:.8rem;opacity:.6">No weekly sets yet — add one above.</p></div>
+        </div>
+      </div>
+
+      <!-- QUESTION REPORTS -->
+      <div class="view" id="view-qreports">
+        <div class="pg-head"><h2><i class="ph ph-warning-circle"></i> Question Reports</h2><p>Issues students have flagged with specific questions — separate from their personal bookmarks/flags.</p></div>
+        <div class="card">
+          <div class="card-hd">
+            <h3>Reports</h3>
+            <button class="btn-s btn-c btn-sm" onclick="QREPORTS.load()"><i class="ph ph-arrow-clockwise"></i> Refresh</button>
+          </div>
+          <div class="toolbar">
+            <select id="qreports-filter" onchange="QREPORTS.setFilter(this.value)" aria-label="Filter question reports">
+              <option value="open">Open</option>
+              <option value="resolved">Resolved</option>
+              <option value="dismissed">Dismissed</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+          <div id="qreports-list" style="display:flex;flex-direction:column;gap:.5rem"><p style="font-size:.8rem;opacity:.6">Click Refresh to load reports.</p></div>
         </div>
       </div>
 
@@ -725,7 +746,7 @@ const ADMIN = {
     }
   },
 
-  ALL_SCOPES: ['stats','users','payments','settings','logs','admins','weeklysets'],
+  ALL_SCOPES: ['stats','users','payments','settings','logs','admins','weeklysets','qreports'],
 
   // scope: optional array of which pieces to reload, e.g. ['stats','users']
   // after granting one user access. Omit it (or pass nothing) for the full
@@ -744,7 +765,8 @@ const ADMIN = {
         settings: () => this.post('getSettings'),
         logs:     () => this.post('adminListLogs').catch(() => ({success:false, logs:[]})),
         admins:   () => this.post('adminListAdmins').catch(() => ({success:false, admins:[]})),
-        weeklysets: () => this.post('adminListWeeklySets').catch(() => ({success:false, sets:[]}))
+        weeklysets: () => this.post('adminListWeeklySets').catch(() => ({success:false, sets:[]})),
+        qreports: () => this.post('adminListQuestionReports').catch(() => ({success:false, reports:[]}))
       };
       const results = await Promise.all(want.map(k => fetchers[k]()));
       const failures = [];
@@ -757,6 +779,7 @@ const ADMIN = {
         else if (k === 'logs') { if (r.success) { this.data.logs = r.logs; LOGS.render(); } }
         else if (k === 'admins') { if (r.success) ADMINS.render(r.admins); }
         else if (k === 'weeklysets') { if (r.success) WEEKLYSETS.render(r.sets); }
+        else if (k === 'qreports') { if (r.success) QREPORTS.render(r.reports); }
       });
       if (failures.length) {
         this.toast('❌ Some data failed to load — ' + failures[0] + (failures.length>1 ? ` (+${failures.length-1} more)` : ''));
@@ -1178,6 +1201,86 @@ const WEEKLYSETS = {
       } else throw new Error(res.error);
     } catch(e) { ADMIN.toast('❌ ' + e.message); }
     ADMIN.hideLoading();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// QUESTION REPORTS — content-quality issues students flag on
+// specific questions, separate from their personal bookmarks/flags
+// ═══════════════════════════════════════════════════════════════
+const QREPORTS = {
+  all: [],
+  filter: 'open',
+
+  setFilter(status) {
+    this.filter = status;
+    this.render(this.all);
+  },
+
+  async load() {
+    ADMIN.showLoading('Loading reports…');
+    try {
+      const res = await ADMIN.post('adminListQuestionReports');
+      if (res.success) this.render(res.reports);
+      else ADMIN.toast('❌ ' + (res.error || 'Failed to load reports'));
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  },
+
+  render(reports) {
+    this.all = reports || [];
+    const box = document.getElementById('qreports-list');
+    if (!box) return;
+    const shown = this.filter === 'all' ? this.all : this.all.filter(r => r.status === this.filter);
+    if (!shown.length) {
+      box.innerHTML = `<p style="font-size:.8rem;opacity:.6">No ${this.filter === 'all' ? '' : this.filter + ' '}reports.</p>`;
+      return;
+    }
+    const reasonLabel = {wrong_answer:'Wrong answer', unclear:'Unclear wording', typo:'Typo/formatting', other:'Other'};
+    box.innerHTML = shown.map(r => {
+      const badge = r.status === 'open'
+        ? '<span class="ctag" style="background:var(--ok-bg);color:var(--grn)">Open</span>'
+        : r.status === 'resolved'
+          ? '<span class="ctag" style="background:var(--b0);color:var(--t3)">Resolved</span>'
+          : '<span class="ctag" style="background:var(--b0);color:var(--t3)">Dismissed</span>';
+      return `<div style="background:var(--b0);border:1px solid var(--b1);border-radius:8px;padding:.6rem .7rem">
+        <div style="display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start;margin-bottom:.4rem">
+          <div style="font-size:.68rem;font-weight:700;color:var(--amb)">${esc(reasonLabel[r.reason] || r.reason)} ${badge}</div>
+          <div style="font-size:.65rem;opacity:.6;flex-shrink:0">${esc(r.reportedBy)} · ${new Date(r.reportedAt).toLocaleDateString()}</div>
+        </div>
+        <div style="font-size:.8rem;margin-bottom:${r.note ? '.35rem' : '.5rem'}">${esc(r.questionSnapshot || '(question text not captured)')}</div>
+        ${r.note ? `<div style="font-size:.74rem;opacity:.75;margin-bottom:.5rem;font-style:italic">"${esc(r.note)}"</div>` : ''}
+        <div style="display:flex;gap:.35rem">
+          ${r.status !== 'resolved' ? `<button class="btn-s btn-g btn-sm" onclick="QREPORTS.setStatus('${escAttrJs(r.id)}','resolved')">Mark Resolved</button>` : ''}
+          ${r.status !== 'dismissed' ? `<button class="btn-s btn-c btn-sm" onclick="QREPORTS.setStatus('${escAttrJs(r.id)}','dismissed')">Dismiss</button>` : ''}
+          ${r.status !== 'open' ? `<button class="btn-s btn-a btn-sm" onclick="QREPORTS.setStatus('${escAttrJs(r.id)}','open')">Reopen</button>` : ''}
+          <button class="btn-s btn-r btn-sm" onclick="QREPORTS.del('${escAttrJs(r.id)}')"><i class="ph ph-trash"></i></button>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  async setStatus(id, status) {
+    try {
+      const res = await ADMIN.post('adminUpdateQuestionReportStatus', {id, status});
+      if (res.success) {
+        const item = this.all.find(r => r.id === id);
+        if (item) item.status = status;
+        this.render(this.all);
+      } else ADMIN.toast('❌ ' + (res.error || 'Update failed'));
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+  },
+
+  async del(id) {
+    if (!confirm('Delete this report permanently?')) return;
+    try {
+      const res = await ADMIN.post('adminDeleteQuestionReport', {id});
+      if (res.success) {
+        this.all = this.all.filter(r => r.id !== id);
+        this.render(this.all);
+        ADMIN.toast('✅ Report deleted');
+      } else ADMIN.toast('❌ ' + (res.error || 'Delete failed'));
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
   }
 };
 

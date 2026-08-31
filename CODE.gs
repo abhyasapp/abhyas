@@ -35,6 +35,7 @@ const ADMINS_SHEET    = "Admins";
 const PROGRESS_SHEET  = "Progress";
 const PUSHTOKENS_SHEET = "PushTokens";
 const WEEKLYSETS_SHEET = "WeeklySets";
+const QREPORTS_SHEET = "QuestionReports";
 
 /* ── BRUTE-FORCE LOGIN PROTECTION ────────────────────────────────
    Tracks failed attempts per-username in PropertiesService (not a sheet
@@ -220,6 +221,15 @@ const PUSHTOKENS_HEADERS = ["username", "fcmToken", "updatedAt"];
 // instantly without touching this sheet at all.
 const WEEKLYSET_HEADERS = ["id", "title", "fileId", "chapterLabel", "status", "uploadedBy", "uploadedAt", "releaseAt"];
 
+// A student's "Report" is deliberately separate from the existing
+// "Flag" feature (which only ever meant "remind me to review this" —
+// a personal study tool, never a content-quality signal). This is
+// specifically for "something about this question itself is wrong."
+// questionSnapshot stores the question text at report time (not just
+// the uid) so an admin reviewing it later doesn't need to re-fetch
+// the source Drive file just to see what was actually reported.
+const QREPORT_HEADERS = ["id", "uid", "fileId", "questionSnapshot", "reason", "note", "reportedBy", "reportedAt", "status"];
+
 const TRIAL_HOURS = 24;
 
 /* ═══════════════════════════════════════════════════════════════
@@ -258,6 +268,7 @@ function doGet(e) {
       case "getprogress":        result = getProgress(e.parameter); break;
       case "savepushtoken":      result = savePushToken(e.parameter); break;
       case "listweeklysets":     result = listWeeklySets(e.parameter); break;
+      case "reportquestion":     result = reportQuestion(e.parameter); break;
 
       // ── PAYMENT ──
       case "submitpayment":      result = submitPayment(e.parameter); break;
@@ -292,11 +303,14 @@ function doGet(e) {
       case "adminupdateweeklyset": result = adminUpdateWeeklySet(e.parameter); break;
       case "admindeleteweeklyset": result = adminDeleteWeeklySet(e.parameter); break;
       case "adminlistweeklysets":  result = adminListWeeklySets(e.parameter); break;
+      case "adminlistquestionreports": result = adminListQuestionReports(e.parameter); break;
+      case "adminupdatequestionreportstatus": result = adminUpdateQuestionReportStatus(e.parameter); break;
+      case "admindeletequestionreport": result = adminDeleteQuestionReport(e.parameter); break;
 
       default:
         result = {
           success: false,
-          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, requestPasswordReset, resetPassword, checkSession, saveProgress, getProgress, savePushToken, listWeeklySets, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminMostMissedQuestions, adminListLogs, adminCreateWeeklySet, adminUploadWeeklySetFile, adminUpdateWeeklySet, adminDeleteWeeklySet, adminListWeeklySets"
+          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, requestPasswordReset, resetPassword, checkSession, saveProgress, getProgress, savePushToken, listWeeklySets, reportQuestion, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminMostMissedQuestions, adminListLogs, adminCreateWeeklySet, adminUploadWeeklySetFile, adminUpdateWeeklySet, adminDeleteWeeklySet, adminListWeeklySets, adminListQuestionReports, adminUpdateQuestionReportStatus, adminDeleteQuestionReport"
         };
     }
   } catch (err) {
@@ -372,6 +386,7 @@ function setup() {
   getProgressSheet_();
   getPushTokensSheet_();
   getWeeklySetsSheet_();
+  getQReportsSheet_();
   initDefaultSettings_();
   ensurePushTriggers_();
   // Idempotent — guarantees every sheet has the correct text-formatting
@@ -685,6 +700,47 @@ function rowToWeeklySet_(row) {
     uploadedBy: row[5] || "",
     uploadedAt: row[6] || "",
     releaseAt: row[7] || ""
+  };
+}
+
+function getQReportsSheet_() {
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(QREPORTS_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(QREPORTS_SHEET);
+    sheet.appendRow(QREPORT_HEADERS);
+    const maxRows = sheet.getMaxRows() - 1;
+    // id/uid/fileId can all start with digits (UUID, uid=fileId_index,
+    // Drive fileId) — same all-digits protection used everywhere else.
+    [1, 2, 3].forEach(col => sheet.getRange(2, col, maxRows, 1).setNumberFormat("@"));
+    applyTableFormat_(sheet, QREPORT_HEADERS, "#d81b60", SpreadsheetApp.BandingTheme.PINK, 340);
+  }
+  return sheet;
+}
+
+function findQReportRow_(sheet, id) {
+  if (!id) return null;
+  const data = sheet.getDataRange().getValues();
+  const target = String(id).trim();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === target) {
+      return { rowIndex: i + 1, row: data[i] };
+    }
+  }
+  return null;
+}
+
+function rowToQReport_(row) {
+  return {
+    id: row[0] || "",
+    uid: row[1] || "",
+    fileId: row[2] || "",
+    questionSnapshot: row[3] || "",
+    reason: row[4] || "",
+    note: row[5] || "",
+    reportedBy: row[6] || "",
+    reportedAt: row[7] || "",
+    status: row[8] || "open"
   };
 }
 
@@ -3045,6 +3101,111 @@ function listWeeklySets(p) {
   return { success: true, sets };
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   QUESTION REPORTS — deliberately separate from the existing "Flag"
+   feature, which only ever meant "remind me to review this question
+   later" (a personal study tool, tracked entirely client-side, never
+   sent to the backend). This is specifically for "something about
+   this question is actually wrong" — a content-quality signal a
+   student sends TO the admin, not a self-reminder.
+   ═══════════════════════════════════════════════════════════════ */
+
+// Requires the same proof-of-identity as saveProgress/getProgress — a
+// valid session token — so a report can't be filed by a logged-out
+// visitor, and reportedBy reflects a real username rather than
+// whatever the client claims.
+function reportQuestion(p) {
+  const username = String(p.username || "").trim();
+  if (!username) return { success: false, error: "Username required." };
+  const userSheet = getUsersSheet_();
+  const userFound = findUserRow_(userSheet, username);
+  if (!userFound) return { success: false, error: "User not found." };
+  if (!verifyUserToken_(userFound, p.token)) {
+    return { success: false, error: "Session expired. Please log in again.", sessionInvalid: true };
+  }
+
+  const uid = String(p.uid || "").trim();
+  const reason = String(p.reason || "").trim();
+  const note = String(p.note || "").trim().slice(0, 500); // generous but bounded — this is a short note, not a support ticket
+  const questionSnapshot = String(p.questionSnapshot || "").trim().slice(0, 1000);
+  if (!uid) return { success: false, error: "Missing question reference." };
+  if (!["wrong_answer", "unclear", "typo", "other"].includes(reason)) {
+    return { success: false, error: "Invalid report reason." };
+  }
+
+  const m = uid.match(/^(.+)_(\d+)$/);
+  const fileId = m ? m[1] : uid;
+
+  return withLock_(() => {
+    const sheet = getQReportsSheet_();
+    // One open report per (uid, reporter) is enough — a student
+    // mashing the report button repeatedly on the same question
+    // shouldn't create duplicate rows an admin then has to de-dupe
+    // manually. A DIFFERENT student reporting the same question is a
+    // separate, valuable signal (multiple independent reports on one
+    // question is itself informative), so this only dedupes per-user.
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][1]) === uid && String(data[i][6]) === username && String(data[i][8]) === "open") {
+        return { success: true, message: "You've already reported this question — it's in the queue for review." };
+      }
+    }
+    const id = Utilities.getUuid();
+    sheet.appendRow([id, uid, fileId, questionSnapshot, reason, note, username, new Date().toISOString(), "open"]);
+    return { success: true, message: "Thanks — this has been sent for review." };
+  });
+}
+
+function adminListQuestionReports(p) {
+  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const sheet = getQReportsSheet_();
+  const data = sheet.getDataRange().getValues();
+  const reports = [];
+  for (let i = 1; i < data.length; i++) reports.push(rowToQReport_(data[i]));
+  // Newest first, and open reports before resolved/dismissed ones —
+  // an admin opening this page should see what needs attention first.
+  reports.sort((a, b) => {
+    if (a.status === "open" && b.status !== "open") return -1;
+    if (a.status !== "open" && b.status === "open") return 1;
+    return new Date(b.reportedAt) - new Date(a.reportedAt);
+  });
+  return { success: true, reports };
+}
+
+function adminUpdateQuestionReportStatus(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+  const id = String(p.id || "").trim();
+  const status = String(p.status || "").trim();
+  if (!id) return { success: false, error: "id required." };
+  if (!["open", "resolved", "dismissed"].includes(status)) {
+    return { success: false, error: "Status must be open, resolved, or dismissed." };
+  }
+  return withLock_(() => {
+    const sheet = getQReportsSheet_();
+    const found = findQReportRow_(sheet, id);
+    if (!found) return { success: false, error: "Report not found." };
+    sheet.getRange(found.rowIndex, 9).setValue(status);
+    logAction_(actor, "Update Question Report", id, "Status: " + status);
+    return { success: true, id, status };
+  });
+}
+
+function adminDeleteQuestionReport(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+  const id = String(p.id || "").trim();
+  if (!id) return { success: false, error: "id required." };
+  return withLock_(() => {
+    const sheet = getQReportsSheet_();
+    const found = findQReportRow_(sheet, id);
+    if (!found) return { success: false, error: "Report not found." };
+    sheet.deleteRow(found.rowIndex);
+    logAction_(actor, "Delete Question Report", id, "");
+    return { success: true, deleted: id };
+  });
+}
+
 /**
  * Run this ONCE from the Apps Script editor if your spreadsheet already
  * existed before this update — the text-formatting fixes in
@@ -3102,7 +3263,12 @@ function fixSheetFormatting() {
   [1, 3].forEach(col => ws.getRange(2, col, maxRows, 1).setNumberFormat("@"));
   applyTableFormat_(ws, WEEKLYSET_HEADERS, "#00acc1", SpreadsheetApp.BandingTheme.CYAN, 320);
 
-  console.log("✅ Sheet formatting fixed/retrofitted on all eight sheets.");
+  const qr = getQReportsSheet_();
+  maxRows = qr.getMaxRows() - 1;
+  [1, 2, 3].forEach(col => qr.getRange(2, col, maxRows, 1).setNumberFormat("@"));
+  applyTableFormat_(qr, QREPORT_HEADERS, "#d81b60", SpreadsheetApp.BandingTheme.PINK, 340);
+
+  console.log("✅ Sheet formatting fixed/retrofitted on all nine sheets.");
   return "Sheet formatting fixed. Check View → Logs for details.";
 }
 

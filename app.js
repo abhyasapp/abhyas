@@ -1716,6 +1716,7 @@ const QUIZ = {
       document.getElementById('fc-acts').innerHTML = `
         <button class="ib ${isStarred?'bk-on':''}" onclick="QUIZ._star()" title="Bookmark" aria-label="Bookmark this question" aria-pressed="${isStarred?'true':'false'}"><i class="ph ph-star"></i></button>
         <button class="ib ${isFlagged?'fl-on':''}" onclick="QUIZ._flag()" title="Flag" aria-label="Flag this question" aria-pressed="${isFlagged?'true':'false'}"><i class="ph ph-flag"></i></button>
+        <button class="ib" onclick="QUIZ._reportCurrent()" title="Report an issue with this question" aria-label="Report an issue with this question"><i class="ph ph-warning-circle"></i></button>
         <button class="ib" onclick="SRCH.toggle()" title="Search (Ctrl+F)" aria-label="Search this question"><i class="ph ph-magnifying-glass"></i></button>
         <select class="sel-c" style="font-size:.68rem;padding:.2rem .35rem;width:auto" onchange="QUIZ._tagCurrent(this.value)">
           <option value="">🏷 Tag…</option>
@@ -1794,6 +1795,45 @@ const QUIZ = {
     const q=S.quiz.qs[S.quiz.idx];
     REV.toggle('fl', q);
     QUIZ._renderFlashcard();
+  },
+  // Deliberately separate from bookmark/flag: those are personal
+  // study reminders (never sent to the backend), this is "something
+  // about this question is actually wrong" — a content-quality signal
+  // for the admin, not a note-to-self.
+  _reportCurrent(){
+    const q = S.quiz.qs?.[S.quiz.idx];
+    if(!q){ toast('No question to report.'); return; }
+    openMod('Report an issue', `
+      <div class="sf"><label for="qr-reason">What's wrong?</label>
+        <select id="qr-reason">
+          <option value="wrong_answer">The marked answer looks wrong</option>
+          <option value="unclear">The question or options are unclear</option>
+          <option value="typo">Typo or formatting issue</option>
+          <option value="other">Something else</option>
+        </select>
+      </div>
+      <div class="sf"><label for="qr-note">Details (optional)</label><textarea id="qr-note" rows="3" placeholder="Anything that would help — e.g. which option you think is actually correct"></textarea></div>
+      <button class="btn" onclick="QUIZ._submitReport('${esc(q.uid)}')">Send Report</button>
+    `);
+  },
+  async _submitReport(uid){
+    const q = (S.quiz.qs||[]).find(x=>x.uid===uid) || S.quiz.qs?.[S.quiz.idx];
+    const reason = document.getElementById('qr-reason')?.value || 'other';
+    const note = (document.getElementById('qr-note')?.value || '').trim();
+    if(!S.user?.username || !S.user?.token){ toast('❌ Please log in again to report a question.'); return; }
+    closeMod();
+    toast('Sending report…');
+    try{
+      const r = await netFetch(`${APPS}?${qs({
+        action:'reportQuestion', username:S.user.username, token:S.user.token,
+        uid, reason, note, questionSnapshot: (q?.q||'').slice(0,1000)
+      })}`, {redirect:'follow'}, 15000);
+      const res = await r.json();
+      if(res.success) toast('✅ ' + (res.message || 'Thanks — report sent.'));
+      else toast('❌ ' + (res.error || 'Could not send report.'));
+    }catch(e){
+      toast('⚠️ Could not send report — check your connection and try again.');
+    }
   },
   _tagCurrent(tag){
     const q=S.quiz.qs[S.quiz.idx];
