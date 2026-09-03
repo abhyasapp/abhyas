@@ -1717,7 +1717,7 @@ const QUIZ = {
         <button class="ib ${isStarred?'bk-on':''}" onclick="QUIZ._star()" title="Bookmark" aria-label="Bookmark this question" aria-pressed="${isStarred?'true':'false'}"><i class="ph ph-star"></i></button>
         <button class="ib ${isFlagged?'fl-on':''}" onclick="QUIZ._flag()" title="Flag" aria-label="Flag this question" aria-pressed="${isFlagged?'true':'false'}"><i class="ph ph-flag"></i></button>
         <button class="ib" onclick="QUIZ._reportCurrent()" title="Report an issue with this question" aria-label="Report an issue with this question"><i class="ph ph-warning-circle"></i></button>
-        <button class="ib" onclick="SRCH.toggle()" title="Search (Ctrl+F)" aria-label="Search this question"><i class="ph ph-magnifying-glass"></i></button>
+        <button class="ib" onclick="SRCH.quickSearch()" title="Search (Ctrl+F)" aria-label="Search this question"><i class="ph ph-magnifying-glass"></i></button>
         <select class="sel-c" style="font-size:.68rem;padding:.2rem .35rem;width:auto" onchange="QUIZ._tagCurrent(this.value)">
           <option value="">🏷 Tag…</option>
           ${BK_TAGS.map(t=>`<option value="${t}" ${REV.getTag(q.uid)===t?'selected':''}>${t}</option>`).join('')}

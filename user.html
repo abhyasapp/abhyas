@@ -961,29 +961,52 @@ QUIZ._startTimer = function(){
 
 /* 10. Search engine */
 function _srchFill(){
-  const q=S.quiz?.qs?.[S.quiz.idx]; if(!q)return;
+  const q=S.quiz?.qs?.[S.quiz.idx]; if(!q)return '';
   const opts=(q.options||[]).map((o,i)=>String.fromCharCode(65+i)+') '+o).join('  ');
-  const inp=$('fc-srch-q'); if(inp) inp.value=(q.q+'  '+opts).trim();
+  const text=(q.q+'  '+opts).trim();
+  const inp=$('fc-srch-q'); if(inp) inp.value=text;
+  return text;
 }
 window.SRCH={
-  toggle(){
-    const p=$('fc-srch'); if(!p)return;
-    const open=p.classList.toggle('open');
-    if(open) _srchFill(); else htm('fc-srch-links','');
+  // One click: compile the current question + lettered options and
+  // search Google immediately — no "open panel, review, click Go"
+  // step required, matching how the exam-mode per-question search
+  // icon already behaves (that one always opened directly). The
+  // panel still opens and stays pre-filled with the same text
+  // afterward, purely as a visible/editable fallback — in case the
+  // automatic query wasn't quite right, or the popup got blocked —
+  // never a required step to actually search.
+  quickSearch(){
+    const p=$('fc-srch'); if(p) p.classList.add('open');
+    const text=_srchFill();
+    if(text) SRCH._openGoogle(text);
   },
+  // Re-runs the search using whatever's currently in the (editable)
+  // box — used by the panel's own Go button and the Enter key, for
+  // refining a query after the automatic first search already ran.
   go(){
     const inp=$('fc-srch-q'); if(!inp)return;
-    const q=encodeURIComponent(inp.value.trim()); if(!q){SRCH.toggle();return;}
+    const text=inp.value.trim();
+    if(!text){ SRCH.toggle(); return; }
+    SRCH._openGoogle(text);
+  },
+  _openGoogle(text){
+    const q=encodeURIComponent(text); if(!q)return;
     const url=`https://www.google.com/search?q=${q}`;
-    // Open directly — previously this only rendered a link below the search
-    // bar, so searching was Go-click → then a SECOND click on that link
-    // just to actually reach Google. One click now does it.
     const win=window.open(url,'_blank','noopener');
     // If the browser blocked the popup (win is null), or as a visible
     // fallback either way, still show the link so it's never a dead end.
     htm('fc-srch-links',
       `<a class="sl sl-g" href="${url}" target="_blank" rel="noopener"><i class="ph ph-magnifying-glass"></i> ${win?'Reopen in':'Open'} Google</a>`
     );
+  },
+  // Manual open/close WITHOUT auto-searching — no longer wired to the
+  // search icon (that's quickSearch now), kept for the panel's own
+  // dismiss behavior when the box is emptied and Go is pressed.
+  toggle(){
+    const p=$('fc-srch'); if(!p)return;
+    const open=p.classList.toggle('open');
+    if(open) _srchFill(); else htm('fc-srch-links','');
   }
 };
 
@@ -1004,7 +1027,7 @@ document.addEventListener('keydown',e=>{
     const sp=$('fc-srch');if(sp?.classList.contains('open')){sp.classList.remove('open');}
     return;
   }
-  if((e.ctrlKey||e.metaKey)&&e.key==='f'&&S.quiz?.active&&S.quiz?.mode!=='exam'){e.preventDefault();SRCH.toggle();}
+  if((e.ctrlKey||e.metaKey)&&e.key==='f'&&S.quiz?.active&&S.quiz?.mode!=='exam'){e.preventDefault();SRCH.quickSearch();}
 });
 
 /* 15. Bottom nav helpers */
