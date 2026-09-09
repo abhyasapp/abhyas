@@ -137,7 +137,7 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
 
 /* CARDS */
 .card{background:var(--c2);border-radius:var(--r3);padding:1rem 1.05rem;box-shadow:var(--ne-sm);margin-bottom:.75rem}
-.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;padding-bottom:.55rem;border-bottom:1px solid var(--b1)}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;padding-bottom:.55rem;border-bottom:1px solid var(--b1);flex-wrap:wrap;gap:.4rem}
 .card-hd h3{font-family:var(--fd);font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:.35rem}
 
 /* STAT CARDS */
@@ -184,11 +184,7 @@ tr:last-child td{border-bottom:none}
 .badge-active{background:rgba(46,125,79,.12);color:var(--grn);border:1px solid rgba(46,125,79,.3)}
 .badge-expired{background:rgba(193,67,60,.12);color:var(--ros);border:1px solid rgba(193,67,60,.3)}
 /* Small inline status tag family — same definitions as user.html's
-   .ctag/.tg/.ta/.tr, brought over here since admin.html never had its
-   own copy despite using it (Weekly Sets' Live/Scheduled/Archived
-   badges, the preview modal's "has image" indicator) — those were
-   rendering as plain unstyled text with none of the intended pill
-   shape/color until this was added. */
+   .ctag/.tg/.ta/.tr. */
 .ctag{font-size:.59rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;padding:.14rem .5rem;border-radius:20px;display:inline-flex;align-items:center;gap:.22rem}
 .tg{background:rgba(var(--grn-rgb),.11);color:var(--grn)}.ta{background:rgba(var(--amb-rgb),.13);color:var(--amb)}.tr{background:rgba(var(--ros-rgb),.11);color:var(--ros)}
 .badge-pending{background:rgba(54,139,79,.12);color:var(--amb);border:1px solid rgba(54,139,79,.3)}
@@ -200,6 +196,9 @@ tr:last-child td{border-bottom:none}
 .toolbar input,.toolbar select{background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r1);padding:.4rem .65rem;color:var(--t1);font-size:.76rem;font-family:var(--ff);outline:none}
 .toolbar input:focus,.toolbar select:focus{border-color:var(--amb);box-shadow:0 0 0 3px rgba(54,139,79,.12)}
 .toolbar input{flex:1;min-width:180px}
+.toolbar .divider{width:1px;align-self:stretch;background:var(--b1);margin:0 .1rem}
+.toolbar label.inline{display:flex;align-items:center;gap:.3rem;font-size:.68rem;color:var(--t3);font-weight:600;white-space:nowrap}
+.toolbar label.inline input[type=number],.toolbar label.inline input[type=date]{width:auto;min-width:0;padding:.35rem .5rem}
 
 /* Settings Form */
 .sf{margin-bottom:.65rem}
@@ -277,6 +276,21 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 .log-item:last-child{border-bottom:none}
 .log-time{font-size:.62rem;color:var(--t3);font-family:var(--fm)}
 .log-action{color:var(--amb);font-weight:600}
+
+/* Missed-questions result cards */
+.miss-card{background:var(--b0);border:1px solid var(--b1);border-radius:8px;padding:.6rem .7rem}
+.miss-tags{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.35rem}
+.miss-meta{font-size:.62rem;color:var(--t3);margin-top:.3rem;display:flex;flex-wrap:wrap;gap:.5rem}
+
+/* Import (device progress) module */
+.import-drop{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3rem;background:var(--c1);border:1.5px dashed var(--b2);border-radius:var(--r1);padding:1.2rem .75rem;cursor:pointer;transition:border-color var(--ease)}
+.import-drop:hover{border-color:var(--amb)}
+.import-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.import-drop .ii{font-size:1.4rem;color:var(--t3)}
+.import-result{background:var(--b0);border:1px solid var(--b1);border-radius:8px;padding:.6rem .7rem;margin-top:.6rem;font-size:.78rem}
+.import-errs{max-height:180px;overflow-y:auto;margin-top:.4rem;font-size:.7rem;font-family:var(--fm);background:var(--c1);border-radius:6px;padding:.4rem .5rem}
+.import-errs div{padding:.15rem 0;border-bottom:1px dashed var(--b1)}
+.import-errs div:last-child{border-bottom:none}
 
 /* Responsive */
 @media(max-width:600px){
@@ -378,7 +392,22 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             <h3><i class="ph ph-target"></i> Most Missed Questions</h3>
             <button class="btn-s btn-c btn-sm" onclick="MISSED.load()"><i class="ph ph-arrow-clockwise"></i> Load</button>
           </div>
-          <p style="font-size:.72rem;opacity:.65;margin-bottom:.6rem">Based on students' recent quiz activity (rolling window, not full history) — the questions most worth reviewing for clarity or correctness.</p>
+          <p style="font-size:.72rem;opacity:.65;margin-bottom:.6rem">Based on students' recent quiz activity (rolling window, not full history) — the questions most worth reviewing for clarity or correctness. Level/Chapter/Book/Subtopic filters only narrow results for attempts whose data actually carries that metadata; the wrong-rate ranking itself always works.</p>
+          <div class="toolbar" id="missed-toolbar">
+            <select id="miss-level" aria-label="Filter by level"><option value="">All Levels</option></select>
+            <select id="miss-chapter" aria-label="Filter by chapter"><option value="">All Chapters</option></select>
+            <label class="inline">From <input type="date" id="miss-from"></label>
+            <label class="inline">To <input type="date" id="miss-to"></label>
+            <label class="inline">Min attempts <input type="number" id="miss-min" value="3" min="1" style="width:4rem"></label>
+            <select id="miss-limit" aria-label="Result limit">
+              <option value="20">Top 20</option>
+              <option value="50">Top 50</option>
+              <option value="100">Top 100</option>
+            </select>
+            <button class="btn-s btn-g btn-sm" onclick="MISSED.load()"><i class="ph ph-funnel"></i> Apply</button>
+            <button class="btn-s btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="MISSED.clearFilters()">Clear</button>
+            <button class="btn-s btn-c btn-sm" onclick="MISSED.exportCSV()"><i class="ph ph-download-simple"></i> CSV</button>
+          </div>
           <div id="missed-list" style="display:flex;flex-direction:column;gap:.5rem"><p style="font-size:.8rem;opacity:.6">Click Load to fetch — this aggregates data across every student, so it's not auto-refreshed with the rest of the dashboard.</p></div>
         </div>
       </div>
@@ -484,14 +513,27 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             <button class="btn-s btn-c btn-sm" onclick="QREPORTS.load()"><i class="ph ph-arrow-clockwise"></i> Refresh</button>
           </div>
           <div class="toolbar">
+            <input type="text" id="qreports-search" placeholder="Search question text, reporter, note…" oninput="QREPORTS.debouncedFilter()">
             <select id="qreports-filter" onchange="QREPORTS.setFilter(this.value)" aria-label="Filter question reports">
               <option value="open">Open</option>
               <option value="resolved">Resolved</option>
               <option value="dismissed">Dismissed</option>
               <option value="all">All</option>
             </select>
+            <select id="qreports-chapter-filter" onchange="QREPORTS.setChapterFilter(this.value)" aria-label="Filter question reports by chapter">
+              <option value="all">All Chapters</option>
+            </select>
+            <select id="qreports-reason-filter" onchange="QREPORTS.setReasonFilter(this.value)" aria-label="Filter question reports by reason">
+              <option value="all">All Reasons</option>
+              <option value="wrong_answer">Wrong answer</option>
+              <option value="unclear">Unclear wording</option>
+              <option value="typo">Typo/formatting</option>
+              <option value="other">Other</option>
+            </select>
+            <button class="btn-s btn-c" onclick="QREPORTS.exportCSV()"><i class="ph ph-download-simple"></i> CSV</button>
           </div>
           <div id="qreports-list" style="display:flex;flex-direction:column;gap:.5rem"><p style="font-size:.8rem;opacity:.6">Click Refresh to load reports.</p></div>
+          <div class="pg" id="qr-pg"></div>
         </div>
       </div>
 
@@ -508,6 +550,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             <option value="delete_payment">Deleted Payment</option>
             <option value="update_settings">Updated Settings</option>
             <option value="login">Login</option>
+            <option value="import">Progress Import</option>
           </select>
         </div>
         <div class="card" id="logs-card">
@@ -555,6 +598,33 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           <div class="sf"><label for="adm-new-user">New Admin Username</label><input type="text" id="adm-new-user" placeholder="letters, numbers, . _ - only"></div>
           <div class="sf"><label for="adm-new-pass">New Admin Password</label><input type="password" id="adm-new-pass" placeholder="Min 6 characters"></div>
           <button class="btn-s btn-g" onclick="ADMINS.create()"><i class="ph ph-plus"></i> Add Admin</button>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><h3><i class="ph ph-upload-simple"></i> Device Progress Import</h3></div>
+          <p style="font-size:.8rem;opacity:.7;margin:0 0 .8rem">Import a student's exported study progress (from an offline device, a backup, or a support request) — always preview first to see exactly what would change before merging or replacing anything.</p>
+          <div class="sf">
+            <label for="imp-file">Export File (.json)</label>
+            <div class="import-drop">
+              <input type="file" id="imp-file" accept="application/json,.json" onchange="IMPORT.onFilePicked()">
+              <span class="ii"><i class="ph ph-file-arrow-up"></i></span>
+              <span style="font-size:.78rem;color:var(--t2)" id="imp-file-name">Drop or choose a .json export file</span>
+            </div>
+          </div>
+          <div class="sf"><label for="imp-json">…or paste the JSON directly</label><textarea id="imp-json" placeholder='{"records":[{"username":"alice","data":{...}}]}' style="min-height:100px;font-family:var(--fm);font-size:.72rem"></textarea></div>
+          <div class="sf">
+            <label for="imp-mode">Mode</label>
+            <select id="imp-mode">
+              <option value="preview">Preview only (no changes)</option>
+              <option value="merge">Merge with existing progress</option>
+              <option value="replace">Replace existing progress (backs up first)</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <button class="btn-s btn-c" onclick="IMPORT.run()"><i class="ph ph-magnifying-glass"></i> Preview / Run Import</button>
+            <button class="btn-s btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="IMPORT.clear()">Clear</button>
+          </div>
+          <div id="imp-result"></div>
         </div>
       </div>
     </div>
@@ -605,6 +675,12 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 
 <script src="version.js"></script>
 <script src="shared.js"></script>
+<!-- Needed for QREPORTS.chapterFor()/MISSED's chapter list — the same
+     fileId → chapter mapping user.html already uses, reused here rather
+     than duplicated so the mapping can never drift between what
+     students see and what the admin filters show. Read-only use here:
+     nothing in this file writes to ChapterData/DRIVE. -->
+<script src="chapters-data.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURATION — Replace with your GAS Web App URL
@@ -618,7 +694,7 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbyZLZxf6VKNiMfhY6memPTK
 const ADMIN = {
   creds: null,
   data: {users:[], payments:[], settings:{}, logs:[]},
-  state: {uPage:1, pPage:1, lPage:1, uPerPage:15, pPerPage:15, lPerPage:20},
+  state: {uPage:1, pPage:1, lPage:1, qrPage:1, uPerPage:15, pPerPage:15, lPerPage:20, qrPerPage:10},
 
   // Leaving admin mode (main Logout, 'Back to User Login', 'User
   // Portal') always clears the admin's own credentials. It also
@@ -821,6 +897,13 @@ const ADMIN = {
     box.appendChild(t); setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),220)},duration);
   },
 
+  // Shared by every module's "Export CSV" — one escaping rule so a
+  // stray comma/quote in a name or note can never silently shift columns.
+  toCSV(headers, rows) {
+    const esc = v => `"${String(v == null ? '' : v).replace(/"/g,'""')}"`;
+    return [headers.map(esc).join(','), ...rows.map(r => r.map(esc).join(','))].join('\n');
+  },
+
   exportUsers() {
     // Exports whatever the Users tab's search box + status filter are
     // currently showing, not the full account list — an admin who
@@ -830,22 +913,16 @@ const ADMIN = {
     const rows = (typeof USERS !== 'undefined' && document.getElementById('u-search')) ? USERS._visibleRows() : ADMIN.data.users;
     if (!rows.length) return this.toast('No users to export');
     const headers = ['Username','Name','Email','Mobile','Status','Created','Access'];
-    const csv = [headers.join(',')];
-    rows.forEach(u => {
-      csv.push([u.username, u.name||'', u.email||'', u.mobile||'', u.status, u.createdAt||'', u.permanentAccess?'Permanent':u.status].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
-    });
-    this.downloadCSV(csv.join('\n'), `users_export_${rows.length===ADMIN.data.users.length?'all':'filtered'}.csv`);
+    const csv = this.toCSV(headers, rows.map(u => [u.username, u.name||'', u.email||'', u.mobile||'', u.status, u.createdAt||'', u.permanentAccess?'Permanent':u.status]));
+    this.downloadCSV(csv, `users_export_${rows.length===ADMIN.data.users.length?'all':'filtered'}.csv`);
   },
 
   exportPayments() {
     const rows = (typeof PAYMENTS !== 'undefined' && document.getElementById('p-search')) ? PAYMENTS._visibleRows() : ADMIN.data.payments;
     if (!rows.length) return this.toast('No payments to export');
     const headers = ['Username','Name','TXN ID','Amount','Status','Submitted','Remarks'];
-    const csv = [headers.join(',')];
-    rows.forEach(p => {
-      csv.push([p.username, p.name||'', p.txId, ADMIN.data.settings.paymentAmount||100, p.status, p.submittedAt||'', p.remarks||''].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
-    });
-    this.downloadCSV(csv.join('\n'), `payments_export_${rows.length===ADMIN.data.payments.length?'all':'filtered'}.csv`);
+    const csv = this.toCSV(headers, rows.map(p => [p.username, p.name||'', p.txId, ADMIN.data.settings.paymentAmount||100, p.status, p.submittedAt||'', p.remarks||'']));
+    this.downloadCSV(csv, `payments_export_${rows.length===ADMIN.data.payments.length?'all':'filtered'}.csv`);
   },
 
   downloadCSV(content, filename) {
@@ -878,6 +955,50 @@ const ADMIN = {
         setTimeout(() => ADMIN.logout(), 2000);
       } else throw new Error(res.error);
     } catch(e) { ADMIN.toast('❌ ' + e.message); }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// CHAPTER LOOKUP — shared by MISSED and QREPORTS so both filter UIs
+// use the exact same fileId → level/chapter mapping as the student
+// app (chapters-data.js), instead of each maintaining its own.
+// ═══════════════════════════════════════════════════════════════
+const CHAPTERS = {
+  _map: null, // fid -> {level, chapter, label}
+  _levels: null,
+  _chaptersByLevel: null,
+
+  _build() {
+    if (this._map) return;
+    this._map = new Map();
+    this._levels = new Set();
+    this._chaptersByLevel = new Map(); // level -> Set(chapter)
+    if (typeof ChapterData !== 'undefined') {
+      ChapterData.allFileRefs().forEach(ref => {
+        const level = ChapterData.levelLabel(ref.lv);
+        const chapter = ChapterData.chapterName(ref.lv, ref.ch);
+        this._map.set(ref.fid, { level, chapter, label: `${level} — ${chapter}` });
+        this._levels.add(level);
+        if (!this._chaptersByLevel.has(level)) this._chaptersByLevel.set(level, new Set());
+        this._chaptersByLevel.get(level).add(chapter);
+      });
+    }
+  },
+  labelFor(fileId) {
+    this._build();
+    return this._map.get(fileId)?.label || (fileId === 'local' ? 'Local File' : 'Unknown / Weekly Set');
+  },
+  infoFor(fileId) {
+    this._build();
+    return this._map.get(fileId) || null;
+  },
+  allLevels() {
+    this._build();
+    return [...this._levels].sort();
+  },
+  allChapters() {
+    this._build();
+    return [...new Set([...this._map.values()].map(v => v.chapter))].sort();
   }
 };
 
@@ -937,22 +1058,55 @@ const ADMINS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// WEEKLY SETS — upload now, unlock for students on a scheduled date
-// ═══════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════
 // MOST MISSED QUESTIONS — aggregate wrong-rate across all students,
 // resolved to readable text on-demand (only for the top results
-// actually shown, never server-side for the whole question bank).
+// actually shown, never server-side for the whole question bank),
+// with level/chapter/date/min-attempts filters wired to the backend's
+// filtered adminMostMissedQuestions.
 // ═══════════════════════════════════════════════════════════════
 const MISSED = {
+  lastResults: [],
+  _filtersBuilt: false,
+
+  _buildFilterOptions() {
+    if (this._filtersBuilt) return;
+    this._filtersBuilt = true;
+    const levelSel = document.getElementById('miss-level');
+    const chapterSel = document.getElementById('miss-chapter');
+    CHAPTERS.allLevels().forEach(l => levelSel.insertAdjacentHTML('beforeend', `<option value="${escAttrJs(l)}">${esc(l)}</option>`));
+    CHAPTERS.allChapters().forEach(c => chapterSel.insertAdjacentHTML('beforeend', `<option value="${escAttrJs(c)}">${esc(c)}</option>`));
+  },
+
+  clearFilters() {
+    document.getElementById('miss-level').value = '';
+    document.getElementById('miss-chapter').value = '';
+    document.getElementById('miss-from').value = '';
+    document.getElementById('miss-to').value = '';
+    document.getElementById('miss-min').value = '3';
+    document.getElementById('miss-limit').value = '20';
+    this.load();
+  },
+
   async load() {
+    this._buildFilterOptions();
     const box = document.getElementById('missed-list');
     box.innerHTML = '<p style="font-size:.8rem;opacity:.7"><i class="ph ph-circle-notch" style="animation:spin 1s linear infinite"></i> Aggregating…</p>';
+
+    const params = {
+      level: document.getElementById('miss-level').value,
+      chapter: document.getElementById('miss-chapter').value,
+      dateFrom: document.getElementById('miss-from').value,
+      dateTo: document.getElementById('miss-to').value,
+      minAttempts: document.getElementById('miss-min').value || 3,
+      limit: document.getElementById('miss-limit').value || 20
+    };
+
     try {
-      const res = await ADMIN.post('adminMostMissedQuestions', { minAttempts: 3, limit: 20 });
+      const res = await ADMIN.post('adminMostMissedQuestions', params);
       if (!res.success) throw new Error(res.error || 'Failed to load');
+      this.lastResults = res.results;
       if (!res.results.length) {
-        box.innerHTML = `<p style="font-size:.8rem;opacity:.6">No questions with ${res.minAttempts}+ recent attempts yet — check back once more students have been active.</p>`;
+        box.innerHTML = `<p style="font-size:.8rem;opacity:.6">No questions with ${res.minAttempts}+ recent attempts match these filters yet. If you set a Level/Chapter filter, remember it only matches attempts whose data already carries that metadata — try clearing filters if you expect more.</p>`;
         return;
       }
 
@@ -974,7 +1128,14 @@ const MISSED = {
         const qs = fileCache[r.fileId];
         const q = (qs && r.index != null) ? qs[r.index] : null;
         const text = q ? (q.q || q.question || q.Question || q.stem || q.ques || q.text) : null;
-        return `<div style="background:var(--b0);border:1px solid var(--b1);border-radius:8px;padding:.6rem .7rem">
+        const chapterLabel = r.chapter || CHAPTERS.labelFor(r.fileId);
+        const tags = [
+          r.level ? `<span class="ctag ta">${esc(r.level)}</span>` : '',
+          chapterLabel ? `<span class="ctag" style="background:rgba(43,108,176,.12);color:var(--sky)"><i class="ph ph-book-open"></i> ${esc(chapterLabel)}</span>` : '',
+          r.book ? `<span class="ctag tg">${esc(r.book)}</span>` : '',
+          r.subtopic ? `<span class="ctag" style="background:var(--b0);color:var(--t3)">${esc(r.subtopic)}</span>` : ''
+        ].filter(Boolean).join('');
+        return `<div class="miss-card">
           <div style="display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start">
             <div style="font-size:.8rem;flex:1;min-width:0">${text ? esc(String(text).slice(0,220)) : `<span style="opacity:.5;font-family:var(--fm)">${esc(r.uid)}</span> <span style="opacity:.5">(couldn't load question text)</span>`}</div>
             <div style="flex-shrink:0;text-align:right">
@@ -982,11 +1143,24 @@ const MISSED = {
               <div style="font-size:.62rem;opacity:.6">${r.wrong}/${r.total} wrong</div>
             </div>
           </div>
+          ${tags ? `<div class="miss-tags">${tags}</div>` : ''}
+          <div class="miss-meta">
+            <span><i class="ph ph-users"></i> ${r.uniqueStudents ?? '—'} student${r.uniqueStudents===1?'':'s'}</span>
+            <span><i class="ph ph-check-circle"></i> ${r.accuracy ?? (100 - r.wrongRate)}% accuracy</span>
+            ${r.lastAttemptAt ? `<span><i class="ph ph-clock"></i> Last attempt ${new Date(r.lastAttemptAt).toLocaleDateString()}</span>` : ''}
+          </div>
         </div>`;
       }).join('');
     } catch (e) {
       box.innerHTML = `<p style="font-size:.8rem;color:var(--ros)">❌ ${esc(e.message)}</p>`;
     }
+  },
+
+  exportCSV() {
+    if (!this.lastResults.length) return ADMIN.toast('Load results first');
+    const headers = ['UID','Level','Chapter','Book','Subtopic','Wrong','Total','WrongRate%','Accuracy%','UniqueStudents','LastAttempt'];
+    const rows = this.lastResults.map(r => [r.uid, r.level||'', r.chapter||CHAPTERS.labelFor(r.fileId)||'', r.book||'', r.subtopic||'', r.wrong, r.total, r.wrongRate, r.accuracy ?? (100-r.wrongRate), r.uniqueStudents ?? '', r.lastAttemptAt||'']);
+    ADMIN.downloadCSV(ADMIN.toCSV(headers, rows), 'most_missed_questions.csv');
   }
 };
 
@@ -1206,15 +1380,29 @@ const WEEKLYSETS = {
 
 // ═══════════════════════════════════════════════════════════════
 // QUESTION REPORTS — content-quality issues students flag on
-// specific questions, separate from their personal bookmarks/flags
+// specific questions, separate from their personal bookmarks/flags.
+// Filters: status, chapter (via CHAPTERS), reason, and free-text
+// search — plus pagination and CSV export.
 // ═══════════════════════════════════════════════════════════════
 const QREPORTS = {
   all: [],
   filter: 'open',
+  chapterFilter: 'all',
+  reasonFilter: 'all',
+  searchTerm: '',
+  debounceTimer: null,
+  REASON_LABEL: {wrong_answer:'Wrong answer', unclear:'Unclear wording', typo:'Typo/formatting', other:'Other'},
 
-  setFilter(status) {
-    this.filter = status;
-    this.render(this.all);
+  setFilter(status) { this.filter = status; ADMIN.state.qrPage = 1; this.render(this.all); },
+  setChapterFilter(ch) { this.chapterFilter = ch; ADMIN.state.qrPage = 1; this.render(this.all); },
+  setReasonFilter(reason) { this.reasonFilter = reason; ADMIN.state.qrPage = 1; this.render(this.all); },
+  debouncedFilter() {
+    clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => {
+      this.searchTerm = document.getElementById('qreports-search').value.toLowerCase();
+      ADMIN.state.qrPage = 1;
+      this.render(this.all);
+    }, 300);
   },
 
   async load() {
@@ -1227,25 +1415,80 @@ const QREPORTS = {
     ADMIN.hideLoading();
   },
 
+  // fileId -> "Level — Chapter" label, via the shared CHAPTERS lookup
+  // (built once from chapters-data.js, same mapping user.html itself
+  // uses — never duplicated/maintained separately here).
+  chapterFor(fileId) { return CHAPTERS.labelFor(fileId); },
+
+  // Rebuilds the chapter <select> options from whatever chapters are
+  // actually represented in the currently loaded reports — not the
+  // full chapters-data.js list — so an admin never sees 80 chapters
+  // with zero reports cluttering the dropdown. Preserves the current
+  // selection across reloads when that chapter is still present.
+  _renderChapterOptions() {
+    const sel = document.getElementById('qreports-chapter-filter');
+    if (!sel) return;
+    const chapters = [...new Set(this.all.map(r => this.chapterFor(r.fileId)))].sort();
+    const current = this.chapterFilter;
+    sel.innerHTML = '<option value="all">All Chapters</option>' +
+      chapters.map(c => `<option value="${escAttrJs(c)}" ${c===current?'selected':''}>${esc(c)}</option>`).join('');
+    // If the previously selected chapter no longer appears in the
+    // current report set (e.g. after a delete), fall back to "all"
+    // rather than silently filtering to an option that's gone.
+    if (current !== 'all' && !chapters.includes(current)) {
+      this.chapterFilter = 'all';
+      sel.value = 'all';
+    }
+  },
+
+  _visibleRows() {
+    let shown = this.filter === 'all' ? this.all : this.all.filter(r => r.status === this.filter);
+    if (this.chapterFilter !== 'all') shown = shown.filter(r => this.chapterFor(r.fileId) === this.chapterFilter);
+    if (this.reasonFilter !== 'all') shown = shown.filter(r => r.reason === this.reasonFilter);
+    if (this.searchTerm) {
+      const q = this.searchTerm;
+      shown = shown.filter(r =>
+        (r.questionSnapshot||'').toLowerCase().includes(q) ||
+        (r.note||'').toLowerCase().includes(q) ||
+        (r.reportedBy||'').toLowerCase().includes(q)
+      );
+    }
+    return shown;
+  },
+
   render(reports) {
     this.all = reports || [];
+    this._renderChapterOptions();
     const box = document.getElementById('qreports-list');
     if (!box) return;
-    const shown = this.filter === 'all' ? this.all : this.all.filter(r => r.status === this.filter);
+    const shown = this._visibleRows();
     if (!shown.length) {
-      box.innerHTML = `<p style="font-size:.8rem;opacity:.6">No ${this.filter === 'all' ? '' : this.filter + ' '}reports.</p>`;
+      const parts = [];
+      if (this.filter !== 'all') parts.push(this.filter);
+      if (this.chapterFilter !== 'all') parts.push(`in ${this.chapterFilter}`);
+      if (this.reasonFilter !== 'all') parts.push(`reason: ${this.REASON_LABEL[this.reasonFilter]||this.reasonFilter}`);
+      if (this.searchTerm) parts.push(`matching "${this.searchTerm}"`);
+      box.innerHTML = `<p style="font-size:.8rem;opacity:.6">No ${parts.join(' ')} reports.</p>`;
+      document.getElementById('qr-pg').innerHTML = '';
       return;
     }
-    const reasonLabel = {wrong_answer:'Wrong answer', unclear:'Unclear wording', typo:'Typo/formatting', other:'Other'};
-    box.innerHTML = shown.map(r => {
+
+    const perPage = ADMIN.state.qrPerPage;
+    const totalPages = Math.ceil(shown.length / perPage) || 1;
+    if (ADMIN.state.qrPage > totalPages) ADMIN.state.qrPage = totalPages;
+    const start = (ADMIN.state.qrPage - 1) * perPage;
+    const pageRows = shown.slice(start, start + perPage);
+
+    box.innerHTML = pageRows.map(r => {
       const badge = r.status === 'open'
         ? '<span class="ctag" style="background:var(--ok-bg);color:var(--grn)">Open</span>'
         : r.status === 'resolved'
           ? '<span class="ctag" style="background:var(--b0);color:var(--t3)">Resolved</span>'
           : '<span class="ctag" style="background:var(--b0);color:var(--t3)">Dismissed</span>';
+      const chapterTag = `<span class="ctag ta" style="margin-left:.3rem"><i class="ph ph-book-open"></i> ${esc(this.chapterFor(r.fileId))}</span>`;
       return `<div style="background:var(--b0);border:1px solid var(--b1);border-radius:8px;padding:.6rem .7rem">
         <div style="display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start;margin-bottom:.4rem">
-          <div style="font-size:.68rem;font-weight:700;color:var(--amb)">${esc(reasonLabel[r.reason] || r.reason)} ${badge}</div>
+          <div style="font-size:.68rem;font-weight:700;color:var(--amb)">${esc(this.REASON_LABEL[r.reason] || r.reason)} ${badge}${chapterTag}</div>
           <div style="font-size:.65rem;opacity:.6;flex-shrink:0">${esc(r.reportedBy)} · ${new Date(r.reportedAt).toLocaleDateString()}</div>
         </div>
         <div style="font-size:.8rem;margin-bottom:${r.note ? '.35rem' : '.5rem'}">${esc(r.questionSnapshot || '(question text not captured)')}</div>
@@ -1258,6 +1501,17 @@ const QREPORTS = {
         </div>
       </div>`;
     }).join('');
+    PAGINATION.render('qr-pg', ADMIN.state.qrPage, totalPages, 'QREPORTS.goPage');
+  },
+
+  goPage(p) { ADMIN.state.qrPage = p; this.render(this.all); },
+
+  exportCSV() {
+    const rows = this._visibleRows();
+    if (!rows.length) return ADMIN.toast('No reports to export');
+    const headers = ['ID','Status','Reason','Chapter','Question','Note','ReportedBy','ReportedAt'];
+    const csv = ADMIN.toCSV(headers, rows.map(r => [r.id, r.status, this.REASON_LABEL[r.reason]||r.reason, this.chapterFor(r.fileId), r.questionSnapshot||'', r.note||'', r.reportedBy, r.reportedAt]));
+    ADMIN.downloadCSV(csv, `question_reports_${rows.length===this.all.length?'all':'filtered'}.csv`);
   },
 
   async setStatus(id, status) {
@@ -1281,6 +1535,77 @@ const QREPORTS = {
         ADMIN.toast('✅ Report deleted');
       } else ADMIN.toast('❌ ' + (res.error || 'Delete failed'));
     } catch(e) { ADMIN.toast('❌ ' + e.message); }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// DEVICE PROGRESS IMPORT — preview/merge/replace a student's
+// exported progress against adminImportProgress/adminImportStatus.
+// Always defaults to "preview" so an admin sees exactly what a merge
+// or replace WOULD do before committing to it.
+// ═══════════════════════════════════════════════════════════════
+const IMPORT = {
+  lastPayload: null,
+
+  onFilePicked() {
+    const input = document.getElementById('imp-file');
+    const nameEl = document.getElementById('imp-file-name');
+    const file = input.files && input.files[0];
+    if (!file) return;
+    nameEl.textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = e => { document.getElementById('imp-json').value = e.target.result; };
+    reader.onerror = () => ADMIN.toast('❌ Could not read that file');
+    reader.readAsText(file);
+  },
+
+  clear() {
+    document.getElementById('imp-file').value = '';
+    document.getElementById('imp-file-name').textContent = 'Drop or choose a .json export file';
+    document.getElementById('imp-json').value = '';
+    document.getElementById('imp-mode').value = 'preview';
+    document.getElementById('imp-result').innerHTML = '';
+  },
+
+  async run() {
+    const raw = document.getElementById('imp-json').value.trim();
+    const mode = document.getElementById('imp-mode').value;
+    const resultBox = document.getElementById('imp-result');
+    if (!raw) return ADMIN.toast('❌ Paste or choose a JSON export first');
+    let payload;
+    try { payload = JSON.parse(raw); } catch (e) { return ADMIN.toast('❌ That\u2019s not valid JSON'); }
+
+    if (mode !== 'preview' && !confirm(
+      mode === 'replace'
+        ? 'REPLACE will overwrite existing progress for every user in this file (a backup is kept automatically). Continue?'
+        : 'MERGE will combine this data into each user\u2019s existing progress. Continue?'
+    )) return;
+
+    ADMIN.showLoading(mode === 'preview' ? 'Validating…' : 'Importing…');
+    try {
+      const res = await ADMIN.post('adminImportProgress', { mode, payload: JSON.stringify(payload) });
+      if (!res.success) throw new Error(res.error || 'Import failed');
+      const errs = res.errors || [];
+      resultBox.innerHTML = `<div class="import-result">
+        <div><strong>${res.preview ? 'Preview' : (mode==='replace'?'Replaced':'Merged')}</strong> — importId <span class="mono">${esc(res.importId)}</span></div>
+        <div style="margin-top:.3rem;display:flex;gap:.8rem;flex-wrap:wrap;font-size:.74rem">
+          <span>Received: <strong>${res.recordsReceived ?? '—'}</strong></span>
+          <span style="color:var(--grn)">Accepted: <strong>${res.recordsAccepted ?? '—'}</strong></span>
+          <span style="color:var(--ros)">Skipped: <strong>${res.recordsSkipped ?? 0}</strong></span>
+        </div>
+        ${errs.length ? `<div class="import-errs">${errs.slice(0,50).map(e => `<div>${esc(e.username||'(row '+e.index+')')}: ${esc(e.error)}</div>`).join('')}${errs.length>50?`<div>…and ${errs.length-50} more</div>`:''}</div>` : ''}
+        ${res.preview ? `<div style="margin-top:.5rem"><button class="btn-s btn-a btn-sm" onclick="document.getElementById('imp-mode').value='merge'">Looks good — switch to Merge</button></div>` : ''}
+      </div>`;
+      if (!res.preview) {
+        ADMIN.toast('✅ Import ' + (mode==='replace'?'replaced':'merged') + ' ' + res.recordsAccepted + ' record(s)');
+        ADMIN.refresh(['logs']);
+      } else {
+        ADMIN.toast('👁️ Preview complete — nothing was changed yet');
+      }
+    } catch (e) {
+      resultBox.innerHTML = `<div class="import-result" style="color:var(--ros)">❌ ${esc(e.message)}</div>`;
+    }
+    ADMIN.hideLoading();
   }
 };
 
@@ -1937,7 +2262,7 @@ const LOGS = {
     const f = document.getElementById('l-filter').value;
     const rows = ADMIN.data.logs.filter(l => {
       const match = !q || (l.admin||'').toLowerCase().includes(q) || (l.target||'').toLowerCase().includes(q) || (l.action||'').toLowerCase().includes(q);
-      const action = f==='all' ? true : (l.action||'').includes(f);
+      const action = f==='all' ? true : (l.action||'').toLowerCase().includes(f);
       return match && action;
     });
     this.renderPage(rows);
@@ -1992,8 +2317,10 @@ document.addEventListener('keydown', e => {
     if (e.key === '1') { e.preventDefault(); UI.nav('dashboard'); }
     if (e.key === '2') { e.preventDefault(); UI.nav('users'); }
     if (e.key === '3') { e.preventDefault(); UI.nav('payments'); }
-    if (e.key === '4') { e.preventDefault(); UI.nav('logs'); }
-    if (e.key === '5') { e.preventDefault(); UI.nav('settings'); }
+    if (e.key === '4') { e.preventDefault(); UI.nav('weeklysets'); }
+    if (e.key === '5') { e.preventDefault(); UI.nav('qreports'); }
+    if (e.key === '6') { e.preventDefault(); UI.nav('logs'); }
+    if (e.key === '7') { e.preventDefault(); UI.nav('settings'); }
   }
   if (e.key === 'Escape') {
     MODAL.close('review'); MODAL.close('user'); MODAL.close('pwd');
