@@ -303,6 +303,12 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 .maint-row .maint-input{display:flex;flex-direction:column;gap:.15rem}
 .maint-row .maint-input label{font-size:.55rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--t3)}
 .maint-row .maint-input input{background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r1);padding:.4rem .55rem;color:var(--t1);font-size:.78rem;font-family:var(--fm);outline:none;width:100px}
+@media(max-width:520px){
+  .maint-row{flex-direction:column;align-items:stretch}
+  .maint-row .maint-input{flex-direction:row;align-items:center;justify-content:space-between}
+  .maint-row .maint-input input{width:120px}
+  .maint-row button{width:100%}
+}
 
 /* Responsive */
 @media(max-width:600px){
@@ -311,6 +317,17 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
   .toolbar input{min-width:100px}
 }
 </style>
+<!-- ═══════════════════════════════════════════════════════════════
+     v1.02 changelog (admin.html):
+       - Backend version indicator in topbar (silent, non-blocking).
+       - New "Trials Ending Soon" dashboard card.
+       - Focus trap on every modal — Tab no longer escapes to the page
+         underneath.
+       - New "Revoke public sharing on old screenshots" maintenance
+         action.
+       - Mobile layout for the Data Maintenance rows.
+       - Escape now closes the weekly-set preview modal (was missing).
+     ═══════════════════════════════════════════════════════════════ -->
 <base target="_blank">
 </head>
 <body>
@@ -350,6 +367,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
     </div>
     <div class="tb-r">
       <div style="font-size:.68rem;color:var(--t3);font-weight:600;margin-right:.4rem" id="admin-name">admin</div>
+      <span id="backend-version" style="font-size:.6rem;color:var(--t3);font-family:var(--fm);margin-right:.3rem;opacity:.7" title="Deployed backend version"></span>
       <button class="tb-btn" onclick="ADMIN.refresh()" title="Refresh" aria-label="Refresh"><i class="ph ph-arrow-clockwise"></i></button>
       <button class="tb-btn" onclick="UI.nav('logs')" title="Activity Logs" aria-label="Activity logs"><i class="ph ph-clipboard-text"></i></button>
       <button class="tb-btn danger" onclick="ADMIN.logout()" title="Logout">⏻</button>
@@ -397,6 +415,22 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             <button class="btn-s btn-c" onclick="ADMIN.exportPayments()"><i class="ph ph-download-simple"></i> Export Payments CSV</button>
             <button class="btn-s btn-r" onclick="ADMIN.changePassword()"><i class="ph ph-lock-key"></i> Change Password</button>
           </div>
+        </div>
+
+        <div class="card" id="card-expiring">
+          <div class="card-hd">
+            <h3><i class="ph ph-hourglass-medium"></i> Trials Ending Soon</h3>
+            <div style="display:flex;gap:.3rem;align-items:center">
+              <select id="exp-hours" onchange="EXPIRING.load()" aria-label="Trial expiry window" style="font-size:.7rem;padding:.3rem .45rem;background:var(--c1);border:1px solid var(--b1);border-radius:6px;color:var(--t1);font-family:var(--ff)">
+                <option value="6">Next 6h</option>
+                <option value="24" selected>Next 24h</option>
+                <option value="72">Next 3 days</option>
+                <option value="168">Next 7 days</option>
+              </select>
+              <button class="btn-s btn-c btn-sm" onclick="EXPIRING.load()" aria-label="Refresh expiring trials"><i class="ph ph-arrow-clockwise"></i></button>
+            </div>
+          </div>
+          <div id="expiring-list"><p style="font-size:.78rem;opacity:.6">Loading…</p></div>
         </div>
 
         <div class="card">
@@ -566,6 +600,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             <option value="clear progress backups">Clear Backups</option>
             <option value="prune progress backups">Prune Backups</option>
             <option value="trim logs">Trim Logs</option>
+            <option value="revoke screenshot sharing">Revoke Screenshot Sharing</option>
           </select>
         </div>
         <div class="card" id="logs-card">
@@ -644,14 +679,15 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 
         <!-- ═══════════════════════════════════════════════════════
              DATA MAINTENANCE — housekeeping for the sheets that grow
-             forever (ProgressBackups, Logs). Every action here is
-             logged to Activity Logs, and the destructive ones ask for
+             forever (ProgressBackups, Logs), plus the one-time
+             screenshot-sharing fixup. Every action here is logged to
+             Activity Logs, and the destructive ones ask for
              confirmation with an exact count of what's about to be
              removed.
              ═══════════════════════════════════════════════════════ -->
         <div class="card">
           <div class="card-hd"><h3><i class="ph ph-broom"></i> Data Maintenance</h3></div>
-          <p style="font-size:.8rem;opacity:.7;margin:0 0 .8rem">Housekeeping for the two sheets that grow forever — ProgressBackups (created by "replace"-mode progress imports) and Activity Logs. All three actions are logged with the acting admin's name.</p>
+          <p style="font-size:.8rem;opacity:.7;margin:0 0 .8rem">Housekeeping for the two sheets that grow forever — ProgressBackups (created by "replace"-mode progress imports) and Activity Logs. All actions are logged with the acting admin's name.</p>
 
           <div class="maint-row">
             <div class="maint-info">
@@ -673,7 +709,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             <button class="btn-s btn-r" onclick="MAINTENANCE.clearAllBackups()"><i class="ph ph-trash"></i> Delete All</button>
           </div>
 
-          <div class="maint-row" style="margin-bottom:0">
+          <div class="maint-row">
             <div class="maint-info">
               <div class="maint-title">Trim activity logs</div>
               <div class="maint-desc">Keeps the most recent N log rows, deletes the rest. The admin UI only ever shows the latest 1000 anyway, so old rows aren't visible without this.</div>
@@ -683,6 +719,14 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
               <input type="number" id="maint-logs-keep" value="5000" min="100" max="100000">
             </div>
             <button class="btn-s btn-a" onclick="MAINTENANCE.trimLogs()"><i class="ph ph-scissors"></i> Trim</button>
+          </div>
+
+          <div class="maint-row" style="margin-bottom:0">
+            <div class="maint-info">
+              <div class="maint-title">Revoke public sharing on old screenshots</div>
+              <div class="maint-desc">Screenshots uploaded before v1.02 were given "Anyone with the link" Drive access. They're no longer uploaded that way, but existing files still are — this pulls each one back to private. The admin panel keeps working: it reads them through the authenticated DriveApp proxy, which ignores sharing settings.</div>
+            </div>
+            <button class="btn-s btn-a" onclick="MAINTENANCE.revokeScreenshotSharing()"><i class="ph ph-lock-key"></i> Revoke Sharing</button>
           </div>
         </div>
       </div>
@@ -816,7 +860,22 @@ const ADMIN = {
     document.getElementById('gate').style.display = 'none';
     document.getElementById('app').classList.add('on');
     document.getElementById('admin-name').textContent = this.creds?.user || 'admin';
+    this.fetchVersion();
     this.refresh();
+  },
+
+  // Read-only version probe. Cheap (one GET, one tiny JSON), non-blocking,
+  // silent on failure — if the network's flaky the admin just doesn't see
+  // the version string, which is fine. Exists so a support conversation
+  // can start with "what version are you on" without either side having
+  // to guess. Backend surfaces this via its own `ping` action.
+  async fetchVersion() {
+    try {
+      const r = await fetch(GAS_URL + "?action=ping");
+      const data = await r.json();
+      const el = document.getElementById('backend-version');
+      if (el && data.success && data.version) el.textContent = 'v' + data.version;
+    } catch(e) { /* non-critical */ }
   },
 
   logout() {
@@ -907,7 +966,16 @@ const ADMIN = {
       const failures = [];
       want.forEach((k, i) => {
         const r = results[i];
-        if (k === 'stats') { if (r.success) this.renderStats(r.stats); else failures.push('stats: '+(r.error||'unknown')); }
+        if (k === 'stats') {
+          if (r.success) {
+            this.renderStats(r.stats);
+            // Only fetch expiring-trials when the dashboard is the
+            // current view — no point hitting the endpoint for an admin
+            // who's sitting on the Payments tab, where the result would
+            // just render into a hidden card anyway.
+            if (document.getElementById('view-dashboard')?.classList.contains('on')) EXPIRING.load();
+          } else failures.push('stats: ' + (r.error || 'unknown'));
+        }
         else if (k === 'users') { if (r.success) { this.data.users = r.users; USERS.render(); } else failures.push('users: '+(r.error||'unknown')); }
         else if (k === 'payments') { if (r.success) { this.data.payments = r.payments; PAYMENTS.render(); } else failures.push('payments: '+(r.error||'unknown')); }
         else if (k === 'settings') { if (r.success) { this.data.settings = r.settings; SETTINGS.load(); } }
@@ -998,6 +1066,7 @@ const ADMIN = {
     document.getElementById('pwd-new').value = '';
     document.getElementById('pwd-confirm').value = '';
     document.getElementById('mbg-pwd').classList.add('show');
+    FOCUS_TRAP.open('mbg-pwd');
   },
 
   async doChangePassword() {
@@ -1062,15 +1131,58 @@ const CHAPTERS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// DATA MAINTENANCE — Settings tab. Thin clients for the three new
-// admin-only cleanup actions added to the backend in v1.01:
-//   adminPruneOldBackups   — delete ProgressBackups rows older than N days
-//   adminClearProgressBackups — delete ALL ProgressBackups rows
-//   adminTrimLogs          — keep only the most recent N Logs rows
-// All three are admin-gated server-side, all three write an entry to
-// the Activity Logs sheet with the acting admin's name, and the two
-// destructive ones confirm here client-side with the exact number that
-// will be removed so a fat-finger can't wipe a year of backups.
+// EXPIRING TRIALS — read-only dashboard card. Lists users whose
+// trial expires within the selected window (backend adminExpiringTrials),
+// sorted soonest-first. Purely informational — the automatic T-2h push
+// notification is fired by checkTrialExpiryWarnings on its own 30-minute
+// trigger; this card is for an admin who wants to eyeball who's about
+// to lapse before that fires, or to message them directly.
+// ═══════════════════════════════════════════════════════════════
+const EXPIRING = {
+  async load() {
+    const box = document.getElementById('expiring-list');
+    if (!box) return;
+    const hours = document.getElementById('exp-hours')?.value || 24;
+    box.innerHTML = '<p style="font-size:.78rem;opacity:.6"><i class="ph ph-circle-notch" style="animation:spin 1s linear infinite"></i> Checking…</p>';
+    try {
+      const res = await ADMIN.post('adminExpiringTrials', {hours});
+      if (!res.success) throw new Error(res.error || 'Failed to load');
+      if (!res.count) {
+        box.innerHTML = `<p style="font-size:.78rem;opacity:.6">No trials expiring in the next ${hours}h. <span style="opacity:.7">Automatic T-2h push warnings are running on schedule.</span></p>`;
+        return;
+      }
+      box.innerHTML =
+        `<p style="font-size:.68rem;opacity:.65;margin-bottom:.45rem">${res.count} trial${res.count===1?'':'s'} ending within ${hours}h — the backend sends an automatic push at T-2h.</p>` +
+        res.users.map(u => {
+          const t = new Date(u.trialExpiresAt).getTime();
+          const mins = Math.max(0, Math.round((t - Date.now()) / 60000));
+          const label = mins < 60 ? `${mins}m` : `${Math.round(mins/60)}h`;
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.4rem .55rem;background:var(--b0);border:1px solid var(--b1);border-radius:7px;margin-bottom:.3rem;font-size:.76rem">
+            <div style="min-width:0;overflow:hidden">
+              <div style="font-weight:600">${esc(u.name) || esc(u.username)}</div>
+              <div class="mono" style="font-size:.65rem;color:var(--t3)">${esc(u.username)} · ${esc(u.email) || 'no email'}</div>
+            </div>
+            <div style="display:flex;gap:.35rem;align-items:center;flex-shrink:0">
+              <span class="ctag ta">${label} left</span>
+              <button class="btn-s btn-c btn-sm" onclick="USERS.view('${escAttrJs(u.username)}')" title="View details" aria-label="View details for ${esc(u.username)}"><i class="ph ph-eye"></i></button>
+            </div>
+          </div>`;
+        }).join('');
+    } catch(e) {
+      box.innerHTML = `<p style="font-size:.78rem;color:var(--ros)">❌ ${esc(e.message)}</p>`;
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// DATA MAINTENANCE — Settings tab. Thin clients for the three
+// admin-only cleanup actions added to the backend in v1.01
+// (adminPruneOldBackups, adminClearProgressBackups, adminTrimLogs),
+// plus the one-time screenshot-sharing fixup added in v1.02. All of
+// them are admin-gated server-side and all of them write an entry to
+// the Activity Logs sheet with the acting admin's name. The
+// destructive ones confirm here client-side with the exact number
+// that will be removed so a fat-finger can't wipe a year of backups.
 // ═══════════════════════════════════════════════════════════════
 const MAINTENANCE = {
   async pruneOldBackups() {
@@ -1119,6 +1231,28 @@ const MAINTENANCE = {
       const res = await ADMIN.post('adminTrimLogs', {keepLast: keep});
       if (!res.success) throw new Error(res.error || 'Trim failed');
       ADMIN.toast(`✅ Trimmed ${res.deleted} old log row(s), kept ${res.kept}`);
+      ADMIN.refresh(['logs']);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  },
+
+  async revokeScreenshotSharing() {
+    if (!confirm(
+      'Make every existing payment screenshot private?\n\n' +
+      'The admin panel will still be able to view them — this only ' +
+      'removes the public Drive link that anyone holding the URL could ' +
+      'have used. Safe to run any time; already-private files are ' +
+      'skipped.'
+    )) return;
+    ADMIN.showLoading('Revoking screenshot sharing…');
+    try {
+      const res = await ADMIN.post('adminRevokeScreenshotSharing');
+      if (!res.success) throw new Error(res.error || 'Failed');
+      const parts = [];
+      parts.push(`${res.revoked} revoked`);
+      parts.push(`${res.alreadyPrivate} already private`);
+      if (res.failed) parts.push(`❌ ${res.failed} failed`);
+      ADMIN.toast('✅ ' + parts.join(', '));
       ADMIN.refresh(['logs']);
     } catch(e) { ADMIN.toast('❌ ' + e.message); }
     ADMIN.hideLoading();
@@ -1416,6 +1550,7 @@ const WEEKLYSETS = {
     document.getElementById('mtitle-wspreview').textContent = 'Preview: ' + (title || fileId);
     document.getElementById('mbody-wspreview').innerHTML = '<p style="font-size:.8rem;opacity:.7"><i class="ph ph-circle-notch" style="animation:spin 1s linear infinite"></i> Loading…</p>';
     document.getElementById('mbg-wspreview').classList.add('show');
+    FOCUS_TRAP.open('mbg-wspreview');
     try {
       const res = await ADMIN.post('getFile', {fileId});
       if (!res.success) throw new Error(res.error || 'Could not load file');
@@ -1748,6 +1883,10 @@ const UI = {
     document.getElementById('view-' + id).classList.add('on');
     document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('active'));
     const el = document.getElementById('nav-' + id); if(el) el.classList.add('active');
+    // Refresh the trials-expiring card every time the dashboard becomes
+    // the active view — the number moves on its own (trials lapse while
+    // the admin is on another tab), so a stale card would be misleading.
+    if (id === 'dashboard' && typeof EXPIRING !== 'undefined') EXPIRING.load();
     this.sidebarClose();
   },
   sidebarOpen() { 
@@ -1779,6 +1918,55 @@ const PAGINATION = {
     html += `<button ${current===total?'disabled':''} onclick="${callback}(${current+1})">→</button>`;
     html += `<span class="pg-info">Page ${current} of ${total}</span>`;
     el.innerHTML = html;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// FOCUS TRAP — keeps Tab navigation inside an open modal. Without
+// this, tabbing past the last control in a modal lands focus back on
+// the page underneath, which is both an accessibility gap (WCAG 2.4.3
+// Focus Order) and a mild footgun: on a fast Tab-Enter a keyboard user
+// can trigger a button on the hidden page behind the modal backdrop.
+// Save-and-restore of the previously-focused element means keyboard
+// users land back where they were after Close, rather than at the top
+// of the document.
+// ═══════════════════════════════════════════════════════════════
+const FOCUS_TRAP = {
+  _state: {}, // modalId -> { previous, handler }
+
+  open(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal || this._state[modalId]) return;
+    const focusables = modal.querySelectorAll(
+      'button, [href], input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusables.length) return;
+    const handler = e => {
+      if (e.key !== 'Tab') return;
+      const list = Array.from(modal.querySelectorAll(
+        'button, [href], input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'
+      )).filter(el => !el.disabled && el.offsetParent !== null);
+      if (!list.length) return;
+      const first = list[0], last = list[list.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    this._state[modalId] = { previous: document.activeElement, handler };
+    modal.addEventListener('keydown', handler);
+    // Focus the first real control once the modal is visible — the
+    // classList.add('show') call happens on the next line at every call
+    // site, so a microtask delay is enough for visibility to settle.
+    setTimeout(() => focusables[0].focus(), 0);
+  },
+
+  close(modalId) {
+    const modal = document.getElementById(modalId);
+    const state = this._state[modalId];
+    if (modal && state) {
+      modal.removeEventListener('keydown', state.handler);
+      if (state.previous && state.previous.focus) state.previous.focus();
+    }
+    delete this._state[modalId];
   }
 };
 
@@ -1993,6 +2181,7 @@ const USERS = {
       </div>
     `;
     document.getElementById('mbg-user').classList.add('show');
+    FOCUS_TRAP.open('mbg-user');
   },
 
   edit(username) {
@@ -2024,6 +2213,7 @@ const USERS = {
       </div>
     `;
     document.getElementById('mbg-user').classList.add('show');
+    FOCUS_TRAP.open('mbg-user');
   },
 
   async saveEdit(username) {
@@ -2256,6 +2446,7 @@ const MODAL = {
       </div>
     `;
     document.getElementById('mbg-review').classList.add('show');
+    FOCUS_TRAP.open('mbg-review');
   },
 
   async confirmReview(username, status) {
@@ -2287,7 +2478,10 @@ const MODAL = {
     ADMIN.hideLoading();
   },
 
-  close(name) { document.getElementById('mbg-' + name).classList.remove('show'); }
+  close(name) {
+    document.getElementById('mbg-' + name).classList.remove('show');
+    FOCUS_TRAP.close('mbg-' + name);
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -2473,7 +2667,7 @@ document.addEventListener('keydown', e => {
     if (e.key === '7') { e.preventDefault(); UI.nav('settings'); }
   }
   if (e.key === 'Escape') {
-    MODAL.close('review'); MODAL.close('user'); MODAL.close('pwd');
+    MODAL.close('review'); MODAL.close('user'); MODAL.close('pwd'); MODAL.close('wspreview');
   }
 });
 </script>
