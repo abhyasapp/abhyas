@@ -10,12 +10,14 @@ const APPS = APP_CONFIG.APPS_URL;
 
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const BK_TAGS = ['Need Check','Interesting','Debating','Confusing','Formulae'];
-const SR_INTERVALS = [1, 3, 7, 14];
+const SR_INTERVALS = [1, 3, 7, 14]; // days for spaced repetition
 
 // Weekly Sets get a fixed exam window: once released, a student has
 // this many hours to take it as a timed, graded Exam — one official
 // attempt. After the window closes, the set never disappears — it just
-// switches to unlimited Flashcard-mode review.
+// switches to unlimited Flashcard-mode review (questions and correct
+// answers stay visible/re-answerable forever), and students can still
+// open it any time from the home card's Weekly Sets list.
 const WEEKLY_EXAM_WINDOW_HOURS = 12;
 
 const LS = {
@@ -26,16 +28,18 @@ const LS = {
   EXAM_SNAP:'abhyas_exam_snap',
   FCOUNT:'abhyas_fcount',
   CLOUD:'abhyas_cloud',
-  PROFILE:'abhyas_profile',
-  CHAPSTATS:'abhyas_chapstats',
-  // FIX #1: Tracks which user's data is currently sitting in localStorage
-  // for this device. When a DIFFERENT user logs in on a shared device,
-  // AUTH._enter() wipes the previous user's local data before init, so
-  // user B never silently inherits user A's progress/bookmarks/streak.
-  // This is what makes PSYNC.pullIfEmpty()'s "looks empty" check safe on
-  // shared devices — otherwise it would skip the cloud pull because the
-  // previous user's data still looked non-empty.
-  LAST_USER:'abhyas_last_user'
+  PROFILE:'abhyas_profile',          // stores S.profile (including id)
+  // Per-chapter running accuracy aggregate — see CHAPSTATS below. Kept
+  // as its OWN small synced object rather than only ever being derived
+  // from S.prog.sessions, because sessions are a rolling, capped window
+  // (50 locally, 500 in the synced copy — see PSYNC._syncPayload). A
+  // long-time user's oldest chapter history would otherwise silently
+  // fall out of both the local cap and the sync cap, and a fresh device
+  // restoring from the cloud would show wrong (too-recent-only) chapter
+  // accuracy. CHAPSTATS never trims by count — it's one small record
+  // PER CHAPTER, not per session, so its size is bounded by how many
+  // distinct chapters exist, not how long someone's been using the app.
+  CHAPSTATS:'abhyas_chapstats'
 };
 
 /* APP_VERSION now lives in version.js (loaded before this file) so
@@ -54,12 +58,13 @@ const S = {
   tt: _load(LS.TT, {sessions:[], reminders:{enabled:false, leadMinutes:5}}),
   stk: _load(LS.STK, {days:[],last:''}),
   fcount: _load(LS.FCOUNT, {}),
+  // chapKey -> {attempted, correct, sessions, lastAt} — see CHAPSTATS.
   chapStats: _load(LS.CHAPSTATS, {}),
   dpi: null,
   localQs: null,
   quiz: {qs:[],ans:[],mode:'',idx:0,timer:null,elapsed:0,left:0,active:false,ch:'',scope:null},
   cloud: _load(LS.CLOUD, {fid:''}),
-  profile: _load(LS.PROFILE, {ver:1, id:''})
+  profile: _load(LS.PROFILE, {ver:1, id:''})   // unique user ID
 };
 // Existing saved S.tt (from before the reminders feature existed) won't
 // have a .reminders field — _load() returns saved data as-is, it doesn't
@@ -77,6 +82,13 @@ function _save(k,v){
     if(PSYNC_KEYS.has(k)) PSYNC.scheduleSync();
     return true;
   }catch(e){
+    // A single quiz session can trigger many _save() calls in quick
+    // succession (each answer, each bookmark, progress tracking) — if
+    // storage is genuinely full, EVERY one of those would otherwise
+    // fire its own toast. Cap it to once every 30s so the user gets
+    // told once, not spammed, while the underlying saves keep failing
+    // silently in between (same as before — this only changes how
+    // often they're told, not whether the save itself succeeds).
     const now = Date.now();
     if(now - _lastStorageWarnAt > 30000){
       _lastStorageWarnAt = now;
@@ -199,16 +211,30 @@ function renderMath(el){
 }
 function shuf(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]]}return b}
 function fmt(s){if(s<0)s=0;return`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
+// Same as fmt() but for durations that can exceed an hour (the weekly-set
+// exam window countdown is up to 12h) — HH:MM:SS instead of MM:SS.
 function fmtHMS(s){
   if(s<0)s=0;
   const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
 }
+// Local calendar-day string (YYYY-MM-DD), NOT UTC. toISOString() always
+// converts to UTC first — for a Nepal-based user (UTC+5:45), that meant
+// the ~5h45m right after their local midnight was still labeled as
+// "yesterday", silently breaking streak day-tracking and timetable
+// reminder de-duplication for anyone studying late into the night
+// (exactly the pattern this app's own greeting logic — "Burning
+// midnight oil?" for the 0-5am local hour range — already treats as
+// completely normal). getFullYear/getMonth/getDate are local-timezone-
+// aware, unlike toISOString().
 function today(){
   const d=new Date();
   const pad=n=>String(n).padStart(2,'0');
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
+// Same local-date logic, offset by N days — used by STREAK below to
+// walk backward day-by-day without re-deriving the pad/format logic,
+// and without the UTC bug a naive d.toISOString() would reintroduce.
 function localDateOffset(baseDate, daysOffset){
   const d=new Date(baseDate);
   d.setDate(d.getDate()+daysOffset);
@@ -220,22 +246,59 @@ function isOk(sel,cor){
   const s=String(sel).trim(),c=String(cor).trim();
   return(!isNaN(s)&&!isNaN(c)&&s!==''&&c!=='')?Number(s)===Number(c):s.toLowerCase()===c.toLowerCase();
 }
+// Resolves a question's raw img/image field — which an uploaded
+// question-bank JSON may express as EITHER an embedded base64 data URI
+// OR a bare Google Drive reference — into a URL an <img src> can load
+// directly, or null if the value is empty/unrecognized.
+//
+// Deliberately does NOT proxy Drive images through handleGetFile the
+// way question-bank JSON files themselves are proxied — that proxy
+// exists because a plain drive.google.com link returns an HTML preview
+// page to fetch()/JSON.parse(), which doesn't apply to an <img> tag (the
+// browser requests it directly as an image, not via our JS). Instead
+// this builds a direct drive.google.com/thumbnail URL, which works for
+// any file shared "Anyone with the link" — same sharing level
+// adminUploadWeeklySetFile and chapters-data.js's own fileIds already
+// use — without adding load on the Apps Script backend or eating into
+// handleGetFile's rate limit for every single question that has a
+// figure.
 function _resolveQImg(raw){
   const v = String(raw || '').trim();
   if(!v) return null;
-  if(v.startsWith('data:image')) return v;
+  if(v.startsWith('data:image')) return v; // already embedded base64 — use as-is
   if(/^https?:\/\//.test(v)){
+    // Accepts any drive.google.com share-link shape
+    // (.../file/d/FILEID/view, ...?id=FILEID, .../open?id=FILEID) and
+    // rewrites it to a thumbnail URL; a non-Drive image URL (someone's
+    // own CDN link) is passed through unchanged.
     const m = v.match(/\/d\/([a-zA-Z0-9_-]{10,})/) || v.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
     return m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w1200` : v;
   }
+  // A bare Drive fileId, same shape as every fileId already in
+  // chapters-data.js (no slashes, no "data:" prefix — just the id).
   if(/^[a-zA-Z0-9_-]{10,}$/.test(v)) return `https://drive.google.com/thumbnail?id=${v}&sz=w1200`;
-  return null;
+  return null; // unrecognized shape — fail quiet rather than render a broken image
 }
+// Shared <img> markup for a normalized question — used by every place
+// a question gets rendered as an HTML string (review lists, exam-mode
+// list) so the img/error/lazy-load handling stays in one spot rather
+// than copy-pasted at each call site. _renderFlashcard uses its own
+// dedicated #fc-img element instead (flashcard mode renders one
+// question at a time into fixed DOM nodes, not a fresh template string
+// per question), but resolves the same q.img field.
 function qImgHtml(q){
   if(!q.img) return '';
   const alt = q.imgCaption || 'Question figure';
   return `<div style="margin:.4rem 0"><img src="${esc(q.img)}" alt="${esc(alt)}" style="max-width:100%;border-radius:8px;border:1px solid var(--b1);display:block" loading="lazy" onerror="this.parentElement.style.display='none'"></div>`;
 }
+// Shared "search this question on Google" icon-link markup — used
+// EVERYWHERE a question is rendered (flashcard, exam, results review,
+// and the bookmarks/flagged/wrong-bank review lists), so every screen
+// that shows a question offers the same one-tap way to look it up,
+// instead of only the screens someone happened to add it to by hand.
+// Truncated to keep the query URL a sane length; options are included
+// (like the exam-mode version already did) since option text is often
+// what actually disambiguates a short/generic-sounding question stem.
 function qSearchHtml(q){
   const optsText = (q.options||[]).map((o,i)=>String.fromCharCode(65+i)+') '+o).join('  ');
   const query = encodeURIComponent(((q.q||'')+'  '+optsText).trim().slice(0,300));
@@ -282,7 +345,20 @@ function normQ(raw,fid){
       options: options.map(String),
       correct,
       explanation: q.explanation||q.explain||q.exp||q.solution||q.hint||'',
+      // A question's diagram/figure can arrive two ways from an uploaded
+      // question-bank file: already embedded as a base64 data URI
+      // (data:image/png;base64,...), or as a bare Google Drive
+      // reference (a fileId, or a full drive.google.com share link) —
+      // the same two shapes chapters-data.js and now Weekly Sets both
+      // accept for question content itself. _resolveQImg normalizes
+      // whichever one shows up into something an <img src> can use
+      // directly, or null if the field is absent/unrecognized.
       img: _resolveQImg(q.img || q.image || q.Image || q.figure || q.diagram || ''),
+      // Optional per-image description, so a screen-reader user gets
+      // something meaningful ("Simply supported beam with point load at
+      // midspan") instead of the generic "Question figure" fallback.
+      // Purely optional — a question-bank file with no caption field
+      // still works exactly as before.
       imgCaption: String(q.imgCaption || q.imgAlt || q.figureCaption || q.caption || '').trim(),
       fileId: fid||'local',
       uid: `${fid||'local'}_${i}`
@@ -299,6 +375,13 @@ function toast(msg,dur=3200){
   c.appendChild(t);
   setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),300)},dur);
 }
+// Toast with an inline Undo button, for reversible destructive actions
+// that don't need a blocking confirm() dialog — e.g. clearAll() below
+// applies the change immediately (list feels instantly responsive) and
+// gives a 6s window to reverse it, instead of interrupting the flow with
+// a modal that has to be dismissed either way. If the toast times out or
+// is dismissed without Undo being pressed, onCommit (if given) runs to
+// finalize anything that was only staged, not actually applied yet.
 function toastUndo(msg, onUndo, dur=6000){
   const c=document.getElementById('toasts');
   if(!c)return;
@@ -325,16 +408,6 @@ function openMod(title,html){
   document.getElementById('mbg').classList.add('show');
 }
 function closeMod(){document.getElementById('mbg').classList.remove('show')}
-
-// FIX #3: Single source of truth for "is anything modal-blocking the
-// quiz right now". The keyboard handler below consults this so pressing
-// 1-5 / a-d / arrows while the report, exit-guard, or resume dialogs
-// are open never answers a question underneath the overlay.
-function _anyModalOpen(){
-  if(document.getElementById('mbg')?.classList.contains('show')) return true;
-  return !!document.querySelector('#quiz-limit-modal, #exam-resume-modal, #quiz-exit-modal, #quiz-error-card, #quiz-loader');
-}
-
 function qs(params){return Object.entries(params).map(([k,v])=>`${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')}
 async function netFetch(url, opts, timeoutMs=20000){
   if(S.forcedOffline) throw new Error('OFFLINE');
@@ -368,7 +441,25 @@ const NETCHECK = {
   }
 };
 
-/* ═══════════════ 3c. CHAPSTATS — durable per-chapter accuracy ═══════════════ */
+/* ═══════════════ 3c. CHAPSTATS — durable per-chapter accuracy ═══════════
+   A small, NEVER-trimmed aggregate: one record per chapter (keyed by
+   whatever label PROG already groups sessions under), holding running
+   attempted/correct counts and last-practised time. Updated incrementally
+   every time a session is recorded — O(1) per quiz, never a full rescan.
+
+   Why this exists alongside S.prog.sessions: sessions are deliberately
+   capped (50 locally, 500 in the synced copy — see PSYNC._syncPayload's
+   own comment on why bk/fl/wr got the same treatment) so a single
+   backup never grows without bound. That's fine for "recent activity",
+   but it means a long-time user's OLDEST chapter history eventually
+   falls out of both caps — and a fresh device restoring from the cloud
+   would then show a chapter as "60% accuracy" when the true lifetime
+   number was 78%, just because the low-scoring early sessions happened
+   to still be in the retained window and the many later good ones
+   scrolled out of it. CHAPSTATS is sized by chapter COUNT, not session
+   count, so it stays complete and small regardless of how long someone
+   studies — exactly the kind of durable, cross-device number a backup
+   should prioritize over re-shipping full bookmarked question text. */
 const CHAPSTATS = {
   record(sess){
     const key = sess.chapter || 'Unknown';
@@ -380,6 +471,10 @@ const CHAPSTATS = {
     S.chapStats[key] = rec;
     _save(LS.CHAPSTATS, S.chapStats);
   },
+  // {chapter, attempted, correct, accuracy, sessions, lastAt}[], sorted
+  // most-recently-practised first — same ordering PROG.render already
+  // uses for its own chapter breakdown, so a caller can swap one for the
+  // other without a visible reordering.
   entries(){
     return Object.entries(S.chapStats)
       .map(([chapter, d]) => ({
@@ -389,6 +484,12 @@ const CHAPSTATS = {
       }))
       .sort((a,b)=>b.lastAt-a.lastAt);
   },
+  // One-time backfill for accounts that already had session history
+  // before CHAPSTATS existed — rebuilds the aggregate from whatever
+  // sessions are CURRENTLY retained (can't recover anything already
+  // trimmed, but that's the best available; going forward nothing more
+  // is ever lost). Safe to call repeatedly — it fully rebuilds rather
+  // than double-adding.
   rebuildFromSessions(){
     const rebuilt = {};
     (S.prog.sessions||[]).forEach(s=>{
@@ -400,6 +501,10 @@ const CHAPSTATS = {
       if((s.at||0) > rec.lastAt) rec.lastAt = s.at||0;
       rebuilt[key] = rec;
     });
+    // Never let a rebuild REDUCE a chapter's numbers below what's
+    // already tracked (that would mean throwing away history this
+    // aggregate exists specifically to preserve) — only fill in
+    // chapters CHAPSTATS doesn't know about yet.
     Object.entries(rebuilt).forEach(([key, rec])=>{
       if(!S.chapStats[key]) S.chapStats[key] = rec;
     });
@@ -476,33 +581,8 @@ const AUTH = {
   _bounce(){
     window.location.href = 'index.html';
   },
-  // FIX #1: Before handing control to APP.init()/PSYNC.pullIfEmpty(),
-  // check whether the account logging in is the SAME account whose data
-  // is already in localStorage. If it isn't, wipe every user-scoped key
-  // first — otherwise a second user on a shared device silently inherits
-  // the first user's progress, bookmarks, wrong-bank, streak, and
-  // chapStats, and pullIfEmpty() then SKIPS the cloud restore (because
-  // the data "looks" non-empty). The IndexedDB question cache is left
-  // alone — it holds only publicly-shared question content, not
-  // per-user data, so sharing it across accounts on one device is
-  // actually a feature.
-  _resetUserScopedLocalDataIfDifferentUser(username){
-    const lastUser = _load(LS.LAST_USER, '');
-    if(lastUser && lastUser !== username){
-      [LS.PROG, LS.BK, LS.FL, LS.WR, LS.STK, LS.CHAPSTATS, LS.TT, LS.EXAM_SNAP].forEach(k=>{
-        try{ localStorage.removeItem(k); }catch(e){}
-      });
-      S.prog = {total:0, correct:0, sessions:[]};
-      S.bk = []; S.fl = []; S.wr = [];
-      S.stk = {days:[], last:''};
-      S.chapStats = {};
-      S.tt = {sessions:[], reminders:{enabled:false, leadMinutes:5}};
-    }
-    _save(LS.LAST_USER, username);
-  },
   _enter(user){
     S.user = user;
-    AUTH._resetUserScopedLocalDataIfDifferentUser(user.username);
     document.getElementById('sg').style.display='none';
     document.getElementById('app').classList.add('on');
     document.getElementById('uchip').textContent = '👤 ' + (user?.name||user?.username||'Student');
@@ -535,12 +615,6 @@ const AUTH = {
   logout(){
     if(!confirm('Log out?'))return;
     localStorage.removeItem(LS.USER);
-    // FIX #1: Also clear LAST_USER so the next login on this device —
-    // even if it's the SAME account — takes the fresh-pull path, which
-    // is the correct behavior after an explicit logout (the user may be
-    // logging back in on a different browser profile or expecting a
-    // clean slate). The cloud copy is intact; pullIfEmpty() restores.
-    localStorage.removeItem(LS.LAST_USER);
     window.location.href = 'index.html';
   },
   _revalidateTimer:null,
@@ -580,7 +654,16 @@ const AUTH = {
   }
 };
 
-/* ═══════════════ 4b. PSYNC — background progress backup ═══════════════ */
+/* ═══════════════ 4b. PSYNC — background progress backup ═══════════════
+   Payload priority, deliberately: CHAPSTATS (tiny, permanent, never
+   trimmed) and prog/stk always go first/whole; bk/fl/wr (which carry
+   full question text+options, not just a uid+stat) are the ones capped
+   when a backup needs to stay small — see _syncPayload below. The goal
+   a device switch actually cares about is "what's my accuracy per
+   chapter and what have I practised", not reproducing every tagged
+   question's full text — that's recoverable from the source Drive file
+   by uid at review time, the accuracy number isn't recoverable from
+   anywhere else. */
 const PSYNC = {
   _timer: null,
   _state: 'idle',
@@ -620,62 +703,35 @@ const PSYNC = {
       navigator.sendBeacon?.(APPS, new Blob([body], {type:'text/plain'}));
     }catch(e){}
   },
+  // saveProgress on the backend rejects anything over 45,000 characters
+  // (Sheets caps a single cell at 50,000). bk/fl/wr can carry full
+  // question text/options (REV._stripHeavy already drops the heaviest
+  // field — embedded images — but text/options remain), so THOSE are
+  // what get capped by count when a payload needs trimming; chapStats
+  // is tiny (one row per chapter) and prog.sessions already caps itself
+  // at 50 locally, so neither needs the same treatment.
   _MAX_SYNCED_SESSIONS: 500,
-  _MAX_SYNCED_LIST_ITEMS: 300,
-  // FIX #5: The server rejects payloads over 45,000 chars (Sheets cell
-  // cap). Per-list COUNT caps alone don't guarantee that — 300 items ×
-  // ~400 chars of question text+options, times three lists, easily blows
-  // past it. So after building the payload the "natural" way, this
-  // measures the actual JSON length and, if it's over a safe ceiling
-  // (44,000 — leaves 1,000 chars of headroom for the request envelope),
-  // trims the largest list iteratively until it fits. chapStats and prog
-  // are never trimmed here — they're small and durable (see the module
-  // comment on CHAPSTATS) and losing them is worse than losing a handful
-  // of older bookmarks.
-  _SYNC_PAYLOAD_CEILING: 44000,
-  _capList(arr, max){
-    return Array.isArray(arr) && arr.length > max ? arr.slice(-max) : arr;
+  _MAX_SYNCED_LIST_ITEMS: 300, // applies to bookmarks/flags/wrong-bank
+  _capList(arr){
+    return Array.isArray(arr) && arr.length > this._MAX_SYNCED_LIST_ITEMS
+      ? arr.slice(-this._MAX_SYNCED_LIST_ITEMS)
+      : arr;
   },
   _syncPayload(){
     const prog = S.prog && S.prog.sessions && S.prog.sessions.length > this._MAX_SYNCED_SESSIONS
       ? { ...S.prog, sessions: S.prog.sessions.slice(-this._MAX_SYNCED_SESSIONS) }
       : S.prog;
-    const build = (bkMax, flMax, wrMax) => JSON.stringify({
+    return JSON.stringify({
       prog,
-      chapStats: S.chapStats,
-      bk: this._capList(S.bk, bkMax),
-      fl: this._capList(S.fl, flMax),
-      wr: this._capList(S.wr, wrMax),
+      chapStats: S.chapStats, // small, always synced whole — see module comment above
+      bk: this._capList(S.bk),
+      fl: this._capList(S.fl),
+      wr: this._capList(S.wr),
       stk: S.stk
     });
-    let bkMax = this._MAX_SYNCED_LIST_ITEMS;
-    let flMax = this._MAX_SYNCED_LIST_ITEMS;
-    let wrMax = this._MAX_SYNCED_LIST_ITEMS;
-    let payload = build(bkMax, flMax, wrMax);
-    // Halve the biggest of the three until it fits, or until all three
-    // are tiny enough that further trimming is clearly not the answer.
-    let guard = 0;
-    while(payload.length > this._SYNC_PAYLOAD_CEILING && guard < 12){
-      guard++;
-      const bkLen = (S.bk||[]).length * bkMax;
-      const flLen = (S.fl||[]).length * flMax;
-      const wrLen = (S.wr||[]).length * wrMax;
-      const maxLen = Math.max(bkLen, flLen, wrLen);
-      if(maxLen === 0) break;
-      if(bkLen === maxLen && bkMax > 20) bkMax = Math.floor(bkMax/2);
-      else if(flLen === maxLen && flMax > 20) flMax = Math.floor(flMax/2);
-      else if(wrLen === maxLen && wrMax > 20) wrMax = Math.floor(wrMax/2);
-      else break;
-      payload = build(bkMax, flMax, wrMax);
-    }
-    return payload;
   },
   async pushNow(){
-    // FIX #12: Respect forcedOffline explicitly rather than relying on
-    // netFetch throwing — a scheduled push that fires while the user is
-    // in manual offline mode should quietly no-op, not flip the sync
-    // indicator into an error state.
-    if(!S.online || S.forcedOffline || !S.user || !S.user.token) return;
+    if(!S.online || !S.user || !S.user.token) return;
     this._setState('syncing');
     const payload = this._syncPayload();
     try{
@@ -710,6 +766,10 @@ const PSYNC = {
       }
       const data = JSON.parse(res.data);
       if(data.prog){ S.prog=data.prog; if(typeof migrateSessionScopes === 'function') migrateSessionScopes(); _save(LS.PROG,S.prog); }
+      // Restored chapStats is the durable per-chapter accuracy — merge
+      // (take the higher attempted count per chapter) rather than blind
+      // overwrite, in case this device already has its OWN local
+      // history the cloud copy predates.
       if(data.chapStats){
         Object.entries(data.chapStats).forEach(([key, rec])=>{
           const existing = S.chapStats[key];
@@ -866,7 +926,13 @@ const PWA = {
   }
 };
 
-/* ═══════════════ 5b. WEEKLY SETS ═══════════════ */
+/* ═══════════════ 5b. WEEKLY SETS ═══════════════
+   Each released set gets a WEEKLY_EXAM_WINDOW_HOURS (12h) countdown from
+   its releaseAt: within that window it opens as a timed, graded Exam
+   (one official attempt); once the window closes it opens in Flashcard
+   mode instead — unlimited re-answering, explanations visible, but no
+   new graded attempt. Merged into ChapterData either way so it's always
+   reachable through the normal Online Study picker, forever. */
 const WEEKLY = {
   sets: [],
   _tickTimer: null,
@@ -883,6 +949,9 @@ const WEEKLY = {
     }catch(e){ /* best-effort */ }
   },
 
+  // Server tells us releaseAt/released; the 12h exam-window math is
+  // done client-side from that same timestamp, so it never needs a
+  // backend change or a new column to add/adjust this feature.
   examCloseAt(s){
     if(!s.releaseAt) return null;
     const t = new Date(s.releaseAt).getTime();
@@ -904,7 +973,7 @@ const WEEKLY = {
       if(s.released){
         const open = this.examOpen(s);
         const closeAt = this.examCloseAt(s);
-        return `<div class="qb-btn ok" style="cursor:pointer;width:100%;justify-content:space-between;align-items:center" onclick="WEEKLY.open(${JSON.stringify(String(s.id))})">
+        return `<div class="qb-btn ok" style="cursor:pointer;width:100%;justify-content:space-between;align-items:center" onclick="WEEKLY.open('${esc(s.id)}')">
           <span><i class="ph ph-${open?'note-pencil':'check-circle'}"></i> ${esc(s.title)}${s.chapterLabel?` <span style="opacity:.6">— ${esc(s.chapterLabel)}</span>`:''}</span>
           ${open ? `<span class="mono" id="weekly-countdown-${esc(s.id)}" data-close="${closeAt}" style="font-size:.68rem;font-weight:700;color:var(--ros)" title="Time left to take this as a graded exam">${fmtHMS(Math.max(0,Math.round((closeAt-Date.now())/1000)))}</span>`
                  : `<span style="font-size:.62rem;opacity:.65">Review mode</span>`}
@@ -918,21 +987,17 @@ const WEEKLY = {
     }).join('');
   },
 
-  // FIX #7: The interval now checks first whether there's actually
-  // anything to tick. Before, an empty this.sets (all sets pre-release,
-  // or the feature not in use) still burned a callback every second,
-  // and the "anyExpired" flag was only set inside the released-set
-  // branch, so a set list that was entirely pre-release ran the loop
-  // forever doing nothing. Now: if nothing is currently counting down,
-  // the interval clears itself and _startTick() is a no-op until a new
-  // list arrives.
+  // Ticks every second so the countdown next to each still-open set
+  // visibly decreases — same lightweight pattern as HOME.tickClock/
+  // TT's own clock, rather than re-rendering the whole card (and losing
+  // scroll position / re-triggering layout) every second. When a set's
+  // window crosses zero mid-session, does one full re-render so its
+  // row flips from the countdown to "Review mode" without needing a
+  // page reload.
   _startTick(){
-    if(this._tickTimer){ clearInterval(this._tickTimer); this._tickTimer = null; }
-    const anyCountdown = this.sets.some(s=>s.released && this.examCloseAt(s) !== null);
-    if(!anyCountdown) return;
+    if(this._tickTimer) clearInterval(this._tickTimer);
     this._tickTimer = setInterval(()=>{
       let anyExpired = false;
-      let anyLive = false;
       this.sets.forEach(s=>{
         if(!s.released) return;
         const closeAt = this.examCloseAt(s);
@@ -940,15 +1005,9 @@ const WEEKLY = {
         const el = document.getElementById('weekly-countdown-'+s.id);
         const left = Math.round((closeAt - Date.now())/1000);
         if(left <= 0){ anyExpired = true; return; }
-        anyLive = true;
         if(el) el.textContent = fmtHMS(left);
       });
       if(anyExpired) this._renderHomeCard();
-      if(!anyLive && !anyExpired){
-        // Nothing left to tick — stop the interval rather than idling.
-        clearInterval(this._tickTimer);
-        this._tickTimer = null;
-      }
     }, 1000);
   },
 
@@ -1278,7 +1337,7 @@ const REV = {
         return `<div class="eo${c?' shc':''}">${String.fromCharCode(65+j)}) ${esc(o)}</div>`;
       }).join('');
       const tagPicker = kind==='bk' ? `
-        <select class="sel-c" style="margin-top:.4rem;font-size:.7rem;padding:.25rem .4rem;width:auto" onchange="REV.setTag(${JSON.stringify(String(q.uid||''))}, this.value)">
+        <select class="sel-c" style="margin-top:.4rem;font-size:.7rem;padding:.25rem .4rem;width:auto" onchange="REV.setTag('${esc(q.uid||'')}', this.value)">
           <option value="">🏷 No tag</option>
           ${BK_TAGS.map(t=>`<option value="${t}" ${q.tag===t?'selected':''}>${t}</option>`).join('')}
         </select>` : '';
@@ -1298,7 +1357,7 @@ const REV = {
           ${q.tag ? `<span class="ctag ta" style="margin-left:.3rem"><i class="ph ph-tag"></i> ${esc(q.tag)}</span>` : ''}
           ${srBadge}
           ${qSearchHtml(q)}
-          <button class="ib" onclick="REV._removeOne(${JSON.stringify(kind)},${JSON.stringify(String(q.uid||''))})" title="Remove from review" aria-label="Remove from review"><i class="ph ph-trash"></i></button>
+          <button class="ib" onclick="REV._removeOne('${kind}','${esc(q.uid||'')}')" title="Remove from review" aria-label="Remove from review"><i class="ph ph-trash"></i></button>
         </div>
         <div class="qt" style="font-size:.82rem">${esc(q.q)}</div>
         ${qImgHtml(q)}
@@ -1430,12 +1489,11 @@ const QUIZ = {
       <div style="font-size:.78rem;color:var(--t2);line-height:1.6;margin-bottom:1rem">${esc(msg)}</div>
       <div style="display:flex;gap:.5rem">
         <button id="quiz-err-retry" style="flex:1;padding:.58rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r1);color:var(--on-accent);font-weight:700;font-size:.82rem;cursor:pointer;font-family:var(--ff)"><i class="ph ph-arrow-clockwise"></i> Retry</button>
-        <button id="quiz-err-close" style="padding:.58rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.82rem;cursor:pointer;font-family:var(--ff)"><i class="ph ph-x"></i> Close</button>
+        <button onclick="document.getElementById('quiz-error-card').remove()" style="padding:.58rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.82rem;cursor:pointer;font-family:var(--ff)"><i class="ph ph-x"></i> Close</button>
       </div>
     </div>`;
     el.style.display = 'flex';
     document.getElementById('quiz-err-retry').onclick = ()=>{ el.remove(); if(el._retry) el._retry(); };
-    document.getElementById('quiz-err-close').onclick = ()=> el.remove();
   },
 
   _showLoader(msg){
@@ -1461,11 +1519,6 @@ const QUIZ = {
     if(el) el.style.display = 'none';
   },
 
-  // FIX #16: Reset any dangling prior-quiz state BEFORE showing the
-  // limit picker. Previously, if a prior session's S.quiz was left in a
-  // half-torn-down state (e.g. the picker was dismissed via the backdrop
-  // while S.quiz.active was still true from a failed start), a
-  // subsequent call could inherit stale qs/ans.
   startWith(qsArr, mode, chapterName, scope=null){
     if(!qsArr || !qsArr.length){ toast('No questions to study'); return; }
     QUIZ._stopTimer();
@@ -1484,13 +1537,13 @@ const QUIZ = {
     modal.id = 'quiz-limit-modal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:10000;padding:1.5rem;backdrop-filter:blur(4px)';
     modal.innerHTML = `
-      <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)" role="dialog" aria-modal="true" aria-labelledby="qlm-title">
+      <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)">
         <div style="font-size:1.2rem;margin-bottom:.35rem">${mode==='exam'?'<i class="ph ph-note-pencil"></i>':'<i class="ph ph-lightning"></i>'}</div>
-        <div id="qlm-title" style="font-family:var(--fd);font-size:.92rem;font-weight:700;color:var(--t1);margin-bottom:.2rem">${esc(chapterName||'Quiz')}</div>
+        <div style="font-family:var(--fd);font-size:.92rem;font-weight:700;color:var(--t1);margin-bottom:.2rem">${esc(chapterName||'Quiz')}</div>
         <div style="font-size:.74rem;color:var(--t3);margin-bottom:1rem">${pluralize(total,'question')} available — how many do you want to do?</div>
         <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem">
-          ${presets.map(n=>`<button data-qn="${n}" class="qlm-preset" style="padding:.35rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.76rem;cursor:pointer;font-family:var(--ff)">${n}</button>`).join('')}
-          <button data-qn="${total}" class="qlm-preset" style="padding:.35rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.76rem;cursor:pointer;font-family:var(--ff)">All ${total}</button>
+          ${presets.map(n=>`<button onclick="document.getElementById('qlm-inp').value=${n}" style="padding:.35rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.76rem;cursor:pointer;font-family:var(--ff)">${n}</button>`).join('')}
+          <button onclick="document.getElementById('qlm-inp').value=${total}" style="padding:.35rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.76rem;cursor:pointer;font-family:var(--ff)">All ${total}</button>
         </div>
         <input id="qlm-inp" type="number" min="1" max="${total}" value="${Math.min(20,total)}"
           style="width:100%;background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r2);padding:.5rem .75rem;color:var(--t1);font-size:.9rem;font-family:var(--ff);outline:none;box-sizing:border-box;margin-bottom:.6rem">
@@ -1500,15 +1553,11 @@ const QUIZ = {
         </label>
         <div style="display:flex;gap:.4rem">
           <button id="qlm-start" style="flex:1;padding:.62rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:var(--on-accent);font-weight:700;font-size:.85rem;cursor:pointer;font-family:var(--ff)">Start →</button>
-          <button id="qlm-cancel" style="padding:.62rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r2);color:var(--t2);font-size:.83rem;cursor:pointer;font-family:var(--ff)"><i class="ph ph-x"></i></button>
+          <button onclick="document.getElementById('quiz-limit-modal').remove()" style="padding:.62rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r2);color:var(--t2);font-size:.83rem;cursor:pointer;font-family:var(--ff)"><i class="ph ph-x"></i></button>
         </div>
       </div>`;
     document.body.appendChild(modal);
     modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
-    document.querySelectorAll('#quiz-limit-modal .qlm-preset').forEach(btn=>{
-      btn.onclick = ()=>{ document.getElementById('qlm-inp').value = btn.dataset.qn; };
-    });
-    document.getElementById('qlm-cancel').onclick = ()=> modal.remove();
     document.getElementById('qlm-start').onclick = ()=>{
       const n = Math.min(total, Math.max(1, parseInt(document.getElementById('qlm-inp').value)||total));
       const doShuffle = document.getElementById('qlm-shuffle').checked;
@@ -1605,14 +1654,8 @@ const QUIZ = {
     const need = TARGET - pool.length;
     const picks = shuf(refs).slice(0, Math.min(8, refs.length));
     let failed = 0;
-    // FIX #8: This used to be `pool.length - (TARGET-need) >= need*2`,
-    // which read like a puzzle. `TARGET - need` equals the ORIGINAL pool
-    // size, so the real condition was "stop once we've pulled at least
-    // 2× the number of questions we still needed". Named that threshold
-    // explicitly so the intent survives the next refactor.
-    const stopAt = pool.length + need*2;
     for(const ref of picks){
-      if(pool.length >= stopAt) break;
+      if(pool.length - (TARGET-need) >= need*2) break;
       try{
         const raw = await QUIZ._fetch(ref.fid, ref.key);
         addAll(normQ(raw, ref.fid));
@@ -1643,38 +1686,15 @@ const QUIZ = {
   },
   _stopTimer(){ if(S.quiz.timer){ clearInterval(S.quiz.timer); S.quiz.timer=null; } },
 
-  // FIX #2: Snapshot used to serialize the FULL question array including
-  // q.img — which may be a base64 data: URI several KB (or tens of KB)
-  // long. A 100-question exam with figures easily exceeds the ~5MB
-  // localStorage limit, and _snapshotExam() runs on EVERY exAnswer()
-  // plus every 15s from the timer, so this would spam the (already
-  // throttled) storage-full toast. Strip img/imgCaption before saving;
-  // on resume, _resumeSnapshot() rehydrates them by uid from the live
-  // S.quiz.qs (which the resume path re-fetches from the server/cache).
-  //
-  // FIX #10: Also debounce — writing the whole array on every tap is
-  // wasteful even without images. A 3-second throttle is far below the
-  // 15s timer cadence and still leaves at most ~3s of answers at risk
-  // on a hard tab-close (the visibilitychange/pagehide flushOnHide path
-  // is the ultimate backstop for a graceful close).
-  _lastSnapAt: 0,
-  _snapshotExam(force){
+  _snapshotExam(){
     if(!S.quiz || !S.quiz.active || S.quiz.mode!=='exam' || !S.user) return;
-    const now = Date.now();
-    if(!force && (now - QUIZ._lastSnapAt) < 3000) return;
-    QUIZ._lastSnapAt = now;
-    const liteQs = S.quiz.qs.map(q => {
-      const { img, imgCaption, ...rest } = q;
-      return rest;
-    });
     _save(LS.EXAM_SNAP, {
       username: S.user.username,
       ch: S.quiz.ch,
-      qs: liteQs,
+      qs: S.quiz.qs,
       ans: S.quiz.ans,
       left: S.quiz.left,
-      startedAt: S.quiz.startedAt || now,
-      savedAt: now
+      savedAt: Date.now()
     });
   },
   _clearExamSnapshot(){ localStorage.removeItem(LS.EXAM_SNAP); },
@@ -1700,7 +1720,7 @@ const QUIZ = {
     modal.id = 'exam-resume-modal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:10000;padding:1.5rem;backdrop-filter:blur(4px)';
     modal.innerHTML = `
-      <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)" role="dialog" aria-modal="true">
+      <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)">
         <div style="font-size:1.2rem;margin-bottom:.35rem"><i class="ph ph-note-pencil"></i></div>
         <div style="font-family:var(--fd);font-size:.92rem;font-weight:700;color:var(--t1);margin-bottom:.2rem">Unfinished exam found</div>
         <div style="font-size:.78rem;color:var(--t3);margin-bottom:1rem">${esc(snap.ch)} — ${answered}/${snap.qs.length} answered, ${fmt(adjustedLeft)} left on the clock. This was probably interrupted by a reload or a closed tab.</div>
@@ -1721,20 +1741,11 @@ const QUIZ = {
     };
   },
   _resumeSnapshot(snap, adjustedLeft){
-    // FIX #9: Restore startedAt. Before, _showResults computed
-    // durationSec from S.quiz.startedAt, which was undefined after a
-    // resume, so resumed exams were logged with 0s duration. Approximate
-    // the original start by walking back the time already spent
-    // (originalTotal - left) from the snapshot's save moment.
-    const originalTotal = (snap.qs.length * 90);
-    const spentBeforeSnap = Math.max(0, originalTotal - (snap.left||0));
-    const startedAt = snap.startedAt || (snap.savedAt - spentBeforeSnap*1000) || Date.now();
     S.quiz = {
       qs: snap.qs, ans: snap.ans, mode:'exam', idx:0, timer:null, elapsed:0,
       left: adjustedLeft,
       examEndAt: Date.now() + adjustedLeft*1000,
-      active:true, ch: snap.ch, skipped:new Set(), shown:new Set(),
-      scope: null, startedAt
+      active:true, ch: snap.ch, skipped:new Set(), shown:new Set()
     };
     document.getElementById('quiz-wrap').style.display='';
     document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
@@ -1759,7 +1770,7 @@ const QUIZ = {
     const answered = S.quiz.ans.filter(a=>a!==null).length;
     const total = S.quiz.qs.length;
     modal.innerHTML = `
-      <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)" role="dialog" aria-modal="true">
+      <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)">
         <div style="font-size:1.3rem;margin-bottom:.4rem"><i class="ph ph-warning"></i></div>
         <div style="font-family:var(--fd);font-size:.95rem;font-weight:700;color:var(--t1);margin-bottom:.3rem">Leave this quiz?</div>
         <div style="font-size:.76rem;color:var(--t3);margin-bottom:1.1rem">${isExam ? answered+' of '+total+' answered' : 'Question '+(S.quiz.idx+1)+' of '+total} · ${S.quiz.ch}</div>
@@ -1898,10 +1909,8 @@ const QUIZ = {
         </select>
       </div>
       <div class="sf"><label for="qr-note">Details (optional)</label><textarea id="qr-note" rows="3" placeholder="Anything that would help — e.g. which option you think is actually correct"></textarea></div>
-      <button class="btn" id="qr-send-btn">Send Report</button>
+      <button class="btn" onclick="QUIZ._submitReport('${esc(q.uid)}')">Send Report</button>
     `);
-    const sendBtn = document.getElementById('qr-send-btn');
-    if(sendBtn) sendBtn.onclick = ()=> QUIZ._submitReport(q.uid);
   },
   async _submitReport(uid){
     const q = (S.quiz.qs||[]).find(x=>x.uid===uid) || S.quiz.qs?.[S.quiz.idx];
@@ -1978,6 +1987,13 @@ const QUIZ = {
     QUIZ._snapshotExam();
     QUIZ._updateSkippedNav();
   },
+  // "Go to skipped questions" — exam mode already renders every question
+  // on one long page (nothing technically blocks scrolling back to an
+  // earlier one), but on a long set that's a lot of scrolling to hunt
+  // down which ones are still blank. This tracks the count and jumps
+  // straight to the next unanswered card, wrapping back to the top once
+  // it's scrolled past the last one — so "go back to what I skipped" is
+  // one tap instead of a manual hunt.
   _updateSkippedNav(){
     const btn = document.getElementById('ex-skip-nav');
     if(!btn) return;
@@ -1989,6 +2005,9 @@ const QUIZ = {
   jumpToUnanswered(){
     if(!S.quiz || !S.quiz.qs) return;
     const total = S.quiz.qs.length;
+    // Search forward from just after whatever's currently topmost in the
+    // viewport, wrapping around — so repeated taps cycle through every
+    // still-blank question rather than always landing on the first one.
     const cards = S.quiz.qs.map((_,i)=>document.getElementById('eqc-'+i)).filter(Boolean);
     const viewTop = window.scrollY + 80;
     let startFrom = 0;
@@ -2089,6 +2108,9 @@ const QUIZ = {
       qres
     };
     PROG.recordSession(sessionObj);
+    // Durable per-chapter accuracy — see CHAPSTATS module comment for
+    // why this is tracked separately from (and backed up ahead of) the
+    // rolling sessions array.
     CHAPSTATS.record(sessionObj);
   }
 };
@@ -2097,16 +2119,6 @@ const QUIZ = {
 document.addEventListener('keydown', e=>{
   if(!S.quiz.active) return;
   if(document.getElementById('quiz-wrap').style.display==='none') return;
-  // FIX #3: Never let quiz shortcuts fire while any modal is open — the
-  // report form (openMod), the exam-resume prompt, the exit guard, the
-  // limit picker, the error card, or the loader. Before this guard,
-  // typing "1" in the report textarea, or pressing Escape while
-  // reviewing the exit dialog, would silently answer/advance the
-  // underlying question.
-  if(_anyModalOpen()) return;
-  // Also skip if focus is inside a form field for any reason.
-  const tag = (e.target && e.target.tagName) || '';
-  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
   if(e.key==='Escape'){ if(S.quiz.active) QUIZ.quit(); }
   if(S.quiz.mode!=='exam'){
     if(e.key==='ArrowRight') QUIZ.fcNav(1);
@@ -2158,6 +2170,14 @@ const PROG = {
         <div class="sc"><div class="sv tsk">${hrs>0?hrs+'h ':''}${mins}m</div><div class="stat-lbl">Study Time</div></div>
       </div>`;
 
+    // Chapter breakdown now reads from CHAPSTATS — the durable,
+    // never-trimmed per-chapter aggregate — instead of re-deriving from
+    // S.prog.sessions on every render. Functionally the two agree for
+    // recent activity, but CHAPSTATS also reflects history that may have
+    // scrolled out of the capped sessions array (50 locally), and is
+    // what actually survives a device switch intact (see PSYNC's payload
+    // priority comment) — so this view now shows the SAME lifetime
+    // numbers a restored session would.
     const chapEntries = CHAPSTATS.entries();
     if(!chapEntries.length){
       document.getElementById('prog-chapters').innerHTML = '<p style="font-size:.78rem;color:var(--t3);padding:.5rem 0">No chapter data yet.</p>';
@@ -2221,27 +2241,16 @@ const STREAK = {
     _save(LS.STK, S.stk);
     HOME.render();
   },
-  // FIX #4: The original logic returned 0 whenever today wasn't yet
-  // marked — even if the user had a long, unbroken streak ending
-  // yesterday. That meant the greeting showed "Start your streak today"
-  // all morning to someone who was actually on day 30. Correct
-  // behavior: count consecutive days ending either at today (already
-  // practised) or at yesterday (streak intact, just not extended yet).
-  // A gap of two or more days correctly returns 0.
   current(){
     if(!S.stk.days || !S.stk.days.length) return 0;
     const set = new Set(S.stk.days);
-    const hasToday = set.has(today());
-    const hasYesterday = set.has(localDateOffset(new Date(), -1));
-    if(!hasToday && !hasYesterday) return 0;
-    let count = 0;
-    let offset = hasToday ? 0 : 1;
-    // Walk backwards one local day at a time until we hit a gap.
-    while(set.has(localDateOffset(new Date(), -offset))){
-      count++;
-      offset++;
-      if(count > 400) break; // safety — S.stk.days is capped at 400 anyway
+    let count=0;
+    let d = new Date();
+    if(!set.has(today())){
+      d.setDate(d.getDate()-1);
+      if(!set.has(localDateOffset(new Date(), -1))) return 0;
     }
+    while(set.has(localDateOffset(new Date(), -count))) count++;
     return count;
   },
   longest(){
@@ -2311,7 +2320,7 @@ const TT = {
           <div class="sb-lbl">${day}</div>
           ${daySessions.map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .6rem;background:var(--b0);border-radius:8px;margin-bottom:.3rem">
             <div><span class="mono" style="font-weight:700">${esc(s.time)}</span> — ${esc(s.label||'Study')}</div>
-            <button class="ib" onclick="TT.remove(${JSON.stringify(String(s.id))})" aria-label="Remove session"><i class="ph ph-trash"></i></button>
+            <button class="ib" onclick="TT.remove('${esc(s.id)}')" aria-label="Remove session"><i class="ph ph-trash"></i></button>
           </div>`).join('')}
         </div>`;
       }).join('') || `<div class="empty"><div class="empty-i"><i class="ph ph-calendar"></i></div><p>No study sessions scheduled</p></div>`;
@@ -2395,12 +2404,9 @@ const CACHE = {
       const label = parts.length>=4 ? `${parts[0]} · Ch${parts[1]} · ${parts[2]} · ${parts[3]}` : k;
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .6rem;background:var(--b0);border-radius:8px;margin-bottom:.3rem;font-size:.78rem">
         <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><i class="ph ph-package"></i> ${esc(label)}</div>
-        <button class="ib cache-rm-btn" data-key="${esc(k)}" title="Remove from cache" aria-label="Remove from cache"><i class="ph ph-trash"></i></button>
+        <button class="ib" onclick="CACHE.remove('${esc(k)}')" title="Remove from cache" aria-label="Remove from cache"><i class="ph ph-trash"></i></button>
       </div>`;
     }).join('');
-    el.querySelectorAll('.cache-rm-btn').forEach(btn=>{
-      btn.onclick = ()=> CACHE.remove(btn.dataset.key);
-    });
   },
   async remove(key){
     await QDB.del(key);
@@ -2431,7 +2437,13 @@ const CACHE = {
   }
 };
 
-/* ═══════════════ 15. DATA EXPORT / IMPORT ═══════════════ */
+/* ═══════════════ 15. DATA EXPORT / IMPORT ═══════════════
+   Backup priority mirrors PSYNC's cloud payload: chapStats and prog are
+   the durable numbers (never trimmed here either), bk/fl/wr carry full
+   question text/options so they're included whole for a LOCAL export
+   (unlike the capped cloud payload, a manual "download my data" file
+   isn't constrained by a 45,000-char Sheets cell, so nothing needs to
+   be dropped here). */
 const DATA = {
   exportAll(){
     const payload = {
@@ -2479,14 +2491,7 @@ const DATA = {
   },
   async wipeDevice(){
     if(!confirm('Erase ALL local data on this device (progress, bookmarks, flags, wrong-bank, cached question sets)? This cannot be undone. Anything already backed up to the cloud will still be there next time you log in online.')) return;
-    // FIX #13: Also clear the keys that used to be left behind —
-    // EXAM_SNAP (a stale resume-exam prompt would otherwise appear right
-    // after the wipe), TT_NOTIFIED, CLOUD, PROFILE, and LAST_USER (so the
-    // NEXT login on this device takes the fresh-pull path). USER is left
-    // alone here — the confirm() text says "reloads", not "logs out",
-    // and the current session is still valid; log out separately to
-    // actually end the session.
-    [LS.PROG, LS.BK, LS.FL, LS.WR, LS.STK, LS.CHAPSTATS, LS.TT, LS.EXAM_SNAP, LS.TT_NOTIFIED, LS.CLOUD, LS.PROFILE, LS.LAST_USER].forEach(k=>localStorage.removeItem(k));
+    [LS.PROG, LS.BK, LS.FL, LS.WR, LS.STK, LS.CHAPSTATS, LS.TT].forEach(k=>localStorage.removeItem(k));
     await QDB.clear();
     toast('🗑 Local data wiped — reloading…');
     setTimeout(()=>location.reload(), 1200);
@@ -2527,6 +2532,9 @@ const APP = {
     if(APP._booted) return;
     APP._booted = true;
     await QDB.migrateFromLocalStorage();
+    // One-time backfill for any account whose chapter history predates
+    // CHAPSTATS — see the method's own comment for why this only ever
+    // fills gaps, never overwrites.
     if(!Object.keys(S.chapStats).length && S.prog.sessions?.length) CHAPSTATS.rebuildFromSessions();
     HOME.render();
     AUTH.startPeriodicRecheck();
@@ -2539,10 +2547,7 @@ const APP = {
 function _updateNetBtn(){
   const dot = document.getElementById('net-dot');
   const txt = document.getElementById('net-txt');
-  // FIX #11: Simplified — the original nested ternary evaluated to the
-  // same result, just harder to read.
-  const offline = S.forcedOffline || !S.online;
-  if(dot) dot.className = 'net-dot' + (offline ? ' off' : '');
+  if(dot) dot.className = 'net-dot' + (S.forcedOffline ? ' off' : (S.online ? '' : ' off'));
   if(txt) txt.textContent = S.forcedOffline ? 'Offline (manual)' : (S.online ? 'Online' : 'Offline');
 }
 function _updateOfflineWarn(){
