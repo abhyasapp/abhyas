@@ -292,6 +292,18 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 .import-errs div{padding:.15rem 0;border-bottom:1px dashed var(--b1)}
 .import-errs div:last-child{border-bottom:none}
 
+/* Data Maintenance — same visual language as the import module, but
+   distinct enough (dashed border + a maintenance icon) that an admin
+   scanning Settings doesn't confuse "delete all backups" with the
+   surrounding normal-configuration controls. */
+.maint-row{display:flex;align-items:flex-end;gap:.5rem;flex-wrap:wrap;padding:.6rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:8px;margin-bottom:.5rem}
+.maint-row .maint-info{flex:1;min-width:180px}
+.maint-row .maint-title{font-size:.78rem;font-weight:600;color:var(--t1);margin-bottom:.15rem}
+.maint-row .maint-desc{font-size:.68rem;color:var(--t3);line-height:1.4}
+.maint-row .maint-input{display:flex;flex-direction:column;gap:.15rem}
+.maint-row .maint-input label{font-size:.55rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--t3)}
+.maint-row .maint-input input{background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r1);padding:.4rem .55rem;color:var(--t1);font-size:.78rem;font-family:var(--fm);outline:none;width:100px}
+
 /* Responsive */
 @media(max-width:600px){
   .gate-card{padding:1.5rem 1.1rem;margin:.8rem}
@@ -551,6 +563,9 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             <option value="update_settings">Updated Settings</option>
             <option value="login">Login</option>
             <option value="import">Progress Import</option>
+            <option value="clear progress backups">Clear Backups</option>
+            <option value="prune progress backups">Prune Backups</option>
+            <option value="trim logs">Trim Logs</option>
           </select>
         </div>
         <div class="card" id="logs-card">
@@ -626,6 +641,50 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           </div>
           <div id="imp-result"></div>
         </div>
+
+        <!-- ═══════════════════════════════════════════════════════
+             DATA MAINTENANCE — housekeeping for the sheets that grow
+             forever (ProgressBackups, Logs). Every action here is
+             logged to Activity Logs, and the destructive ones ask for
+             confirmation with an exact count of what's about to be
+             removed.
+             ═══════════════════════════════════════════════════════ -->
+        <div class="card">
+          <div class="card-hd"><h3><i class="ph ph-broom"></i> Data Maintenance</h3></div>
+          <p style="font-size:.8rem;opacity:.7;margin:0 0 .8rem">Housekeeping for the two sheets that grow forever — ProgressBackups (created by "replace"-mode progress imports) and Activity Logs. All three actions are logged with the acting admin's name.</p>
+
+          <div class="maint-row">
+            <div class="maint-info">
+              <div class="maint-title">Prune old progress backups</div>
+              <div class="maint-desc">Deletes ProgressBackups rows older than the cutoff. Keeps the window you specify intact — a bad import within that window is still restorable.</div>
+            </div>
+            <div class="maint-input">
+              <label for="maint-backup-days">Keep (days)</label>
+              <input type="number" id="maint-backup-days" value="30" min="1" max="3650">
+            </div>
+            <button class="btn-s btn-a" onclick="MAINTENANCE.pruneOldBackups()"><i class="ph ph-scissors"></i> Prune</button>
+          </div>
+
+          <div class="maint-row">
+            <div class="maint-info">
+              <div class="maint-title" style="color:var(--ros)">Delete ALL progress backups</div>
+              <div class="maint-desc">Irreversible. Removes every pre-replace snapshot — after this, a bad progress import can no longer be undone. Use with real caution.</div>
+            </div>
+            <button class="btn-s btn-r" onclick="MAINTENANCE.clearAllBackups()"><i class="ph ph-trash"></i> Delete All</button>
+          </div>
+
+          <div class="maint-row" style="margin-bottom:0">
+            <div class="maint-info">
+              <div class="maint-title">Trim activity logs</div>
+              <div class="maint-desc">Keeps the most recent N log rows, deletes the rest. The admin UI only ever shows the latest 1000 anyway, so old rows aren't visible without this.</div>
+            </div>
+            <div class="maint-input">
+              <label for="maint-logs-keep">Keep (rows)</label>
+              <input type="number" id="maint-logs-keep" value="5000" min="100" max="100000">
+            </div>
+            <button class="btn-s btn-a" onclick="MAINTENANCE.trimLogs()"><i class="ph ph-scissors"></i> Trim</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -660,9 +719,9 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
   <div class="mbox" onclick="event.stopPropagation()">
     <div class="mhd"><h3>Change Admin Password</h3><button class="mcl" onclick="MODAL.close('pwd')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
     <div class="mbody">
-      <div class="sf"><label for="pwd-current">Current Password</label><input type="password" id="pwd-current" placeholder="••••••••"></div>
-      <div class="sf"><label for="pwd-new">New Password</label><input type="password" id="pwd-new" placeholder="Min 6 characters"></div>
-      <div class="sf"><label for="pwd-confirm">Confirm New Password</label><input type="password" id="pwd-confirm" placeholder="••••••••"></div>
+      <div class="sf"><label for="pwd-current">Current Password</label><input type="password" id="pwd-current" placeholder="••••••••" autocomplete="current-password"></div>
+      <div class="sf"><label for="pwd-new">New Password</label><input type="password" id="pwd-new" placeholder="Min 6 characters" autocomplete="new-password"></div>
+      <div class="sf"><label for="pwd-confirm">Confirm New Password</label><input type="password" id="pwd-confirm" placeholder="••••••••" autocomplete="new-password"></div>
       <div style="display:flex;gap:.4rem;margin-top:.5rem">
         <button class="btn-s btn-g" style="flex:1" onclick="ADMIN.doChangePassword()">Save New Password</button>
         <button class="btn-s" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="MODAL.close('pwd')">Cancel</button>
@@ -1003,6 +1062,70 @@ const CHAPTERS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// DATA MAINTENANCE — Settings tab. Thin clients for the three new
+// admin-only cleanup actions added to the backend in v1.01:
+//   adminPruneOldBackups   — delete ProgressBackups rows older than N days
+//   adminClearProgressBackups — delete ALL ProgressBackups rows
+//   adminTrimLogs          — keep only the most recent N Logs rows
+// All three are admin-gated server-side, all three write an entry to
+// the Activity Logs sheet with the acting admin's name, and the two
+// destructive ones confirm here client-side with the exact number that
+// will be removed so a fat-finger can't wipe a year of backups.
+// ═══════════════════════════════════════════════════════════════
+const MAINTENANCE = {
+  async pruneOldBackups() {
+    const days = parseInt(document.getElementById('maint-backup-days').value, 10);
+    if (!days || days < 1) return ADMIN.toast('❌ Enter a positive number of days');
+    if (!confirm(`Delete ProgressBackups rows older than ${days} day(s)?\n\nBackups newer than that stay untouched. This can't be undone.`)) return;
+    ADMIN.showLoading('Pruning backups…');
+    try {
+      const res = await ADMIN.post('adminPruneOldBackups', {daysToKeep: days});
+      if (!res.success) throw new Error(res.error || 'Prune failed');
+      ADMIN.toast(`✅ Pruned ${res.deleted} backup row(s), kept last ${res.daysToKeep}d`);
+      ADMIN.refresh(['logs']);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  },
+
+  async clearAllBackups() {
+    // Deliberately loud: this one is irreversible and removes the ONLY
+    // undo path for a replace-mode progress import, so the confirm
+    // requires typing the word DELETE rather than just clicking OK.
+    const typed = prompt(
+      'This will permanently delete EVERY progress-backup row.\n\n' +
+      'After this, a bad "replace"-mode progress import can no longer be undone.\n\n' +
+      'Type DELETE (uppercase) to confirm:'
+    );
+    if (typed !== 'DELETE') {
+      if (typed !== null) ADMIN.toast('Cancelled — nothing was deleted');
+      return;
+    }
+    ADMIN.showLoading('Clearing all backups…');
+    try {
+      const res = await ADMIN.post('adminClearProgressBackups');
+      if (!res.success) throw new Error(res.error || 'Clear failed');
+      ADMIN.toast(`🗑 Deleted ${res.deleted} backup row(s)`);
+      ADMIN.refresh(['logs']);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  },
+
+  async trimLogs() {
+    const keep = parseInt(document.getElementById('maint-logs-keep').value, 10);
+    if (!keep || keep < 100) return ADMIN.toast('❌ Keep at least 100 rows');
+    if (!confirm(`Keep only the most recent ${keep} log rows and delete everything older?`)) return;
+    ADMIN.showLoading('Trimming logs…');
+    try {
+      const res = await ADMIN.post('adminTrimLogs', {keepLast: keep});
+      if (!res.success) throw new Error(res.error || 'Trim failed');
+      ADMIN.toast(`✅ Trimmed ${res.deleted} old log row(s), kept ${res.kept}`);
+      ADMIN.refresh(['logs']);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
 // ADMIN ACCOUNTS — multi-admin management (Settings tab)
 // ═══════════════════════════════════════════════════════════════
 const ADMINS = {
@@ -1200,14 +1323,21 @@ const WEEKLYSETS = {
     if (!file) return;
     if (nameEl) nameEl.textContent = file.name;
 
-    // 2MB is well beyond a text-only question set (even a few hundred
-    // questions is normally under 200KB) — a file this large is almost
-    // always many embedded base64 images. Not blocked, since a
-    // genuinely image-heavy set might be intentional, but flagged so
-    // an admin who fat-fingered the wrong file (or didn't realize how
-    // much base64 images bloat size) notices before publishing
-    // something slow to download on a student's connection.
+    // v1.01: backend now refuses uploads over 5MB — this catches the
+    // same case client-side so a fat-fingered wrong file (a PDF, a
+    // screenshot, a video) is rejected instantly instead of after a
+    // slow round-trip. The 2MB soft-warn is unchanged: not blocked,
+    // just flagged, since a genuinely image-heavy question set at that
+    // size is possible and intentional.
+    const HARD_LIMIT_BYTES = 5 * 1024 * 1024;
     const LARGE_FILE_WARN_BYTES = 2 * 1024 * 1024;
+    if (file.size > HARD_LIMIT_BYTES) {
+      const mb = (file.size / (1024*1024)).toFixed(1);
+      status.textContent = `❌ File is ${mb}MB — question-bank JSON should be well under 4MB.`;
+      input.value = '';
+      if (nameEl) nameEl.textContent = 'No file chosen';
+      return;
+    }
     if (file.size > LARGE_FILE_WARN_BYTES) {
       const mb = (file.size / (1024*1024)).toFixed(1);
       if (!confirm(`This file is ${mb}MB — likely several embedded images. That's fine, but it'll be slower to download for students on weak connections. Continue uploading?`)) {
@@ -1798,7 +1928,16 @@ const USERS = {
 
   async bulkDelete() {
     if (!this.selected.size) return;
-    if (!confirm(`Permanently delete ${this.selected.size} user account(s)? This cannot be undone.`)) return;
+    // v1.01 note: the backend now also purges each deleted user's
+    // Progress, PushTokens, Payments, and ProgressBackups rows — the
+    // confirm text says so explicitly rather than the old, misleading
+    // "(payments, progress)" parenthetical, which undersold what goes.
+    if (!confirm(
+      `Permanently delete ${this.selected.size} user account(s)?\n\n` +
+      `This also removes each user's synced progress, push tokens, ` +
+      `payment record, and any progress backups — the whole account, ` +
+      `not just the Users row. Cannot be undone.`
+    )) return;
     const usernames = [...this.selected];
     ADMIN.showLoading('Deleting ' + usernames.length + ' user(s)…');
     try {
@@ -1806,13 +1945,13 @@ const USERS = {
       if (!res.success) throw new Error(res.error || 'Batch delete failed');
       const ok = res.results.filter(r => r.success).length;
       const failed = res.results.length - ok;
-      ADMIN.toast('🗑 Deleted ' + ok + (failed ? ', ❌ ' + failed + ' failed' : ''));
+      ADMIN.toast('🗑 Deleted ' + ok + ' account(s) and their associated data' + (failed ? ', ❌ ' + failed + ' failed' : ''));
     } catch(e) {
       ADMIN.toast('❌ ' + e.message);
     }
     ADMIN.hideLoading();
     this.clearSelection();
-    ADMIN.refresh(['stats','users']);
+    ADMIN.refresh(['stats','users','payments']);
   },
 
   view(username) {
@@ -1860,10 +1999,14 @@ const USERS = {
     const u = ADMIN.data.users.find(x => x.username === username);
     if (!u) return;
     document.getElementById('mtitle-user').textContent = 'Edit User: ' + username;
+    // v1.01 note: the backend now validates email and mobile against the
+    // same regexes handleSignup enforces, and refuses the save with a
+    // specific error otherwise — the toast below will surface exactly
+    // what was wrong rather than silently writing a malformed value.
     document.getElementById('mbody-user').innerHTML = `
       <div class="sf"><label for="edit-name">Full Name</label><input type="text" id="edit-name" value="${esc(u.name)}"></div>
-      <div class="sf"><label for="edit-email">Email</label><input type="email" id="edit-email" value="${esc(u.email)}"></div>
-      <div class="sf"><label for="edit-mobile">Mobile</label><input type="text" id="edit-mobile" value="${esc(u.mobile)}"></div>
+      <div class="sf"><label for="edit-email">Email</label><input type="email" id="edit-email" value="${esc(u.email)}" placeholder="user@example.com"></div>
+      <div class="sf"><label for="edit-mobile">Mobile</label><input type="text" id="edit-mobile" value="${esc(u.mobile)}" placeholder="98XXXXXXXX"></div>
       <div class="sf"><label for="edit-status">Status</label>
         <select id="edit-status">
           <option value="trial" ${u.status==='trial'?'selected':''}>Trial</option>
@@ -1903,7 +2046,14 @@ const USERS = {
   },
 
   async del(username) {
-    if (!confirm('Delete user "' + username + '"? This cannot be undone.\n\nAll associated data (payments, progress) will also be deleted.')) return;
+    // v1.01 note: the backend purge now removes Progress, PushTokens,
+    // Payments, and ProgressBackups too — same message used for bulk
+    // delete, so the confirm wording matches what actually happens.
+    if (!confirm(
+      `Delete user "${username}"?\n\n` +
+      `This also removes their synced progress, push tokens, payment ` +
+      `record, and any progress backups. Cannot be undone.`
+    )) return;
     ADMIN.showLoading('Deleting user…');
     try {
       const res = await ADMIN.post('adminDeleteUser', {username});
