@@ -12,8 +12,47 @@
    version.js on the client (single client-side source of truth — see
    that file's header — sw.js derives its cache name from it too, so
    bumping BOTH this constant and version.js's APP_VERSION together
-   forces every open browser tab into a fresh session on next load). */
-const APP_VERSION = "1.00";
+   forces every open browser tab into a fresh session on next load).
+
+   v1.01 changelog (backend-only, no client changes required):
+     - handleLogin: wrong admin password no longer silently falls
+       through to the user world and returns a confusing "no account"
+       error for a username that IS an admin.
+     - handleGoogleLogin: rate-limited like the plain signup form, so
+       the Google path can no longer be used to farm accounts or burn
+       UrlFetch quota on /tokeninfo verification calls.
+     - adminUpdateUser: email/mobile now validated with the same regex
+       as handleSignup, so an admin typo can't silently break dedup or
+       the payment-review contact fallback.
+     - adminUploadWeeklySetFile: refuses uploads over ~5MB with a
+       clear error instead of pushing garbage at Drive.
+     - checkYearlyExpiry_: clears accessType/accessExpiresAt columns
+       when a yearly grant expires, so no stale "yearly" values sit on
+       the row for code that reads rowToUser_() directly.
+     - adminDeleteUser/adminDeleteUsersBatch: purge the deleted user's
+       Progress, PushTokens, Payments, and ProgressBackups rows too.
+     - Three new admin actions: adminClearProgressBackups,
+       adminPruneOldBackups, adminTrimLogs.
+     - adminDeleteWeeklySet: cleans up its own wsnotified_<id>
+       PropertiesService flag.
+     - requestPasswordReset: removed a dead resetUrl computation.
+     - doGet's unknown-action error no longer embeds a giant list.
+
+   v1.02 changelog (backend + admin UI):
+     - Admin tokens now slide — an actively-used session extends its
+       own expiry, so an admin working past the 24h mark isn't silently
+       logged out mid-action. Idle sessions still expire normally.
+     - Payment screenshots are no longer uploaded with ANYONE_WITH_LINK
+       sharing. New uploads are private to the script owner; the admin
+       panel already views them via the authenticated DriveApp proxy,
+       so nothing needed public access in the first place. A one-time
+       adminRevokeScreenshotSharing action fixes existing files.
+     - Google Sign-In now has its own rate-limit bucket
+       (30/min) instead of sharing the signup bucket — an attacker
+       hammering /tokeninfo can no longer lock out legitimate signups.
+     - New adminExpiringTrials action: lists users whose trial expires
+       within N hours, powers a new dashboard card. */
+const APP_VERSION = "1.02";
 
 /* ── ADMIN CREDENTIALS ───────────────────────────────────────────
    Admins now live in their own sheet (see getAdminsSheet_ / ADMIN_HEADERS
@@ -158,7 +197,12 @@ function checkGetFileRateLimit_() {
    here than it would be for a read-only action like getFile.
    Threshold is generous enough for a realistic burst (a classroom
    signing up together during an orientation session) while still
-   meaningfully slowing down automated mass account creation. */
+   meaningfully slowing down automated mass account creation.
+
+   NOTE (v1.02): handleGoogleLogin now uses its own bucket key
+   ("googlelogin") rather than sharing this one, so an attacker
+   hammering /tokeninfo can no longer lock out legitimate signups for
+   the rest of the minute. */
 const SIGNUP_RATE_LIMIT_PER_MINUTE = 15;
 
 function checkSignupRateLimit_() {
@@ -214,6 +258,12 @@ const LOG_HEADERS = ["timestamp", "admin", "action", "target", "details"];
 const ADMIN_HEADERS = [
   "username", "passHash", "createdAt", "createdBy", "token", "tokenExpires"
 ];
+
+// 24h, same as admin.html's own client-side expires value. Extracted to
+// a constant because findAdminByToken_ and issueAdminToken_ both need it
+// and previously duplicated the literal — see v1.02's sliding-refresh
+// behavior below.
+const ADMIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 // A DELIBERATELY separate sheet from Users, not new columns on it — that
 // way this ships with zero migration risk to anyone's already-deployed
@@ -338,11 +388,22 @@ function doGet(e) {
       case "adminimportprogress": result = adminImportProgress(e.parameter); break;
       case "adminimportstatus":  result = adminImportStatus(e.parameter); break;
 
+      // ── ADMIN CLEANUP (v1.01) ──
+      case "adminclearprogressbackups": result = adminClearProgressBackups(e.parameter); break;
+      case "adminpruneoldbackups":       result = adminPruneOldBackups(e.parameter); break;
+      case "admintrimlogs":              result = adminTrimLogs(e.parameter); break;
+
+      // ── ADMIN MAINTENANCE / REPORTING (v1.02) ──
+      case "adminrevokescreenshotsharing": result = adminRevokeScreenshotSharing(e.parameter); break;
+      case "adminexpiringtrials":          result = adminExpiringTrials(e.parameter); break;
+
       default:
-        result = {
-          success: false,
-          error: "Unknown action: '" + action + "'. Valid: ping, login, googleLogin, signup, requestPasswordReset, resetPassword, updateOwnMobile, checkSession, saveProgress, getProgress, savePushToken, listWeeklySets, reportQuestion, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminReviewPaymentsBatch, adminDownloadScreenshot, adminGrantAccess, adminGrantAccessBatch, adminUpdateUser, adminDeleteUser, adminDeleteUsersBatch, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminMostMissedQuestions, adminListLogs, adminCreateWeeklySet, adminUploadWeeklySetFile, adminUpdateWeeklySet, adminDeleteWeeklySet, adminListWeeklySets, adminListQuestionReports, adminUpdateQuestionReportStatus, adminDeleteQuestionReport, adminImportProgress, adminImportStatus"
-        };
+        // Deliberately short. A giant hardcoded list of every action
+        // name drifts out of sync the moment someone adds one, and the
+        // error string itself was long enough to be a maintenance
+        // hazard. The doGet switch above IS the canonical list.
+        console.warn("Unknown action requested:", action);
+        result = { success: false, error: "Unknown action: '" + action + "'. See backend source for the valid action list." };
     }
   } catch (err) {
     console.error("doGet ERROR [" + action + "]:", err);
@@ -656,6 +717,13 @@ function findAdminRow_(sheet, username) {
 }
 
 // Token is column 5, expiry is column 6 (0-indexed 4/5) per ADMIN_HEADERS.
+// v1.02: sliding-window refresh. Every authenticated request that
+// arrives more than SLIDE_THRESHOLD_MS into the current window pushes
+// the expiry out by another full TTL — so an admin actively working past
+// hour 24 is never silently logged out mid-action, while a token that's
+// genuinely been abandoned still expires on schedule. Only writes when
+// the window has meaningfully moved, so a normal burst of admin requests
+// doesn't hit the Sheets write quota.
 function findAdminByToken_(sheet, token) {
   if (!token) return null;
   const data = sheet.getDataRange().getValues();
@@ -664,6 +732,21 @@ function findAdminByToken_(sheet, token) {
     const storedToken = data[i][4];
     const expires = Number(data[i][5] || 0);
     if (storedToken && storedToken === token && expires && now <= expires) {
+      // Time remaining in the current window. If it's dropped below
+      // (TTL - 1h) — i.e. this token has been alive for over an hour —
+      // extend it back to a fresh full TTL from now.
+      const SLIDE_THRESHOLD_MS = 60 * 60 * 1000;
+      if (expires - now < ADMIN_TOKEN_TTL_MS - SLIDE_THRESHOLD_MS) {
+        const newExpires = now + ADMIN_TOKEN_TTL_MS;
+        try {
+          sheet.getRange(i + 1, 6).setValue(String(newExpires));
+        } catch (e) {
+          // Best-effort: if the write fails the request still succeeds
+          // against the OLD (still-valid) expiry — the admin just doesn't
+          // get the extension this time.
+          console.error("findAdminByToken_: sliding refresh write failed:", e);
+        }
+      }
       return { rowIndex: i + 1, row: data[i] };
     }
   }
@@ -1012,7 +1095,7 @@ function checkAdmin_(p) {
 // a second device) logging in no longer invalidates anyone else's session.
 function issueAdminToken_(sheet, rowIndex) {
   const token = Utilities.getUuid();
-  const expires = Date.now() + 24 * 60 * 60 * 1000;
+  const expires = Date.now() + ADMIN_TOKEN_TTL_MS;
   sheet.getRange(rowIndex, 5).setValue(token);
   sheet.getRange(rowIndex, 6).setValue(String(expires));
   return token;
@@ -1028,7 +1111,15 @@ function checkYearlyExpiry_(sheet, found, user, status) {
     if (!isNaN(expiresAt) && new Date() > expiresAt) {
       sheet.getRange(found.rowIndex, 8).setValue("expired");
       sheet.getRange(found.rowIndex, 14).setValue("false");
+      // Clear the yearly-specific fields too, or a stale accessType=
+      // "yearly" + an old accessExpiresAt sit on the row forever and
+      // any code reading rowToUser_() directly (rather than through
+      // this function) still sees a "yearly" grant.
+      sheet.getRange(found.rowIndex, 15).setValue("");
+      sheet.getRange(found.rowIndex, 16).setValue("");
       user.permanentAccess = false;
+      user.accessType = "";
+      user.accessExpiresAt = "";
       return "expired";
     }
   }
@@ -1039,6 +1130,54 @@ function getOrCreateFolder_(folderName) {
   const iter = DriveApp.getFoldersByName(folderName);
   if (iter.hasNext()) return iter.next();
   return DriveApp.createFolder(folderName);
+}
+
+// Best-effort removal of a user's ancillary data from every sheet that
+// references them by username. Called from adminDeleteUser and
+// adminDeleteUsersBatch AFTER the Users row itself is deleted. Not
+// transactional — if the process is interrupted halfway some sheets may
+// retain rows for a now-deleted user, which is harmless (those rows are
+// never read against a missing Users entry) but a re-run of the same
+// delete for that same username would find nothing in Users to trigger
+// on, so purge those stragglers directly if that ever happens.
+function purgeUserAuxiliaryRows_(username) {
+  if (!username) return;
+  const target = String(username).toLowerCase().trim();
+
+  try {
+    const progressSheet = getProgressSheet_();
+    const found = findProgressRow_(progressSheet, username);
+    if (found) progressSheet.deleteRow(found.rowIndex);
+  } catch (e) { console.error("purgeUserAuxiliaryRows_: Progress failed:", e); }
+
+  try {
+    const ptSheet = getPushTokensSheet_();
+    const found = findPushTokenRow_(ptSheet, username);
+    if (found) ptSheet.deleteRow(found.rowIndex);
+  } catch (e) { console.error("purgeUserAuxiliaryRows_: PushTokens failed:", e); }
+
+  // Payments — at most one row per user by design, but iterate
+  // high-to-low in case a historical double-write ever left two.
+  try {
+    const paySheet = getPaymentsSheet_();
+    const payData = paySheet.getDataRange().getValues();
+    for (let i = payData.length - 1; i >= 1; i--) {
+      if (String(payData[i][0]).toLowerCase().trim() === target) {
+        paySheet.deleteRow(i + 1);
+      }
+    }
+  } catch (e) { console.error("purgeUserAuxiliaryRows_: Payments failed:", e); }
+
+  // ProgressBackups — every snapshot ever taken for this user
+  try {
+    const backupSheet = getProgressBackupsSheet_();
+    const backupData = backupSheet.getDataRange().getValues();
+    for (let i = backupData.length - 1; i >= 1; i--) {
+      if (String(backupData[i][2]).toLowerCase().trim() === target) {
+        backupSheet.deleteRow(i + 1);
+      }
+    }
+  } catch (e) { console.error("purgeUserAuxiliaryRows_: ProgressBackups failed:", e); }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1080,6 +1219,11 @@ function handleLogin(p) {
       };
     }
     recordLoginFailure_('admin', username);
+    // Do NOT fall through to the user world: this username IS an admin
+    // account, and "No account found. Please sign up first." is a
+    // confusing lie for someone who typed the right username with the
+    // wrong password. Return a password error instead.
+    return { success: false, error: "Wrong password." };
   }
 
   // ── USER WORLD ──
@@ -1219,6 +1363,14 @@ const GOOGLE_CLIENT_ID = "242226857075-hpkbjoqhlem95fu6vkf712e8ijs33sng.apps.goo
 function handleGoogleLogin(p) {
   const idToken = String(p.idToken || "").trim();
   if (!idToken) return { success: false, error: "Missing Google ID token." };
+
+  // v1.02: its own bucket, not shared with signup. A previous version
+  // routed this through checkSignupRateLimit_ — which meant an attacker
+  // hammering /tokeninfo could also block legitimate signups for the
+  // rest of that minute. Same ceiling, separate impact.
+  if (!checkRateLimit_("googlelogin", 30, 60000, "GoogleLogin Rate Limited")) {
+    return { success: false, error: "Too many sign-in attempts, please try again in a minute." };
+  }
 
   let payload;
   try {
@@ -1382,14 +1534,13 @@ function requestPasswordReset(p) {
   props.setProperty(resetTokenKey_(token), JSON.stringify({ username, expiresAt: Date.now() + RESET_TOKEN_TTL_MS }));
   props.setProperty(cooldownKey, String(Date.now()));
 
-  const resetUrl = ScriptApp.getService().getUrl().replace(/\/exec$/, "") + "/exec?resetToken=" + token;
-  // NOTE: the link above points at THIS Apps Script web app URL, not the
-  // actual hosted index.html — this app has no server-rendered pages to
-  // redirect through. The email body below instead tells the person to
-  // open the app and paste the code, which index.html's client-side
-  // resetToken handling (checks both a pasted code AND a ?resetToken=
-  // URL param, in case a future deploy does host index.html at a fixed
-  // domain) already supports either way.
+  // The reset code is delivered as a plain token the person pastes into
+  // the app. A prior version computed a `resetUrl` pointing at this Web
+  // App's own /exec endpoint but never used it in the email body below
+  // — dead code that only confused the next reader. If a future deploy
+  // hosts index.html at a fixed domain, restore a URL here and reference
+  // it in the mail body; index.html already handles a ?resetToken= URL
+  // param if you do.
   try {
     MailApp.sendEmail({
       to: email,
@@ -1775,7 +1926,14 @@ function submitPayment(p) {
       const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), "image/png", username + "_payment.png");
       const folder = getOrCreateFolder_("PaymentScreenshots");
       const file = folder.createFile(blob);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      // v1.02: deliberately NOT shared publicly. Payment screenshots
+      // routinely contain a student's name, phone number, and (depending
+      // on what app they screenshotted) bank details — no reason for
+      // anyone holding the URL to be able to view that. The admin panel
+      // reads them through adminDownloadScreenshot, which uses DriveApp
+      // as the script owner and works regardless of file sharing. The
+      // URL stored below is still a valid Drive URL for reference; it
+      // just won't resolve for anyone but the script owner now.
       screenshotUrl = file.getDownloadUrl();
     } catch (e) {
       console.log("Screenshot upload failed: " + e.message);
@@ -2810,8 +2968,25 @@ function adminUpdateUser(p) {
 
     const changes = [];
     if (p.name !== undefined) { sheet.getRange(found.rowIndex, 3).setValue(sanitizeSheetField_(p.name)); changes.push("name"); }
-    if (p.email !== undefined) { sheet.getRange(found.rowIndex, 4).setValue(sanitizeSheetField_(p.email)); changes.push("email"); }
-    if (p.mobile !== undefined) { sheet.getRange(found.rowIndex, 5).setValue(p.mobile); changes.push("mobile"); }
+    if (p.email !== undefined) {
+      const email = String(p.email).trim();
+      // Empty is allowed (clearing is legitimate); a non-empty value
+      // must match the same regex handleSignup enforces, or an admin
+      // typo silently breaks email dedup and password-reset mail.
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return { success: false, error: "Invalid email address." };
+      }
+      sheet.getRange(found.rowIndex, 4).setValue(sanitizeSheetField_(email));
+      changes.push("email");
+    }
+    if (p.mobile !== undefined) {
+      const mobile = String(p.mobile).trim();
+      if (mobile && !/^(98|97|96|99)\d{8}$/.test(mobile)) {
+        return { success: false, error: "Invalid Nepali mobile number. Use 10 digits starting with 98/97/96/99." };
+      }
+      sheet.getRange(found.rowIndex, 5).setValue(mobile);
+      changes.push("mobile");
+    }
     if (p.status !== undefined && p.status !== "") { sheet.getRange(found.rowIndex, 8).setValue(p.status); changes.push("status→" + p.status); }
     if (p.permanentAccess !== undefined) {
       const val = (p.permanentAccess === true || p.permanentAccess === "true") ? "true" : "false";
@@ -2839,7 +3014,8 @@ function adminDeleteUser(p) {
     const found = findUserRow_(sheet, username);
     if (!found) return { success: false, error: "User not found." };
     sheet.deleteRow(found.rowIndex);
-    logAction_(actor, "Delete User", username, "");
+    purgeUserAuxiliaryRows_(username);
+    logAction_(actor, "Delete User", username, "Purged Progress/PushTokens/Payments/Backups");
     return { success: true, deleted: username };
   });
 }
@@ -2884,12 +3060,13 @@ function adminDeleteUsersBatch(p) {
     toDelete.sort((a, b) => b.rowIndex - a.rowIndex); // high-to-low, see comment above
     toDelete.forEach(({ username, rowIndex }) => {
       sheet.deleteRow(rowIndex);
+      purgeUserAuxiliaryRows_(username); // AFTER the deleteRow, per-user, since deleteRow shifts indices
       results.push({ username, success: true });
     });
 
     const okCount = results.filter(r => r.success).length;
     logAction_(actor, "Bulk Delete User", usernames.join(", "),
-      okCount + "/" + usernames.length + " succeeded");
+      okCount + "/" + usernames.length + " succeeded (auxiliary rows purged)");
 
     return { success: true, results };
   });
@@ -3035,6 +3212,15 @@ function adminUploadWeeklySetFile(p) {
   const filename = String(p.filename || "weeklyset.json").trim();
   if (!fileData) return { success: false, error: "No file data provided." };
 
+  // A question-bank JSON is never genuinely megabytes. Refuse anything
+  // past ~5MB raw (base64 inflates ~33%, so this caps decoded content
+  // at ~3.7MB) — well above any real file, low enough that a
+  // fat-fingered wrong upload fails fast with a clear error instead
+  // of hammering Drive.
+  if (fileData.length > 5 * 1024 * 1024) {
+    return { success: false, error: "File too large — question-bank JSON should be well under 4MB." };
+  }
+
   let jsonText;
   try {
     // Accept either a raw data: URI (from <input type=file> + FileReader)
@@ -3154,6 +3340,10 @@ function adminDeleteWeeklySet(p) {
     const found = findWeeklySetRow_(sheet, id);
     if (!found) return { success: false, error: "Weekly set not found." };
     sheet.deleteRow(found.rowIndex);
+    // Clean up the "already notified for this set" flag so a future set
+    // that happens to be assigned the same UUID (vanishingly unlikely,
+    // but still) isn't silently skipped by checkWeeklySetUnlocks_.
+    PropertiesService.getScriptProperties().deleteProperty("wsnotified_" + id);
     logAction_(actor, "Delete Weekly Set", id, "");
     return { success: true, deleted: id };
   });
@@ -3934,6 +4124,162 @@ function reportIndexFromUid_(uid) {
   return match ? Number(match[2]) : null;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN CLEANUP — v1.01 additions
+   ───────────────────────────────────────────────────────────────
+   Three admin-gated maintenance actions for the sheets that grow
+   forever: ProgressBackups (a snapshot per user per replace-mode
+   import), Logs (one row per admin action, signup, password reset,
+   rate-limit trip), and — implicitly — whatever orphaned data the
+   delete-user purge above can't reach because the Users row is
+   already gone. All three are idempotent, all three are logged.
+   ═══════════════════════════════════════════════════════════════ */
+
+// Deletes every row in ProgressBackups (keeps the sheet and its header).
+// Irreversible — the pre-replace snapshots of every user's progress that
+// any past "replace"-mode import created are gone. Admin-gated like
+// every other mutation. Logged, so at least there's a record of when it
+// happened and who ran it.
+function adminClearProgressBackups(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+  return withLock_(() => {
+    const sheet = getProgressBackupsSheet_();
+    const lastRow = sheet.getLastRow();
+    const deleted = Math.max(0, lastRow - 1);
+    if (deleted > 0) sheet.deleteRows(2, deleted);
+    logAction_(actor, "Clear Progress Backups", "", "Deleted " + deleted + " backup row(s)");
+    return { success: true, deleted };
+  });
+}
+
+// Prunes ProgressBackups rows whose createdAt is older than p.daysToKeep
+// (default 30). Called periodically, this keeps the sheet from growing
+// forever WITHOUT losing the ability to undo a recent bad import —
+// anything within the window is still restorable.
+function adminPruneOldBackups(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+  const days = Math.max(1, Math.min(3650, Number(p.daysToKeep) || 30));
+  return withLock_(() => {
+    const sheet = getProgressBackupsSheet_();
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, deleted: 0, daysToKeep: days };
+    const data = sheet.getRange(2, 1, lastRow - 1, PROGRESS_BACKUP_HEADERS.length).getValues();
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    const rowsToDelete = [];
+    data.forEach((row, i) => {
+      // createdAt is column 5 (index 4) in PROGRESS_BACKUP_HEADERS
+      const t = new Date(row[4]).getTime();
+      if (!isNaN(t) && t < cutoff) rowsToDelete.push(i + 2);
+    });
+    rowsToDelete.sort((a, b) => b - a).forEach(r => sheet.deleteRow(r)); // high-to-low, same pattern as adminDeleteUsersBatch
+    logAction_(actor, "Prune Progress Backups", "", "Kept last " + days + "d, deleted " + rowsToDelete.length + " row(s)");
+    return { success: true, deleted: rowsToDelete.length, daysToKeep: days };
+  });
+}
+
+// Trims the Logs sheet down to its most recent `keepLast` rows
+// (default 5000). Logs grow monotonically — every admin action, every
+// signup, every password reset writes one — and adminListLogs only
+// ever reads the latest LOGS_MAX_ROWS_READ (1000) anyway, so anything
+// older than that is invisible to the admin UI regardless.
+function adminTrimLogs(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+  const keepLast = Math.max(100, Math.min(100000, Number(p.keepLast) || 5000));
+  return withLock_(() => {
+    const sheet = getLogsSheet_();
+    const lastRow = sheet.getLastRow();
+    const totalDataRows = Math.max(0, lastRow - 1);
+    const toDelete = Math.max(0, totalDataRows - keepLast);
+    if (toDelete > 0) sheet.deleteRows(2, toDelete); // oldest are at the top
+    logAction_(actor, "Trim Logs", "", "Kept " + keepLast + ", deleted " + toDelete + " row(s)");
+    return { success: true, deleted: toDelete, kept: keepLast };
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN MAINTENANCE — v1.02 additions
+   ───────────────────────────────────────────────────────────────
+   Two additional admin-only utilities:
+
+   1. adminRevokeScreenshotSharing — a one-time fixup for every payment
+      screenshot uploaded before v1.02 was shipped. Those files were
+      given ANYONE_WITH_LINK access by the old submitPayment code path;
+      this walks the PaymentScreenshots Drive folder and pulls each one
+      back to PRIVATE. Idempotent, safe to re-run any number of times.
+
+   2. adminExpiringTrials — a read-only query for users whose trial
+      expires within N hours. Powers a "Trials Ending Soon" card on the
+      admin dashboard. Separate from checkTrialExpiryWarnings (which is
+      the automatic push-notification job) so an admin can eyeball who's
+      about to lapse without waiting for the push or scanning the whole
+      Users list.
+   ═══════════════════════════════════════════════════════════════ */
+
+// One-time fix for the v1.01-and-earlier screenshot-sharing bug: every
+// screenshot uploaded before v1.02 was set to ANYONE_WITH_LINK. This
+// walks the PaymentScreenshots folder and pulls each file back to
+// PRIVATE. Idempotent — re-running on an already-private folder is a
+// no-op (counted under alreadyPrivate, not revoked). Safe to run any
+// number of times.
+function adminRevokeScreenshotSharing(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+
+  const folderIter = DriveApp.getFoldersByName("PaymentScreenshots");
+  if (!folderIter.hasNext()) {
+    return { success: true, processed: 0, revoked: 0, alreadyPrivate: 0, failed: 0, message: "No PaymentScreenshots folder yet — nothing to do." };
+  }
+  const folder = folderIter.next();
+  const files = folder.getFiles();
+  let processed = 0, revoked = 0, alreadyPrivate = 0, failed = 0;
+  while (files.hasNext()) {
+    processed++;
+    const f = files.next();
+    try {
+      if (f.getSharingAccess() === DriveApp.Access.PRIVATE) {
+        alreadyPrivate++;
+        continue;
+      }
+      f.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+      revoked++;
+    } catch (e) {
+      failed++;
+      console.error("adminRevokeScreenshotSharing: could not revoke " + f.getId() + " — " + (e.message || e));
+    }
+  }
+  logAction_(actor, "Revoke Screenshot Sharing", "",
+    `Processed ${processed}, revoked ${revoked}, already-private ${alreadyPrivate}, failed ${failed}`);
+  return { success: true, processed, revoked, alreadyPrivate, failed };
+}
+
+// Lists users whose trial expires within the next `hours` (default 24,
+// capped at 168 = 7 days). Read-only. Powers the "Trials Ending Soon"
+// card on the admin dashboard so an admin can see who's about to lapse
+// without having to eyeball the entire Users list. Sorted
+// soonest-expiring first — that's the order an admin actually cares
+// about.
+function adminExpiringTrials(p) {
+  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const hours = Math.max(1, Math.min(168, Number(p.hours) || 24));
+  const sheet = getUsersSheet_();
+  const data = sheet.getDataRange().getValues();
+  const now = Date.now();
+  const cutoff = now + hours * 60 * 60 * 1000;
+  const users = [];
+  for (let i = 1; i < data.length; i++) {
+    const u = rowToUser_(data[i]);
+    if (u.status !== "trial" || !u.trialExpiresAt) continue;
+    const t = new Date(u.trialExpiresAt).getTime();
+    if (isNaN(t) || t <= now || t > cutoff) continue;
+    users.push(u);
+  }
+  users.sort((a, b) => new Date(a.trialExpiresAt) - new Date(b.trialExpiresAt));
+  return { success: true, hours, count: users.length, users };
+}
+
 /**
  * Run this ONCE from the Apps Script editor if your spreadsheet already
  * existed before this update — the text-formatting fixes in
@@ -4011,6 +4357,13 @@ function fixSheetFormatting() {
    ═══════════════════════════════════════════════════════════════ */
 
 function testAll() {
+  // The seed password is meant to be changed after first login (see
+  // ADMIN_SEED_PASSWORD's own comment). Using the raw constant here
+  // means the test keeps passing as long as the seed account is still
+  // on the seed password; once you've changed it, edit testAdminPass
+  // below to match whatever you actually set.
+  const testAdminPass = ADMIN_SEED_PASSWORD;
+
   console.log("═══════════════════════════════════════════════════════");
   console.log("  Abhyas V1 — FULL SYSTEM TEST");
   console.log("═══════════════════════════════════════════════════════");
@@ -4045,14 +4398,14 @@ function testAll() {
   console.log("\n[4/10] Testing admin login...");
   const adminResult = adminLogin({
     username: "admin",
-    password: "ChangeMe123!"
+    password: testAdminPass
   });
   console.log("Admin login:", JSON.stringify(adminResult));
   if (!adminResult.success || !adminResult.isAdmin) throw new Error("ADMIN LOGIN FAILED");
 
   // 5. Admin list users
   console.log("\n[5/10] Testing admin list users...");
-  const listUsers = adminListUsers({ adminUser: "admin", adminPass: "ChangeMe123!" });
+  const listUsers = adminListUsers({ adminUser: "admin", adminPass: testAdminPass });
   console.log("Users count:", listUsers.users.length);
   if (!listUsers.success) throw new Error("ADMIN LIST USERS FAILED");
 
@@ -4091,7 +4444,7 @@ function testAll() {
   console.log("\n[9/10] Testing admin verify payment...");
   const verifyResult = adminReviewPayment({
     adminUser: "admin",
-    adminPass: "ChangeMe123!",
+    adminPass: testAdminPass,
     username: "testuser",
     status: "verified"
   });
@@ -4109,7 +4462,7 @@ function testAll() {
 
   // Stats
   console.log("\n[EXTRA] Admin stats...");
-  const stats = adminStats({ adminUser: "admin", adminPass: "ChangeMe123!" });
+  const stats = adminStats({ adminUser: "admin", adminPass: testAdminPass });
   console.log("Stats:", JSON.stringify(stats));
 
   console.log("\n═══════════════════════════════════════════════════════");
@@ -4152,6 +4505,7 @@ function diagnose() {
   const ss = getSpreadsheet_();
   console.log("Spreadsheet URL:", ss.getUrl());
   console.log("Sheets:", ss.getSheets().map(s => s.getName()).join(", "));
+  console.log("Backend version:", APP_VERSION);
 
   const u = getUsersSheet_();
   console.log("Users rows:", u.getLastRow());
