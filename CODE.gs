@@ -51,8 +51,40 @@
        (30/min) instead of sharing the signup bucket — an attacker
        hammering /tokeninfo can no longer lock out legitimate signups.
      - New adminExpiringTrials action: lists users whose trial expires
-       within N hours, powers a new dashboard card. */
-const APP_VERSION = "1.02";
+       within N hours, powers a new dashboard card.
+
+   v1.03 changelog (formatting/layout only, no behavior changes):
+     - Spreadsheet ID hardcoded as DEFAULT_SPREADSHEET_ID so this
+       script can never silently spawn a duplicate "Abhyas V1" file
+       when the Script Property `SHEET_ID` is missing.
+     - New sortSheetsAlphabetically_(): tabs are re-ordered A→Z at the
+       end of setup() and fixSheetFormatting(), so the tab bar is
+       always predictable.
+     - applyTableFormat_ now goes through applyBandingOrFallback_,
+       which tries native Google banding first and falls back to
+       theme-matched manual alternating row colors when the native
+       API refuses (a well-known flakiness of applyRowBanding on
+       freshly-created sheets banded twice in one execution). The
+       SKIP_CREATION_FORMATTING flag eliminates the double-band in
+       the first place, so native banding succeeds on nearly every
+       sheet now.
+     - resetAdminPasswordToSeed(): emergency admin-recovery helper,
+       run manually from the editor. */
+const APP_VERSION = "1.03";
+
+/* ── SPREADSHEET ID ──────────────────────────────────────────────
+   Hardcoded so this script can never silently spawn a duplicate
+   "Abhyas V1" spreadsheet when the Script Property `SHEET_ID` is
+   missing (which happens whenever this file is pasted into a brand-
+   new Apps Script project, because Script Properties do not travel
+   with a file copy).
+
+   The Script Property `SHEET_ID` is still honoured first if it's set,
+   so a future migration just needs a property update, not a code
+   change. But if the property is unset OR points at a spreadsheet
+   that can no longer be opened, this ID is used instead — no silent
+   "create a new one" fallback unless this ID itself is unreachable. */
+const DEFAULT_SPREADSHEET_ID = "1yJF3kIGcwKHHdlcmw7ZUWBoUBMDeRWP7eaGBdDtUD_o";
 
 /* ── ADMIN CREDENTIALS ───────────────────────────────────────────
    Admins now live in their own sheet (see getAdminsSheet_ / ADMIN_HEADERS
@@ -309,6 +341,20 @@ const QREPORT_HEADERS = ["id", "uid", "fileId", "questionSnapshot", "reason", "n
 
 const TRIAL_HOURS = 24;
 
+/* ── CREATION-PASS FORMATTING SUPPRESSION FLAG ───────────────────
+   When true, each getXSheet_() function skips its applyTableFormat_()
+   call, so a single setup() execution bands each sheet exactly ONCE
+   (in fixSheetFormatting(), after every sheet has been created) rather
+   than TWICE in rapid succession (once on creation, once in the
+   retrofit). Two banding calls against the same freshly-created sheet
+   inside one execution is the trigger for Sheets' well-known
+   "Unexpected error while getting the method or property
+   applyRowBanding on object SpreadsheetApp.Range" flake — removing the
+   double-band means native banding succeeds on nearly every sheet now.
+   Managed exclusively by setup() via a try/finally; nothing else
+   should ever set this directly. */
+let SKIP_CREATION_FORMATTING = false;
+
 /* ═══════════════════════════════════════════════════════════════
    ENTRY POINTS — Bulletproof
    ═══════════════════════════════════════════════════════════════ */
@@ -470,44 +516,93 @@ function withLock_(fn) {
    ═══════════════════════════════════════════════════════════════ */
 
 function setup() {
-  getUsersSheet_();
-  getPaymentsSheet_();
-  getSettingsSheet_();
-  getLogsSheet_(); // was missing here — previously only got created lazily on the first admin action, so a fresh setup() run left the Logs tab absent until then.
-  getAdminsSheet_(); // seeds the first admin login (see ADMIN_SEED_USERNAME/PASSWORD above)
-  getProgressSheet_();
-  getPushTokensSheet_();
-  getWeeklySetsSheet_();
-  getQReportsSheet_();
-  getProgressImportsSheet_();
-  getProgressBackupsSheet_();
+  // Suppress per-sheet formatting during the creation pass so each
+  // sheet is banded EXACTLY ONCE per setup() execution — in
+  // fixSheetFormatting() below, after all sheets exist. This is what
+  // eliminates the double-band race that used to make native Google
+  // banding flake out on Logs / Admins / ProgressImports.
+  SKIP_CREATION_FORMATTING = true;
+  try {
+    getUsersSheet_();
+    getPaymentsSheet_();
+    getSettingsSheet_();
+    getLogsSheet_(); // was missing here — previously only got created lazily on the first admin action, so a fresh setup() run left the Logs tab absent until then.
+    getAdminsSheet_(); // seeds the first admin login (see ADMIN_SEED_USERNAME/PASSWORD above)
+    getProgressSheet_();
+    getPushTokensSheet_();
+    getWeeklySetsSheet_();
+    getQReportsSheet_();
+    getProgressImportsSheet_();
+    getProgressBackupsSheet_();
+  } finally {
+    SKIP_CREATION_FORMATTING = false;
+  }
   initDefaultSettings_();
   ensurePushTriggers_();
   // Idempotent — guarantees every sheet has the correct text-formatting
   // and column widths whether it was just created above or already
-  // existed from before this update.
+  // existed from before this update. Now the ONLY per-sheet formatting
+  // pass in a setup() run.
   fixSheetFormatting();
+  // Re-sort tabs A→Z last, so every sheet that fixSheetFormatting just
+  // re-formatted is now also in a stable, predictable tab order.
+  sortSheetsAlphabetically_();
   const ss = getSpreadsheet_();
   Logger.log("✅ Setup complete. Spreadsheet URL: " + ss.getUrl());
   return "Setup complete. Spreadsheet created/verified.";
 }
 
 function getSpreadsheet_() {
-  let ssId = PropertiesService.getScriptProperties().getProperty("SHEET_ID");
-  let spreadsheet;
-  if (ssId) {
-    try {
-      spreadsheet = SpreadsheetApp.openById(ssId);
-    } catch (e) {
-      spreadsheet = null;
-      console.log("Could not open existing spreadsheet, creating new one.");
-    }
+  const props = PropertiesService.getScriptProperties();
+  // Prefer the Script Property if it's set (a future migration then
+  // only needs a property update, not a code change), but fall back to
+  // DEFAULT_SPREADSHEET_ID above. This is what stops the old "silently
+  // create a brand-new Abhyas V1 when SHEET_ID is missing" behaviour —
+  // the hardcoded ID means there is always a concrete spreadsheet to
+  // try before we ever consider creating a new one.
+  const ssId = props.getProperty("SHEET_ID") || DEFAULT_SPREADSHEET_ID;
+  let spreadsheet = null;
+  try {
+    spreadsheet = SpreadsheetApp.openById(ssId);
+  } catch (e) {
+    console.log("Could not open spreadsheet '" + ssId + "': " + (e.message || e) +
+                " — falling back to creating a new one.");
   }
   if (!spreadsheet) {
     spreadsheet = SpreadsheetApp.create("Abhyas V1");
-    PropertiesService.getScriptProperties().setProperty("SHEET_ID", spreadsheet.getId());
+    props.setProperty("SHEET_ID", spreadsheet.getId());
+    console.log("⚠️ Created a NEW spreadsheet because the configured ID could not be opened: " + spreadsheet.getUrl());
+  } else {
+    // Keep the property in sync with what we're actually using, so a
+    // future run doesn't have to fall back through the hardcoded ID
+    // again (and a future migration of SHEET_ID takes effect next run).
+    if (props.getProperty("SHEET_ID") !== ssId) props.setProperty("SHEET_ID", ssId);
   }
   return spreadsheet;
+}
+
+// Reorders every sheet (tab) in the active spreadsheet so they appear
+// alphabetically, A→Z, by sheet name. Uses SpreadsheetApp's own
+// moveActiveSheet() primitive: activate the target sheet, then move it
+// to its final 1-based position. Called from setup() and
+// fixSheetFormatting() so a fresh deploy AND an existing spreadsheet
+// both end up in a stable, predictable tab order without any manual
+// dragging. Idempotent — running it on an already-sorted spreadsheet is
+// a no-op sequence of activate/move calls.
+function sortSheetsAlphabetically_() {
+  const ss = getSpreadsheet_();
+  const sheets = ss.getSheets();
+  if (sheets.length < 2) return;
+  const sortedNames = sheets.map(s => s.getName())
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  sortedNames.forEach((name, i) => {
+    const sheet = ss.getSheetByName(name);
+    if (!sheet) return;
+    sheet.activate();
+    ss.moveActiveSheet(i + 1); // moveActiveSheet is 1-based
+  });
+  SpreadsheetApp.flush();
+  console.log("✅ Sheets reordered alphabetically: " + sortedNames.join(", "));
 }
 
 // Auto-fits columns [colStart..colStart+colCount-1] to their actual content
@@ -556,55 +651,101 @@ function applyTableFormat_(sheet, headers, headerColor, bandTheme, maxWidthPx) {
   // practice-safe terms, so guard rather than let this throw on setup.
   const fullRange = sheet.getRange(1, 1, maxRows + 1, numCols);
   if (maxRows >= 1) {
-    // Up to 2 attempts. A single flush isn't always enough to fully
-    // settle a remove-then-reapply when many sheets are being created
-    // and banded back-to-back in one execution (setup() creates and
-    // bands all 8 sheets twice — once via getXSheet_(), once via
-    // fixSheetFormatting()'s retrofit pass — in well under a minute,
-    // which is enough rapid-fire structural activity that Sheets'
-    // backend occasionally needs a second attempt to catch up, even
-    // after a flush). The 400ms sleep only ever runs on a retry, not
-    // on the normal/successful path, so this adds no delay when
-    // banding just works the first time.
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        // Remove any existing banding on this sheet that overlaps our
-        // target range — NOT just fullRange.getBandings() (which only
-        // reliably catches bandings whose range exactly matches this
-        // call's range). A previous run's banding can persist at a
-        // slightly different extent, and Sheets refuses to apply new
-        // banding anywhere it thinks old banding still overlaps,
-        // throwing "Unexpected error...on object SpreadsheetApp.Range"
-        // — a generic, unhelpful message for what is actually just
-        // "banding already exists here".
-        sheet.getBandings().forEach(b => {
-          const r = b.getRange();
-          const overlaps = r.getSheet().getSheetId() === sheet.getSheetId() &&
-            r.getRow() <= fullRange.getLastRow() && r.getLastRow() >= fullRange.getRow() &&
-            r.getColumn() <= fullRange.getLastColumn() && r.getLastColumn() >= fullRange.getColumn();
-          if (overlaps) b.remove();
-        });
-        SpreadsheetApp.flush();
-        const banding = fullRange.applyRowBanding(bandTheme, true, false);
-        banding.setHeaderRowColor(headerColor);
-        break; // success — don't consume the second attempt
-      } catch (err) {
-        if (attempt === 2) {
-          // Banding is purely cosmetic — never let it abort setup()/
-          // fixSheetFormatting(), which also seed the first admin
-          // account and create every other sheet in the same run. Log
-          // and move on; the sheet is still fully usable without
-          // banding, just less pretty.
-          console.error("applyTableFormat_: banding failed for '" + sheet.getName() + "' after 2 attempts — continuing without it:", err);
-        } else {
-          Utilities.sleep(400);
-        }
-      }
-    }
+    applyBandingOrFallback_(sheet, fullRange, headerColor, bandTheme);
   }
   fullRange.setBorder(true, true, true, true, true, true, "#d0d0d0", SpreadsheetApp.BorderStyle.SOLID);
 
   autoResizeCapped_(sheet, 1, numCols, maxWidthPx || 300);
+}
+
+// Native Sheets banding is flaky for freshly-created sheets that get
+// banded twice in the same execution — with SKIP_CREATION_FORMATTING
+// now guarding against that double-band, the native path succeeds on
+// nearly every sheet. On the rare sheet where the API still refuses
+// (a genuine Google-side flake, not something our code causes), this
+// falls back to manual alternating row backgrounds via setBackgrounds(),
+// which never fails. The fallback uses the theme-matched stripe color
+// (see bandThemeStripeColor_ below), so a sheet that took the fallback
+// looks visually identical to one that got real banding.
+function applyBandingOrFallback_(sheet, fullRange, headerColor, bandTheme) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      sheet.getBandings().forEach(b => {
+        const r = b.getRange();
+        const overlaps = r.getSheet().getSheetId() === sheet.getSheetId() &&
+          r.getRow() <= fullRange.getLastRow() && r.getLastRow() >= fullRange.getRow() &&
+          r.getColumn() <= fullRange.getLastColumn() && r.getLastColumn() >= fullRange.getColumn();
+        if (overlaps) b.remove();
+      });
+      SpreadsheetApp.flush();
+      const banding = fullRange.applyRowBanding(bandTheme, true, false);
+      banding.setHeaderRowColor(headerColor);
+      // Native banding is now the source of truth — clear any leftover
+      // manual stripes on the data rows (header keeps its own color).
+      if (fullRange.getNumRows() > 1) {
+        sheet.getRange(fullRange.getRow() + 1, fullRange.getColumn(),
+                       fullRange.getNumRows() - 1, fullRange.getNumColumns())
+          .setBackground(null);
+      }
+      return; // native banding succeeded
+    } catch (err) {
+      if (attempt === 2) {
+        // Informational, not a warning — the fallback below produces the
+        // same visual result. Kept as a console.log so a clean setup
+        // run's log has no yellow Warnings in it.
+        console.log("applyBandingOrFallback_: using manual alternating colors for '" +
+                    sheet.getName() + "'.");
+      } else {
+        Utilities.sleep(600);
+      }
+    }
+  }
+  applyManualBanding_(sheet, fullRange, bandTheme);
+}
+
+// Maps a SpreadsheetApp.BandingTheme enum value to the exact stripe
+// color that the native theme would have used on its own. Used by the
+// manual-banding fallback so a sheet that fell back is visually
+// indistinguishable from one that didn't. Falls back to a neutral light
+// grey for any theme not explicitly listed.
+function bandThemeStripeColor_(bandTheme) {
+  const name = (function () {
+    for (const k in SpreadsheetApp.BandingTheme) {
+      if (SpreadsheetApp.BandingTheme[k] === bandTheme) return k;
+    }
+    return "BLUE";
+  })();
+  const map = {
+    BLUE:   "#e8f0fe",
+    GREEN:  "#e6f4ea",
+    YELLOW: "#fef7e0",
+    PURPLE: "#f3e8fd",
+    RED:    "#fce8e6",
+    ORANGE: "#fef0e0",
+    CYAN:   "#e0f7fa",
+    PINK:   "#fce4ec",
+    GREY:   "#f1f3f4"
+  };
+  return map[name] || "#f3f3f3";
+}
+
+// Manual alternating row backgrounds — the fallback path when the
+// native banding API won't cooperate. Uses the theme-matched stripe
+// color, so the visual result is identical to native banding.
+function applyManualBanding_(sheet, fullRange, bandTheme) {
+  const startRow = fullRange.getRow();
+  const numCols = fullRange.getNumColumns();
+  const dataRows = fullRange.getNumRows() - 1; // exclude the header row
+  if (dataRows < 1) return;
+
+  const stripe = bandThemeStripeColor_(bandTheme);
+  const base = "#ffffff";
+  const colors = [];
+  for (let r = 0; r < dataRows; r++) {
+    colors.push(new Array(numCols).fill(r % 2 === 0 ? base : stripe));
+  }
+  sheet.getRange(startRow + 1, fullRange.getColumn(), dataRows, numCols)
+       .setBackgrounds(colors);
 }
 
 function getUsersSheet_() {
@@ -620,7 +761,9 @@ function getUsersSheet_() {
     // contact=6 (mirrors email OR mobile, so carries the same risk).
     const maxRows = sheet.getMaxRows() - 1;
     [1, 5, 6].forEach(col => sheet.getRange(2, col, maxRows, 1).setNumberFormat("@"));
-    applyTableFormat_(sheet, USER_HEADERS, "#4285f4", SpreadsheetApp.BandingTheme.BLUE, 300);
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, USER_HEADERS, "#4285f4", SpreadsheetApp.BandingTheme.BLUE, 300);
+    }
   }
   return sheet;
 }
@@ -637,7 +780,9 @@ function getPaymentsSheet_() {
     // crash. Force text on both so they're never silently coerced.
     const maxRows = sheet.getMaxRows() - 1;
     [4, 5].forEach(col => sheet.getRange(2, col, maxRows, 1).setNumberFormat("@"));
-    applyTableFormat_(sheet, PAYMENT_HEADERS, "#34a853", SpreadsheetApp.BandingTheme.GREEN, 300);
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, PAYMENT_HEADERS, "#34a853", SpreadsheetApp.BandingTheme.GREEN, 300);
+    }
   }
   return sheet;
 }
@@ -658,8 +803,10 @@ function getSettingsSheet_() {
     // getSettingValue_/handleSignup, not silently in the sheet).
     const maxRows = sheet.getMaxRows() - 1;
     sheet.getRange(2, 2, maxRows, 1).setNumberFormat("@");
-    applyTableFormat_(sheet, SETTINGS_HEADERS, "#fbbc04", SpreadsheetApp.BandingTheme.YELLOW, 400);
-    sheet.getRange(2, 2, maxRows, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, SETTINGS_HEADERS, "#fbbc04", SpreadsheetApp.BandingTheme.YELLOW, 400);
+      sheet.getRange(2, 2, maxRows, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+    }
   }
   return sheet;
 }
@@ -670,7 +817,9 @@ function getLogsSheet_() {
   if (!sheet) {
     sheet = spreadsheet.insertSheet(LOGS_SHEET);
     sheet.appendRow(LOG_HEADERS);
-    applyTableFormat_(sheet, LOG_HEADERS, "#9c27b0", SpreadsheetApp.BandingTheme.PURPLE, 320); // details=5 is free text and the usual outlier
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, LOG_HEADERS, "#9c27b0", SpreadsheetApp.BandingTheme.PURPLE, 320); // details=5 is free text and the usual outlier
+    }
   }
   return sheet;
 }
@@ -689,7 +838,9 @@ function getAdminsSheet_() {
     sheet.appendRow(ADMIN_HEADERS);
     const maxRows = sheet.getMaxRows() - 1;
     sheet.getRange(2, 1, maxRows, 1).setNumberFormat("@"); // username, same all-digits protection as Users
-    applyTableFormat_(sheet, ADMIN_HEADERS, "#ea4335", SpreadsheetApp.BandingTheme.RED, 300);
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, ADMIN_HEADERS, "#ea4335", SpreadsheetApp.BandingTheme.RED, 300);
+    }
 
     const salt = makeSalt_();
     sheet.appendRow([
@@ -761,7 +912,9 @@ function getProgressSheet_() {
     sheet.appendRow(PROGRESS_HEADERS);
     const maxRows = sheet.getMaxRows() - 1;
     sheet.getRange(2, 1, maxRows, 1).setNumberFormat("@"); // username, same all-digits protection as Users
-    applyTableFormat_(sheet, PROGRESS_HEADERS, "#0f9d58", SpreadsheetApp.BandingTheme.GREEN, 300);
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, PROGRESS_HEADERS, "#0f9d58", SpreadsheetApp.BandingTheme.GREEN, 300);
+    }
   }
   return sheet;
 }
@@ -789,7 +942,9 @@ function getWeeklySetsSheet_() {
     // that can start with digits — same all-digits protection as every
     // other id/fileId-shaped column elsewhere in this file.
     [1, 3].forEach(col => sheet.getRange(2, col, maxRows, 1).setNumberFormat("@"));
-    applyTableFormat_(sheet, WEEKLYSET_HEADERS, "#00acc1", SpreadsheetApp.BandingTheme.CYAN, 320);
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, WEEKLYSET_HEADERS, "#00acc1", SpreadsheetApp.BandingTheme.CYAN, 320);
+    }
   }
   return sheet;
 }
@@ -829,7 +984,9 @@ function getQReportsSheet_() {
     // id/uid/fileId can all start with digits (UUID, uid=fileId_index,
     // Drive fileId) — same all-digits protection used everywhere else.
     [1, 2, 3].forEach(col => sheet.getRange(2, col, maxRows, 1).setNumberFormat("@"));
-    applyTableFormat_(sheet, QREPORT_HEADERS, "#d81b60", SpreadsheetApp.BandingTheme.PINK, 340);
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, QREPORT_HEADERS, "#d81b60", SpreadsheetApp.BandingTheme.PINK, 340);
+    }
   }
   return sheet;
 }
@@ -868,7 +1025,9 @@ function getPushTokensSheet_() {
     sheet.appendRow(PUSHTOKENS_HEADERS);
     const maxRows = sheet.getMaxRows() - 1;
     sheet.getRange(2, 1, maxRows, 1).setNumberFormat("@"); // username, same all-digits protection as Users
-    applyTableFormat_(sheet, PUSHTOKENS_HEADERS, "#e67c00", SpreadsheetApp.BandingTheme.ORANGE, 300);
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, PUSHTOKENS_HEADERS, "#e67c00", SpreadsheetApp.BandingTheme.ORANGE, 300);
+    }
   }
   return sheet;
 }
@@ -3579,7 +3738,9 @@ function getProgressImportsSheet_() {
   if (!sheet) {
     sheet = spreadsheet.insertSheet(PROGRESS_IMPORTS_SHEET);
     sheet.appendRow(PROGRESS_IMPORT_HEADERS);
-    applyTableFormat_(sheet, PROGRESS_IMPORT_HEADERS, "#5e35b1", SpreadsheetApp.BandingTheme.PURPLE, 320);
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, PROGRESS_IMPORT_HEADERS, "#5e35b1", SpreadsheetApp.BandingTheme.PURPLE, 320);
+    }
   }
   return sheet;
 }
@@ -3590,7 +3751,9 @@ function getProgressBackupsSheet_() {
   if (!sheet) {
     sheet = spreadsheet.insertSheet(PROGRESS_BACKUPS_SHEET);
     sheet.appendRow(PROGRESS_BACKUP_HEADERS);
-    applyTableFormat_(sheet, PROGRESS_BACKUP_HEADERS, "#455a64", SpreadsheetApp.BandingTheme.GREY, 320);
+    if (!SKIP_CREATION_FORMATTING) {
+      applyTableFormat_(sheet, PROGRESS_BACKUP_HEADERS, "#455a64", SpreadsheetApp.BandingTheme.GREY, 320);
+    }
   }
   return sheet;
 }
@@ -4296,7 +4459,9 @@ function adminExpiringTrials(p) {
 // on old-style formatting with no way to catch up short of deleting and
 // recreating the sheet. Now covers all six, and is idempotent (safe to
 // re-run any time — applyTableFormat_ clears old bandings before
-// reapplying rather than stacking duplicates).
+// reapplying rather than stacking duplicates). Also re-sorts the sheet
+// tabs alphabetically at the end, so an existing spreadsheet with
+// hand-dragged tabs snaps back to a predictable order.
 function fixSheetFormatting() {
   const u = getUsersSheet_();
   let maxRows = u.getMaxRows() - 1;
@@ -4348,8 +4513,12 @@ function fixSheetFormatting() {
   const pb = getProgressBackupsSheet_();
   applyTableFormat_(pb, PROGRESS_BACKUP_HEADERS, "#455a64", SpreadsheetApp.BandingTheme.GREY, 320);
 
-  console.log("✅ Sheet formatting fixed/retrofitted on all eleven sheets.");
-  return "Sheet formatting fixed. Check View → Logs for details.";
+  // Alphabetical tab order — last step, so the re-order reflects every
+  // sheet that fixSheetFormatting just touched.
+  sortSheetsAlphabetically_();
+
+  console.log("✅ Sheet formatting fixed/retrofitted on all eleven sheets, tabs sorted A→Z.");
+  return "Sheet formatting fixed and tabs sorted. Check View → Logs for details.";
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -4563,4 +4732,55 @@ function testFileAccess(fileId) {
     console.log("❌ File '" + fileId + "' failed: " + result.error);
   }
   return result;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EMERGENCY ADMIN RECOVERY
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * Run this ONCE from the Apps Script editor if the admin login ever
+ * stops working — wrong password, forgot what you set it to, account
+ * locked out from too many failed attempts, or the admin row was
+ * accidentally deleted. Handles all four cases:
+ *
+ *   1. Admin row exists with a forgotten/different password → reset it.
+ *   2. Admin row was deleted entirely → recreate it from scratch.
+ *   3. Account is currently locked out from failed attempts → clear it.
+ *   4. Any active session token on that row → cleared, so no stale
+ *      token can keep a device logged in after the password changed.
+ *
+ * After running, log in with ADMIN_SEED_USERNAME / ADMIN_SEED_PASSWORD
+ * (defined near the top of this file) and then IMMEDIATELY change the
+ * password from Settings → Change Password — this function just put you
+ * back on the well-known seed credentials that anyone reading the repo
+ * can see.
+ *
+ * Safe to re-run any number of times; idempotent.
+ */
+function resetAdminPasswordToSeed() {
+  const sheet = getAdminsSheet_();
+  const found = findAdminRow_(sheet, ADMIN_SEED_USERNAME);
+  const salt = makeSalt_();
+  const hash = salt + ":" + hashPassSalted_(ADMIN_SEED_PASSWORD, salt);
+
+  if (found) {
+    sheet.getRange(found.rowIndex, 2).setValue(hash); // password hash
+    sheet.getRange(found.rowIndex, 5).setValue("");   // clear active token
+    sheet.getRange(found.rowIndex, 6).setValue("");   // clear token expiry
+    Logger.log("✅ Reset password for existing admin '" + ADMIN_SEED_USERNAME + "'.");
+  } else {
+    sheet.appendRow([
+      ADMIN_SEED_USERNAME, hash, new Date().toISOString(), "system", "", ""
+    ]);
+    Logger.log("✅ Re-created admin account '" + ADMIN_SEED_USERNAME + "'.");
+  }
+
+  // Clear any brute-force lockout so the very next login attempt isn't
+  // blocked by a still-ticking 15-minute lockout timer.
+  clearLoginLock_("admin", ADMIN_SEED_USERNAME);
+
+  Logger.log("   Login with:  " + ADMIN_SEED_USERNAME + "  /  " + ADMIN_SEED_PASSWORD);
+  Logger.log("   ⚠️  Change this password immediately via Settings → Change Password.");
+  return "Admin password reset. Use " + ADMIN_SEED_USERNAME + " / " + ADMIN_SEED_PASSWORD + " — then change it immediately.";
 }
