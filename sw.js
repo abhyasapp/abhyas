@@ -88,7 +88,18 @@ const SHELL = [
   './design-system.css',
   './manifest.json',
   './vendor/phosphor/phosphor-regular.css',
-  './vendor/phosphor/Phosphor.woff2'
+  './vendor/phosphor/Phosphor.woff2',
+  // v1.04 — Google Identity Services client. Precached so the Personal
+  // Drive Backup card's "Sign in with Google" button still works when
+  // the user opens Progress while offline: CLOUD._waitForGsi() polls
+  // for window.google.accounts.oauth2 and would otherwise time out
+  // after 20s with "Google Identity Services didn't load".
+  //
+  // NOTE: this is a cross-origin URL, so addAll() may fail it
+  // silently (opaque response). That's fine — the fetch handler's
+  // network-first path caches it on the next online request anyway,
+  // and a miss here is non-fatal for the SW install.
+  'https://accounts.google.com/gsi/client'
   // NOTE: admin.html is deliberately NOT in SHELL — it must never be
   // served from cache.
 ];
@@ -114,14 +125,24 @@ self.addEventListener('install', e => {
   self.skipWaiting();  // ← immediate activation, no old SW left behind
 });
 
-/* ----- ACTIVATE: delete all old caches and claim all clients ----- */
+/* ----- ACTIVATE: delete all old caches, claim all clients, and tell
+   every open tab the new SW is now in control. That notification is
+   what lets app.js surface a "reload to update" toast — the SW itself
+   can activate mid-session (skipWaiting + clients.claim below), but the
+   PAGE keeps executing the OLD JavaScript until it reloads, which is
+   invisible to the user without this nudge. ── */
 self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
-  );
-  self.clients.claim();  // ← take control of every open tab/pwa instantly
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
+    await self.clients.claim();
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach(client => {
+      try {
+        client.postMessage({ type: 'SW_ACTIVATED', version: APP_VERSION });
+      } catch (e) { /* client may be closing */ }
+    });
+  })());
 });
 
 /* Remove any cached shell entries that aren't in the current SHELL list */
@@ -179,7 +200,14 @@ self.addEventListener('fetch', e => {
           const clone = res.clone();
           caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
         }
-        clearStaleShellEntries();
+        // v1.04 — deliberately NO clearStaleShellEntries() call here.
+        // It used to fire on every getFile fetch (a full cache-key scan
+        // per question-file request, so ~200 scans during a first-time
+        // CACHE.autoSync of the whole library). The message-triggered
+        // path above is the only place stale entries can actually
+        // accumulate — index.html posts CLEAR_STALE_IF_ONLINE on every
+        // reconnect — so the hot-path call was pure redundancy with a
+        // real cost.
         return res;
       } catch (err) {
         if (isGetFile) {

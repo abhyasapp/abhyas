@@ -5,8 +5,6 @@
    This project intentionally has no build step (see README §2), so
    this can't be an ES module import — it's a plain script loaded
    with a <script src="shared.js"> tag before each page's own logic.
-   That's enough to stop copy-pasting the same handful of helper
-   functions into three separate <script> blocks.
    ═══════════════════════════════════════════════════════════════ */
 
 /**
@@ -17,29 +15,45 @@
  * handing it to the JS parser, so a plain HTML-escaped `"` would still
  * close the JS string wrapper (after decoding) even though it looks
  * "escaped". This handles both layers in the right order.
+ *
+ * v1.04: The function does NOT escape newlines. That's currently safe
+ * because every value ever passed here (usernames, ids) is validated
+ * upstream against [a-zA-Z0-9_.-] — a scheme that has no newline
+ * character. If the username regex is ever loosened, this function
+ * MUST be extended, because a literal newline inside a JS single-
+ * quoted string literal is a syntax error (not an injection vector,
+ * but still breakage).
  */
 function escAttrJs(s) {
-  return String(s || '').replace(/[\\'"<>]/g, c => ({
+  return String(s == null ? '' : s).replace(/[\\'"<>]/g, c => ({
     '\\': '\\\\', "'": "\\'", '"': '&quot;', '<': '&lt;', '>': '&gt;'
   }[c]));
 }
 
-/** HTML-escape a value for safe interpolation into innerHTML. */
+/**
+ * HTML-escape a value for safe interpolation into innerHTML.
+ *
+ * v1.04: the previous implementation used `s || ''`, which coerced
+ * false and 0 to the empty string — so esc(0) returned '' instead of
+ * '0' and esc(false) returned '' instead of 'false'. That's a subtle
+ * bug anywhere a numeric 0 is being escaped (e.g. a counter that
+ * legitimately reads zero). Fixed with an explicit null check.
+ */
 function esc(s) {
-  return String(s || '').replace(/[&<>"']/g, m => ({
+  return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[m]));
 }
 
 /**
- * "1 question" vs "5 questions" — several chapters/subtopics
- * genuinely have exactly 1 question (e.g. Geotechnical Engineering's
- * Rock & Earthquake subtopic, noted in chapters-data.js), so this
- * isn't just a theoretical singular case that never happens in
- * practice. Pass an explicit pluralWord for irregular nouns (e.g.
- * pluralize(1, 'file', 'files') already reads fine without one, since
- * the default is just word+'s' — only needed for words that don't
- * pluralize by simply appending 's').
+ * "1 question" vs "5 questions" — several chapters/subtopics genuinely
+ * have exactly 1 question (e.g. Geotechnical Engineering's Rock &
+ * Earthquake subtopic, noted in chapters-data.js), so this isn't just
+ * a theoretical singular case that never happens in practice. Pass an
+ * explicit pluralWord for irregular nouns (e.g. pluralize(1, 'file',
+ * 'files') already reads fine without one, since the default is just
+ * word+'s' — only needed for words that don't pluralize by simply
+ * appending 's').
  */
 function pluralize(n, word, pluralWord) {
   return `${n} ${n === 1 ? word : (pluralWord || word + 's')}`;

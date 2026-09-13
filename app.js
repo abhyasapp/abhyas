@@ -14,8 +14,7 @@ const SR_INTERVALS = [1, 3, 7, 14]; // days for spaced repetition
 
 // Weekly Sets exam window — once released, the student has this many
 // hours to take it as a timed, graded Exam. After the window closes,
-// the set switches to unlimited Flashcard-mode review (still reachable
-// forever via the home card's Weekly Sets list).
+// the set switches to unlimited Flashcard-mode review.
 const WEEKLY_EXAM_WINDOW_HOURS = 12;
 
 const LS = {
@@ -26,15 +25,15 @@ const LS = {
   EXAM_SNAP:'abhyas_exam_snap',
   FCOUNT:'abhyas_fcount',
   CLOUD:'abhyas_cloud',
-  PROFILE:'abhyas_profile',          // stores S.profile (including id)
-  // Per-chapter running accuracy aggregate — never trimmed by count,
-  // kept small (one row per chapter). Survives device switches intact
-  // and is what powers the durable chapter breakdown in PROG.render.
+  PROFILE:'abhyas_profile',
   CHAPSTATS:'abhyas_chapstats',
-  // Tracks which user's data currently sits on this device. When a
-  // DIFFERENT user logs in, AUTH._enter() wipes the previous user's
-  // scoped keys so they don't leak across accounts on a shared device.
-  LAST_USER:'abhyas_last_user'
+  LAST_USER:'abhyas_last_user',
+  // ═══ v1.04 ═══ Local mirror of the student's own Weekly Set attempts
+  // (keyed by weeklyId). Written locally FIRST (so a network failure
+  // can't lose the one submission), then pushed to the server. Not
+  // wiped by _resetUserScopedLocalDataIfDifferentUser — see that
+  // method's comment for why (attempts are immutable once submitted).
+  WK_ATTEMPTS:'abhyas_weekly_attempts'
 };
 
 const APP_NAME = 'Abhyas V1';
@@ -52,17 +51,19 @@ const S = {
   stk: _load(LS.STK, {days:[],last:''}),
   fcount: _load(LS.FCOUNT, {}),
   chapStats: _load(LS.CHAPSTATS, {}),
+  // ═══ v1.04 ═══ { [weeklyId]: {weeklyId, answers[], total, correct,
+  //   pct, skipped, startedAt, submittedAt, durationSec, synced} }
+  weeklyAttempts: _load(LS.WK_ATTEMPTS, {}),
   dpi: null,
   localQs: null,
   quiz: {qs:[],ans:[],mode:'',idx:0,timer:null,elapsed:0,left:0,active:false,ch:'',scope:null},
   cloud: _load(LS.CLOUD, {fid:''}),
   profile: _load(LS.PROFILE, {ver:1, id:''})
 };
-// Existing saved S.tt won't have a .reminders field — guard it explicitly.
 if(!S.tt.reminders) S.tt.reminders = {enabled:false, leadMinutes:5};
-// Ensure sessions array exists — older saves may lack it.
 if(!Array.isArray(S.prog.sessions)) S.prog.sessions = [];
 if(!S.stk.days) S.stk.days = [];
+if(!S.weeklyAttempts || typeof S.weeklyAttempts !== 'object') S.weeklyAttempts = {};
 
 /* ═══════════════ 3. UTILITIES ═══════════════ */
 function _load(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch{return d}}
@@ -124,7 +125,10 @@ const QDB = (() => {
       });
       return true;
     } catch (e) {
-      toast('⚠️ Storage full — some data not saved');
+      // ═══ v1.04 ═══ This toast is now suppressed — callers decide
+      // whether a cache-write failure is worth surfacing. QUIZ._fetch
+      // (the main caller) warns once per session instead of once per
+      // fetch, which matters when CACHE.autoSync iterates 200 files.
       return false;
     }
   }
@@ -174,7 +178,6 @@ const QDB = (() => {
   return { get, set, del, keys, clear, migrateFromLocalStorage };
 })();
 
-// esc() comes from shared.js (loaded before this file in user.html)
 function renderMath(el){
   if(!el || typeof window.renderMathInElement !== 'function') return;
   try{
@@ -189,13 +192,11 @@ function renderMath(el){
 }
 function shuf(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]]}return b}
 function fmt(s){if(s<0)s=0;return`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
-// Same as fmt() but for durations that can exceed an hour.
 function fmtHMS(s){
   if(s<0)s=0;
   const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
 }
-// Local calendar-day string (YYYY-MM-DD), NOT UTC.
 function today(){
   const d=new Date();
   const pad=n=>String(n).padStart(2,'0');
@@ -228,7 +229,6 @@ function qImgHtml(q){
   const alt = q.imgCaption || 'Question figure';
   return `<div style="margin:.4rem 0"><img src="${esc(q.img)}" alt="${esc(alt)}" style="max-width:100%;border-radius:8px;border:1px solid var(--b1);display:block" loading="lazy" onerror="this.parentElement.style.display='none'"></div>`;
 }
-// Shared "search this question on Google" icon-link markup.
 function qSearchHtml(q){
   const optsText = (q.options||[]).map((o,i)=>String.fromCharCode(65+i)+') '+o).join('  ');
   const query = encodeURIComponent(((q.q||'')+'  '+optsText).trim().slice(0,300));
@@ -319,12 +319,21 @@ function openMod(title,html){
 }
 function closeMod(){document.getElementById('mbg').classList.remove('show')}
 
-// Single source of truth for "is anything modal-blocking the quiz right
-// now" — used by the keydown handler so quiz shortcuts never fire while
-// any overlay is open.
 function _anyModalOpen(){
   if(document.getElementById('mbg')?.classList.contains('show')) return true;
-  return !!document.querySelector('#quiz-limit-modal, #exam-resume-modal, #quiz-exit-modal, #quiz-error-card, #quiz-loader');
+  // ═══ v1.04 ═══ Visible-based check (offsetParent !== null) instead of
+  // mere DOM presence — the loader and error card are created once and
+  // only hidden, so the previous querySelector-based check permanently
+  // returned true after the first quiz load. That silently disabled
+  // every keyboard shortcut (A/B/C/D, 1-5, ←/→, Esc) from the first
+  // quiz onward.
+  return [
+    '#quiz-limit-modal','#exam-resume-modal','#quiz-exit-modal',
+    '#quiz-error-card','#quiz-loader'
+  ].some(sel => {
+    const el = document.querySelector(sel);
+    return el && el.offsetParent !== null;
+  });
 }
 
 function qs(params){return Object.entries(params).map(([k,v])=>`${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')}
@@ -344,7 +353,7 @@ async function netFetch(url, opts, timeoutMs=20000){
   }
 }
 
-/* ═══════════════ 3b. NETCHECK — active reachability check ═══════════════ */
+/* ═══════════════ 3b. NETCHECK ═══════════════ */
 const NETCHECK = {
   _timer: null,
   async ping(){
@@ -360,12 +369,7 @@ const NETCHECK = {
   }
 };
 
-/* ═══════════════ 3c. CHAPSTATS — durable per-chapter accuracy ═══════════════
-   One record per chapter, holding running attempted/correct counts and
-   last-practised time. Updated incrementally every time a session is
-   recorded — O(1) per quiz, never a full rescan. Never trimmed by count
-   so a long-time user's earliest chapter history never falls out of the
-   rolling sessions window. */
+/* ═══════════════ 3c. CHAPSTATS ═══════════════ */
 const CHAPSTATS = {
   record(sess){
     const key = sess.chapter || 'Unknown';
@@ -386,9 +390,6 @@ const CHAPSTATS = {
       }))
       .sort((a,b)=>b.lastAt-a.lastAt);
   },
-  // Rebuilds the aggregate from whatever sessions are CURRENTLY retained.
-  // Never REDUCES a chapter's numbers — only fills chapters CHAPSTATS
-  // doesn't know about yet.
   rebuildFromSessions(){
     const rebuilt = {};
     (S.prog.sessions||[]).forEach(s=>{
@@ -407,7 +408,7 @@ const CHAPSTATS = {
   }
 };
 
-/* ═══════════════ 4. AUTH — SESSION GATE ONLY ═══════════════ */
+/* ═══════════════ 4. AUTH ═══════════════ */
 const AUTH = {
   async restore(){
     const u = _load(LS.USER, null);
@@ -476,12 +477,15 @@ const AUTH = {
   _bounce(){
     window.location.href = 'index.html';
   },
-  // Wipes user-scoped local data if a DIFFERENT user logs in on this
-  // device — otherwise user B silently inherits user A's progress,
-  // bookmarks, wrong-bank, streak, and chapStats, and pullIfEmpty()
-  // then skips the cloud restore because the data "looks" non-empty.
-  // EXAM_SNAP is deliberately NOT wiped here — checkResumableExam()
-  // already rejects snapshots from other users.
+  // Wipes user-scoped local data if a DIFFERENT user logs in on this device.
+  // ═══ v1.04 ═══ LS.WK_ATTEMPTS is deliberately NOT in the wipe list.
+  // Weekly attempts are immutable facts about specific (username,
+  // weeklyId) pairs — user A's submitted attempt for week 5 must not
+  // be lost just because user B logs into the same device. The
+  // server-side fetch during WEEKLY.init() will re-hydrate B's own
+  // attempts anyway, and A's stale entries sit inert in localStorage
+  // until A logs back in (at which point they are simply confirmed
+  // by the server and kept).
   _resetUserScopedLocalDataIfDifferentUser(username){
     const lastUser = _load(LS.LAST_USER, '');
     if(lastUser && lastUser !== username){
@@ -509,7 +513,7 @@ const AUTH = {
     PSYNC.pullIfEmpty();
     TT._startReminderChecker();
     if(typeof PUSH!=='undefined') PUSH.silentRefresh();
-    WEEKLY.init();
+    WEEKLY.init();   // ═══ v1.04 ═══ now async (fetches sets AND attempts)
   },
   _updateSidebarCard(user){
     const nameEl = document.getElementById('sb-uname');
@@ -528,15 +532,6 @@ const AUTH = {
       }
     }
   },
-  // Guarantees an auto-backup before tearing down the session.
-  // PSYNC's normal push is debounced (8s), so a user who answers a
-  // question and immediately hits Logout would previously lose that
-  // last batch for any device they next log in on.
-  //   1. If a debounced sync is pending, await a real pushNow() capped
-  //      at 1.5s — common case gets confirmation.
-  //   2. If that doesn't complete in time, fall back to sendBeacon —
-  //      browser guarantees the request survives the navigation.
-  // If nothing is pending, skips both — instant logout, no network call.
   async logout(){
     if(!confirm('Log out?'))return;
 
@@ -593,7 +588,7 @@ const AUTH = {
   }
 };
 
-/* ═══════════════ 4b. PSYNC — background progress backup ═══════════════ */
+/* ═══════════════ 4b. PSYNC ═══════════════ */
 const PSYNC = {
   _timer: null,
   _state: 'idle',
@@ -624,9 +619,6 @@ const PSYNC = {
     clearTimeout(this._timer);
     this._timer = setTimeout(()=>this.pushNow(), 8000);
   },
-  // Shared sendBeacon path — used by flushOnHide() and by AUTH.logout's
-  // awaited-push fallback. Fire-and-forget; browser guarantees the
-  // request survives an imminent navigation.
   _beaconSync(){
     if(!S.online || S.forcedOffline || !S.user || !S.user.token) return;
     try{
@@ -645,54 +637,53 @@ const PSYNC = {
     this._timer = null;
     this._beaconSync();
   },
-  // saveProgress on the backend rejects anything over 45,000 characters.
-  // Per-list COUNT caps alone don't guarantee that, so this measures the
-  // actual JSON length and iteratively halves the biggest of bk/fl/wr
-  // until the whole thing fits under 44,000 (leaves 1,000 chars of
-  // headroom). prog and chapStats are never trimmed — they're small and
-  // durable, losing them is worse than losing older bookmarks.
   _MAX_SYNCED_SESSIONS: 500,
   _MAX_SYNCED_LIST_ITEMS: 300,
   _SYNC_PAYLOAD_CEILING: 44000,
   _capList(arr, max){
     return Array.isArray(arr) && arr.length > max ? arr.slice(-max) : arr;
   },
+  // ═══ v1.04 ═══ Streamlined trimming. The old loop rebuilt and
+  // re-stringified the entire payload up to 12 times per sync. This
+  // version tries 4 progressively-smaller caps (full, half, quarter,
+  // minimum) and stops at the first one that fits — usually the first
+  // or second attempt. Same end result, up to 10 fewer serializations.
   _syncPayload(){
-    const prog = S.prog && S.prog.sessions && S.prog.sessions.length > this._MAX_SYNCED_SESSIONS
-      ? { ...S.prog, sessions: S.prog.sessions.slice(-this._MAX_SYNCED_SESSIONS) }
-      : S.prog;
-    const build = (bkMax, flMax, wrMax) => JSON.stringify({
-      prog,
-      chapStats: S.chapStats,
-      bk: this._capList(S.bk, bkMax),
-      fl: this._capList(S.fl, flMax),
-      wr: this._capList(S.wr, wrMax),
-      stk: S.stk
-    });
-    let bkMax = this._MAX_SYNCED_LIST_ITEMS;
-    let flMax = this._MAX_SYNCED_LIST_ITEMS;
-    let wrMax = this._MAX_SYNCED_LIST_ITEMS;
-    let payload = build(bkMax, flMax, wrMax);
-    let guard = 0;
-    while(payload.length > this._SYNC_PAYLOAD_CEILING && guard < 12){
-      guard++;
-      const bkLen = (S.bk||[]).length * bkMax;
-      const flLen = (S.fl||[]).length * flMax;
-      const wrLen = (S.wr||[]).length * wrMax;
-      const maxLen = Math.max(bkLen, flLen, wrLen);
-      if(maxLen === 0) break;
-      if(bkLen === maxLen && bkMax > 20) bkMax = Math.floor(bkMax/2);
-      else if(flLen === maxLen && flMax > 20) flMax = Math.floor(flMax/2);
-      else if(wrLen === maxLen && wrMax > 20) wrMax = Math.floor(wrMax/2);
-      else break;
-      payload = build(bkMax, flMax, wrMax);
+    const build = (bkMax, flMax, wrMax, sessMax) => {
+      const prog = (S.prog && S.prog.sessions && S.prog.sessions.length > sessMax)
+        ? { ...S.prog, sessions: S.prog.sessions.slice(-sessMax) }
+        : S.prog;
+      return JSON.stringify({
+        prog,
+        chapStats: S.chapStats,
+        bk: this._capList(S.bk, bkMax),
+        fl: this._capList(S.fl, flMax),
+        wr: this._capList(S.wr, wrMax),
+        stk: S.stk
+      });
+    };
+    const full = this._MAX_SYNCED_LIST_ITEMS;
+    const half = Math.max(20, Math.floor(full / 2));
+    const quarter = Math.max(20, Math.floor(full / 4));
+    const min = 20;
+    const sessFull = this._MAX_SYNCED_SESSIONS;
+    const sessHalf = Math.max(50, Math.floor(sessFull / 2));
+    const sessMin = 50;
+
+    const attempts = [
+      [full, full, full, sessFull],
+      [half, half, half, sessHalf],
+      [quarter, quarter, quarter, sessHalf],
+      [min, min, min, sessMin]
+    ];
+    for (const [bk, fl, wr, ss] of attempts) {
+      const payload = build(bk, fl, wr, ss);
+      if (payload.length <= this._SYNC_PAYLOAD_CEILING) return payload;
     }
-    return payload;
+    return build(min, min, min, sessMin);
   },
   async pushNow(){
     if(!S.online || S.forcedOffline || !S.user || !S.user.token) return;
-    // Clear the pending timer so _timer is a reliable "is a sync still
-    // pending?" flag for AUTH.logout's awaited-push check.
     clearTimeout(this._timer);
     this._timer = null;
     this._setState('syncing');
@@ -729,9 +720,6 @@ const PSYNC = {
       }
       const data = JSON.parse(res.data);
       if(data.prog){ S.prog=data.prog; if(typeof migrateSessionScopes === 'function') migrateSessionScopes(); _save(LS.PROG,S.prog); }
-      // Restored chapStats: merge (take the higher attempted count per
-      // chapter), clone before storing so a later local mutation can't
-      // reach back into the parsed cloud object.
       if(data.chapStats){
         Object.entries(data.chapStats).forEach(([key, rec])=>{
           const existing = S.chapStats[key];
@@ -756,7 +744,7 @@ const PSYNC = {
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') PSYNC.flushOnHide(); });
 window.addEventListener('pagehide', ()=>PSYNC.flushOnHide());
 
-/* ═══════════════ 4c. PUSH — Firebase Cloud Messaging notifications ═══════ */
+/* ═══════════════ 4c. PUSH ═══════════════ */
 const PUSH = {
   _messaging: null,
   supported(){
@@ -861,6 +849,17 @@ const PWA = {
     });
     if('serviceWorker' in navigator){
       navigator.serviceWorker.register('./sw.js', {scope:'./'}).catch(()=>{});
+      // ═══ v1.04 ═══ Service Worker updated and new SW has claimed the
+      // page — show a reload prompt. Never auto-reload (that would blow
+      // away an in-progress quiz); just notify, and suppress during an
+      // active quiz so the toast doesn't collide with quiz toasts.
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        if(e.data?.type === 'SW_ACTIVATED' && e.data.version !== (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '')){
+          if(!S.quiz.active){
+            toast('🔄 Update ready — reload to get the latest version.', 8000);
+          }
+        }
+      });
     }
   },
   _showInstallBanner(){
@@ -888,21 +887,52 @@ const PWA = {
   }
 };
 
-/* ═══════════════ 5b. WEEKLY SETS ═══════════════ */
+/* ═══════════════ 5b. WEEKLY SETS ═══════════════
+   ═══ v1.04 ═══ Rewritten. Three big changes vs. the previous version:
+     1. init() now fetches attempts alongside sets, in parallel, so the
+        home card can render the correct per-set state on first paint.
+     2. open() is async and consults the attempt state to decide which
+        of three modes to enter (exam / scored review / unscored review).
+     3. A submission path exists (recordAttempt → syncAttempt with
+        retry) that captures the student's single attempt at each set.
+        Submission is local-first — the student's one-shot write must
+        survive a network failure, so localStorage gets it before the
+        server does. */
 const WEEKLY = {
   sets: [],
+  attempts: S.weeklyAttempts || {},
   _tickTimer: null,
 
+  _saveAttempts(){
+    S.weeklyAttempts = this.attempts;
+    _save(LS.WK_ATTEMPTS, this.attempts);
+  },
+
+  // Fetches sets AND the user's own attempts in parallel, merges server
+  // attempts in (never overwriting a local one that hasn't been synced
+  // yet — that local copy is the student's only record of their one
+  // submission until the push succeeds), then renders.
   async init(){
-    if(!S.online || S.forcedOffline) return;
+    if(!S.online || S.forcedOffline){ this._renderHomeCard(); this._startTick(); return; }
     try{
-      const r = await netFetch(`${APPS}?${qs({action:'listWeeklySets', username:S.user.username, token:S.user.token})}`, {redirect:'follow'}, 15000);
-      const res = await r.json();
-      if(!res.success) return;
-      this.sets = res.sets || [];
+      const [setsRes, attemptsRes] = await Promise.all([
+        netFetch(`${APPS}?${qs({action:'listWeeklySets', username:S.user.username, token:S.user.token})}`, {redirect:'follow'}, 15000)
+          .then(r=>r.json()).catch(()=>({success:false})),
+        netFetch(`${APPS}?${qs({action:'getMyWeeklyAttempts', username:S.user.username, token:S.user.token})}`, {redirect:'follow'}, 15000)
+          .then(r=>r.json()).catch(()=>({success:false}))
+      ]);
+      if(setsRes.success) this.sets = setsRes.sets || [];
+      if(attemptsRes.success && Array.isArray(attemptsRes.attempts)){
+        for(const a of attemptsRes.attempts){
+          const local = this.attempts[a.weeklyId];
+          if(local && !local.synced) continue;   // don't clobber an unsynced local submission
+          this.attempts[a.weeklyId] = a;
+        }
+        this._saveAttempts();
+      }
       this._renderHomeCard();
       this._startTick();
-    }catch(e){ /* best-effort */ }
+    }catch(e){ this._renderHomeCard(); }
   },
 
   examCloseAt(s){
@@ -915,6 +945,7 @@ const WEEKLY = {
     const closeAt = this.examCloseAt(s);
     return closeAt !== null && Date.now() < closeAt;
   },
+  hasAttempt(id){ return !!this.attempts[id]; },
 
   _renderHomeCard(){
     const outer = document.getElementById('weekly-sets-outer');
@@ -923,35 +954,53 @@ const WEEKLY = {
     if(!this.sets.length){ outer.style.display = 'none'; box.innerHTML = ''; return; }
     outer.style.display = '';
     box.innerHTML = this.sets.map(s=>{
-      if(s.released){
-        const open = this.examOpen(s);
-        const closeAt = this.examCloseAt(s);
-        const idJson = JSON.stringify(String(s.id));
-        return `<div class="qb-btn ok" style="cursor:pointer;width:100%;justify-content:space-between;align-items:center" onclick='WEEKLY.open(${idJson})'>
-          <span><i class="ph ph-${open?'note-pencil':'check-circle'}"></i> ${esc(s.title)}${s.chapterLabel?` <span style="opacity:.6">— ${esc(s.chapterLabel)}</span>`:''}</span>
-          ${open ? `<span class="mono" id="weekly-countdown-${esc(s.id)}" data-close="${closeAt}" style="font-size:.68rem;font-weight:700;color:var(--ros)" title="Time left to take this as a graded exam">${fmtHMS(Math.max(0,Math.round((closeAt-Date.now())/1000)))}</span>`
-                 : `<span style="font-size:.62rem;opacity:.65">Review mode</span>`}
+      const attempted = this.attempts[s.id];
+      const idJson = JSON.stringify(String(s.id));
+
+      // Not yet released — locked countdown.
+      if(!s.released){
+        const when = s.releaseAt ? new Date(s.releaseAt) : null;
+        const whenTxt = when ? when.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : 'soon';
+        return `<div class="qb-btn" style="width:100%;justify-content:flex-start;opacity:.6;cursor:default">
+          <i class="ph ph-lock-simple"></i> ${esc(s.title)} <span style="opacity:.7">— unlocks ${whenTxt}</span>
         </div>`;
       }
-      const when = s.releaseAt ? new Date(s.releaseAt) : null;
-      const whenTxt = when ? when.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : 'soon';
-      return `<div class="qb-btn" style="width:100%;justify-content:flex-start;opacity:.6;cursor:default">
-        <i class="ph ph-lock-simple"></i> ${esc(s.title)} <span style="opacity:.7">— unlocks ${whenTxt}</span>
+
+      // Attempted — show recorded score. No countdown (nothing left to attempt).
+      if(attempted){
+        return `<div class="qb-btn ok" style="cursor:pointer;width:100%;justify-content:space-between;align-items:center;opacity:.92" onclick='WEEKLY.open(${idJson})'>
+          <span><i class="ph ph-check-circle"></i> ${esc(s.title)}${s.chapterLabel?` <span style="opacity:.6">— ${esc(s.chapterLabel)}</span>`:''}</span>
+          <span class="ctag tg" style="font-size:.62rem;font-weight:700">✓ ${attempted.pct}% · Review</span>
+        </div>`;
+      }
+
+      // Not attempted, window still open — graded exam with live countdown.
+      const open = this.examOpen(s);
+      const closeAt = this.examCloseAt(s);
+      if(open){
+        return `<div class="qb-btn ok" style="cursor:pointer;width:100%;justify-content:space-between;align-items:center" onclick='WEEKLY.open(${idJson})'>
+          <span><i class="ph ph-note-pencil"></i> ${esc(s.title)}${s.chapterLabel?` <span style="opacity:.6">— ${esc(s.chapterLabel)}</span>`:''}</span>
+          <span class="mono" id="weekly-countdown-${esc(s.id)}" data-close="${closeAt}" style="font-size:.68rem;font-weight:700;color:var(--ros)" title="Time left — one attempt only">${fmtHMS(Math.max(0,Math.round((closeAt-Date.now())/1000)))}</span>
+        </div>`;
+      }
+
+      // Not attempted, window closed — review only, no score possible.
+      return `<div class="qb-btn" style="cursor:pointer;width:100%;justify-content:space-between;align-items:center;opacity:.75" onclick='WEEKLY.open(${idJson})'>
+        <span><i class="ph ph-eye"></i> ${esc(s.title)}${s.chapterLabel?` <span style="opacity:.6">— ${esc(s.chapterLabel)}</span>`:''}</span>
+        <span style="font-size:.62rem;opacity:.75">Review only</span>
       </div>`;
     }).join('');
   },
 
-  // Interval clears itself once nothing has a live countdown — no more
-  // 1-second churn on an empty set list.
   _startTick(){
     if(this._tickTimer){ clearInterval(this._tickTimer); this._tickTimer = null; }
-    const anyCountdown = this.sets.some(s=>s.released && this.examCloseAt(s) !== null);
+    const anyCountdown = this.sets.some(s=>s.released && !this.attempts[s.id] && this.examCloseAt(s) !== null);
     if(!anyCountdown) return;
     this._tickTimer = setInterval(()=>{
       let anyExpired = false;
       let anyLive = false;
       this.sets.forEach(s=>{
-        if(!s.released) return;
+        if(!s.released || this.attempts[s.id]) return;
         const closeAt = this.examCloseAt(s);
         if(closeAt===null) return;
         const el = document.getElementById('weekly-countdown-'+s.id);
@@ -968,16 +1017,138 @@ const WEEKLY = {
     }, 1000);
   },
 
-  open(id){
+  // Entry point from the home card. Resolves to one of three modes:
+  //   - First attempt, window open → graded exam (QUIZ.load mode='exam')
+  //   - Already submitted → scored review (flashcard + preset answers)
+  //   - Window closed, never attempted → unscored review (flashcard,
+  //     no preset answers, correct answers still shown on reveal)
+  async open(id){
     const s = this.sets.find(x=>x.id===id);
     if(!s || !s.released || !s.fileId){ toast('Not unlocked yet.'); return; }
-    const open = this.examOpen(s);
-    if(open){
-      toast('📝 Graded exam — ' + fmtHMS(Math.max(0,Math.round((this.examCloseAt(s)-Date.now())/1000))) + ' left in the window');
-    } else {
-      toast('👁️ Exam window closed — open for unlimited review');
+
+    // Prefer the local attempt — may be unsynced. Fetch from server
+    // only if the local cache is empty (fresh install, cleared storage,
+    // or another device got there first).
+    let attempt = this.attempts[id];
+    if(!attempt && S.online && !S.forcedOffline){
+      try{
+        const r = await netFetch(`${APPS}?${qs({action:'getWeeklyAttempt', username:S.user.username, token:S.user.token, weeklyId:id})}`, {redirect:'follow'}, 15000);
+        const res = await r.json();
+        if(res.success && res.attempt){
+          attempt = res.attempt;
+          this.attempts[id] = attempt;
+          this._saveAttempts();
+          this._renderHomeCard();
+        }
+      }catch(e){ /* network hiccup — fall through, let exam start */ }
     }
-    QUIZ.load(s.fileId, `weekly_${s.id}`, open ? 'exam' : 'flashcard', s.title, null);
+
+    if(attempt){
+      toast(`🔒 One attempt only — showing your recorded result (${attempt.pct}%)`, 3500);
+      this._startReview(s, attempt);
+      return;
+    }
+
+    if(!this.examOpen(s)){
+      toast('👁️ Exam window closed — viewing answers only', 3500);
+      this._startReview(s, null);
+      return;
+    }
+
+    toast(`📝 Graded exam — you get ONE attempt. ${fmtHMS(Math.max(0, Math.round((this.examCloseAt(s)-Date.now())/1000)))} left.`, 5000);
+    // ═══ v1.04 ═══ scope.weeklyId triggers the shuffle-lock in
+    // QUIZ._doStart — see that function's comment for why the shuffle
+    // MUST be off for any weekly attempt (so the recorded answers[]
+    // array stays aligned with the source question file's order).
+    QUIZ.load(s.fileId, `weekly_${s.id}`, 'exam', s.title, {
+      weeklyId: s.id,
+      weeklyTitle: s.title,
+      weeklyFirstAttempt: true
+    });
+  },
+
+  // Review mode. `attempt` may be null (window closed, never
+  // submitted) — in that case there's no preset answers array, but
+  // the correct answers still display on option reveal, exactly like a
+  // normal flashcard session.
+  _startReview(s, attempt){
+    QUIZ.load(s.fileId, `weekly_${s.id}`, 'flashcard', s.title, {
+      weeklyId: s.id,
+      weeklyTitle: s.title,
+      weeklyReviewMode: true,
+      weeklyAttempt: attempt || null
+    });
+  },
+
+  // Called from QUIZ._showResults after a weekly exam completes.
+  // Local-first: the student's one submission must survive a network
+  // failure, so localStorage gets it before the server push. Then a
+  // best-effort server sync via _syncAttempt (which retries via
+  // retryUnsynced on next reconnect).
+  async _recordAttempt(quiz, stats){
+    const weeklyId = quiz.scope?.weeklyId;
+    if(!weeklyId) return;
+    const attempt = {
+      weeklyId,
+      answers: (quiz.ans || []).slice(),
+      total: stats.total,
+      correct: stats.correct,
+      skipped: stats.skipped,
+      pct: stats.pct,
+      startedAt: quiz.startedAt || Date.now(),
+      submittedAt: Date.now(),
+      durationSec: Math.min(6*60*60, Math.round((Date.now()-(quiz.startedAt||Date.now()))/1000)),
+      synced: false
+    };
+    this.attempts[weeklyId] = attempt;
+    this._saveAttempts();
+    this._renderHomeCard();
+    await this._syncAttempt(attempt);
+  },
+
+  async _syncAttempt(attempt){
+    if(!S.online || S.forcedOffline || !S.user?.token) return;
+    try{
+      const r = await netFetch(APPS, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          action: 'submitWeeklyAttempt',
+          username: S.user.username,
+          token: S.user.token,
+          weeklyId: attempt.weeklyId,
+          answers: JSON.stringify(attempt.answers),
+          correctCount: attempt.correct,
+          startedAt: attempt.startedAt,
+          durationSec: attempt.durationSec
+        })
+      }, 20000);
+      const res = await r.json();
+      if(res.success && res.attempt){
+        // Server may have normalized the payload — trust its copy.
+        this.attempts[attempt.weeklyId] = res.attempt;
+        this._saveAttempts();
+        this._renderHomeCard();
+      } else if(res.alreadyAttempted && res.attempt){
+        // Another device on this account beat us to the write. Server
+        // wins — replace the local copy so the student sees the real
+        // recorded score, and let them know why.
+        this.attempts[attempt.weeklyId] = res.attempt;
+        this._saveAttempts();
+        this._renderHomeCard();
+        toast('ℹ️ This set was already submitted on another device — showing the recorded result.', 5000);
+      }
+    }catch(e){
+      // Offline or transient error. Leave synced:false; retryUnsynced
+      // picks it up on next reconnect.
+    }
+  },
+
+  retryUnsynced(){
+    if(!S.online || S.forcedOffline) return;
+    Object.values(this.attempts).forEach(a => {
+      if(a && !a.synced) this._syncAttempt(a);
+    });
   }
 };
 
@@ -992,7 +1163,22 @@ const UI = {
     document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
     const ni=document.getElementById('nav-'+v);
     if(ni)ni.classList.add('active');
-    UI.cur=v;UI.sidebarClose();window.scrollTo(0,0);
+
+    // ═══ v1.04 ═══ Clear view-scoped intervals when leaving their view.
+    // Without this, HOME._clockTimer and TT._clockTimer kept running
+    // forever after a single visit — the naive "clear on next render"
+    // pattern never fires if you never return to that view.
+    if(UI.cur === 'home' && v !== 'home' && HOME._clockTimer){ clearInterval(HOME._clockTimer); HOME._clockTimer = null; }
+    if(UI.cur === 'timetable' && v !== 'timetable' && TT._clockTimer){ clearInterval(TT._clockTimer); TT._clockTimer = null; }
+
+    UI.cur=v;UI.sidebarClose();
+    // ═══ v1.04 ═══ scroll the correct container. #main is the actual
+    // scrolling pane (overflow-y:auto); window.scrollTo(0,0) was a
+    // no-op for the previous view's preserved scroll position.
+    const mainEl = document.getElementById('main');
+    if(mainEl) mainEl.scrollTop = 0;
+    window.scrollTo(0,0);
+
     ({
       home:()=>HOME.render(),
       progress:()=>{ PROG.render(); if(typeof PUSH!=='undefined') PUSH.refreshButtonUI(); },
@@ -1150,7 +1336,7 @@ const PSY = {
       const names=ChapterData.chapters(lv);
       const items=Object.entries(names).map(([k,n])=>{
         const fc=ChapterData.fileCount(lv,k);
-        return `<div class="ch-item" onclick="this.querySelector('input').click()">
+        return `<div class="ch-item" tabindex="0" role="button" onclick="this.querySelector('input').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.querySelector('input').click()}">
           <input type="checkbox" value="${k}" data-lv="${lv}" ${fc?'':'disabled'} onclick="event.stopPropagation();PSY._info()">
           <div class="ch-num">${k}</div>
           <div class="ch-name">${n}${fc?'':' <span style=\"color:var(--t3)\">(no files)</span>'}</div>
@@ -1179,22 +1365,39 @@ const PSY = {
   async start(type){
     const cbs=[...document.querySelectorAll('#psy-levels input:checked')];
     if(!cbs.length){toast('Select at least one chapter');return}
-    const totalFiles = cbs.reduce((n,cb)=>n+ChapterData.chapterFileRefs(cb.dataset.lv,cb.value).length,0);
-    QUIZ._showLoader(`Loading ${cbs.length} chapter${cbs.length>1?'s':''} (0/${totalFiles})…`);
-    const all=[];
-    let done=0,failed=0;
+    // ═══ v1.04 ═══ Parallel fetch with concurrency 4. The previous
+    // version awaited every file strictly in sequence — for a full-level
+    // "All" run (~60 files) that turned into minutes of wall time on a
+    // slow connection, all while the loader said nothing. The API
+    // endpoint is rate-limited at 120/min; 4 concurrent leaves plenty
+    // of headroom.
+    const refs = [];
     for(const cb of cbs){
-      const lv=cb.dataset.lv;
-      const ch=cb.value;
-      for(const ref of ChapterData.chapterFileRefs(lv,ch)){
+      const lv = cb.dataset.lv;
+      const ch = cb.value;
+      refs.push(...ChapterData.chapterFileRefs(lv, ch));
+    }
+    QUIZ._showLoader(`Loading ${pluralize(refs.length,'file')}…`);
+    const all=[];
+    let done=0, failed=0, i=0;
+    const loaderMsg = () => {
+      const el = document.getElementById('quiz-loader-msg');
+      if(el) el.textContent = `Loading files (${done}/${refs.length})…`;
+    };
+    async function worker(){
+      while(i < refs.length){
+        const ref = refs[i++];
         try{
-          const raw=await QUIZ._fetch(ref.fid,ref.key);
-          all.push(...normQ(raw,ref.fid));
-          done++;
-          document.getElementById('quiz-loader-msg').textContent=`Loading files (${done}/${totalFiles})…`;
-        }catch{ failed++; }
+          const raw = await QUIZ._fetch(ref.fid, ref.key);
+          all.push(...normQ(raw, ref.fid));
+        }catch(e){
+          failed++;
+        }
+        done++;
+        loaderMsg();
       }
     }
+    await Promise.all(Array.from({length: Math.min(4, refs.length)}, worker));
     QUIZ._hideLoader();
     if(!all.length){toast('❌ No questions loaded. Cache data first if offline.',5000);return}
     if(failed>0) toast(`⚠️ ${failed} file${failed>1?'s':''} failed to load — starting with ${all.length} questions`);
@@ -1210,16 +1413,12 @@ const PSY = {
   }
 };
 
-/* ═══════════════ 8. REVIEW LISTS (bookmarks / flagged / wrong) ═══════════════ */
+/* ═══════════════ 8. REVIEW LISTS ═══════════════ */
 const REV = {
   _store(kind){ return kind==='bk'?S.bk : kind==='fl'?S.fl : S.wr; },
   _lsKey(kind){ return kind==='bk'?LS.BK : kind==='fl'?LS.FL : LS.WR; },
   _listEl(kind){ return kind==='bk'?'bk-list' : kind==='fl'?'fl-list' : 'wr-list'; },
 
-  // Drops the heaviest field (embedded base64 img) before persisting —
-  // a handful of bookmarked image-heavy questions could otherwise
-  // exhaust the entire localStorage quota on their own. Text and options
-  // are what matter for review.
   _stripHeavy(q){
     if(!q || !q.img) return q;
     const {img, imgCaption, ...rest} = q;
@@ -1391,8 +1590,16 @@ const QUIZ = {
         throw new Error(data.error || 'Server returned an error for this file.');
       }
       if(_validCache(data)){
-        if(!(await QDB.set(cacheKey, data))){
-          throw new Error('Storage full — could not save this set for offline use. Clear some cached sets first.');
+        // ═══ v1.04 ═══ The IndexedDB write is best-effort. Previously a
+        // storage-full failure THREW, even though the fetch had already
+        // succeeded and the data was in memory. That meant a user with
+        // a full IDB literally could not take a quiz online, which is
+        // nonsense — the offline cache is a nice-to-have, not the point
+        // of an online fetch. Warn once per session, keep the data.
+        const ok = await QDB.set(cacheKey, data);
+        if(!ok && !QUIZ._cacheWarned){
+          QUIZ._cacheWarned = true;
+          toast('⚠️ Device storage is full — quizzes still work, but new sets won\'t be saved for offline use. Clear some cached sets from the Offline Cache tab to free space.', 6000);
         }
       }
       return data;
@@ -1407,6 +1614,7 @@ const QUIZ = {
       throw err;
     }
   },
+  _cacheWarned: false,
 
   async load(fileId, cacheKey, mode, chapterName, scope=null){
     if(!S.online || S.forcedOffline){
@@ -1478,9 +1686,13 @@ const QUIZ = {
     document.getElementById('quiz-loader-msg').textContent = msg || 'Loading…';
     el.style.display = 'flex';
   },
+  // ═══ v1.04 ═══ Now actually REMOVES the loader element rather than
+  // merely hiding it. The old "hide but keep in DOM" approach meant
+  // _anyModalOpen()'s presence-based check stayed true forever after the
+  // first quiz, permanently disabling every keyboard shortcut.
   _hideLoader(){
     const el = document.getElementById('quiz-loader');
-    if(el) el.style.display = 'none';
+    if(el) el.remove();
   },
 
   startWith(qsArr, mode, chapterName, scope=null){
@@ -1500,6 +1712,10 @@ const QUIZ = {
     const modal = document.createElement('div');
     modal.id = 'quiz-limit-modal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:10000;padding:1.5rem;backdrop-filter:blur(4px)';
+    // ═══ v1.04 ═══ Shuffle checkbox default is now UNCHECKED in the
+    // markup AND the picker refuses to enable it for weekly sets —
+    // see _doStart's shuffle-lock comment for why.
+    const isWeekly = !!(scope && scope.weeklyId);
     modal.innerHTML = `
       <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)" role="dialog" aria-modal="true" aria-labelledby="qlm-title">
         <div style="font-size:1.2rem;margin-bottom:.35rem">${mode==='exam'?'<i class="ph ph-note-pencil"></i>':'<i class="ph ph-lightning"></i>'}</div>
@@ -1509,10 +1725,10 @@ const QUIZ = {
           ${presets.map(n=>`<button data-qn="${n}" class="qlm-preset" style="padding:.35rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.76rem;cursor:pointer;font-family:var(--ff)">${n}</button>`).join('')}
           <button data-qn="${total}" class="qlm-preset" style="padding:.35rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.76rem;cursor:pointer;font-family:var(--ff)">All ${total}</button>
         </div>
-        <input id="qlm-inp" type="number" min="1" max="${total}" value="${Math.min(20,total)}"
-          style="width:100%;background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r2);padding:.5rem .75rem;color:var(--t1);font-size:.9rem;font-family:var(--ff);outline:none;box-sizing:border-box;margin-bottom:.6rem">
-        <label style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;cursor:pointer;font-size:.8rem;color:var(--t2)">
-          <input id="qlm-shuffle" type="checkbox" checked style="width:16px;height:16px;accent-color:var(--amb);cursor:pointer">
+        <input id="qlm-inp" type="number" min="1" max="${total}" value="${isWeekly ? total : Math.min(20,total)}"
+          style="width:100%;background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r2);padding:.5rem .75rem;color:var(--t1);font-size:.9rem;font-family:var(--ff);outline:none;box-sizing:border-box;margin-bottom:.6rem" ${isWeekly ? 'readonly' : ''}>
+        <label style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;cursor:pointer;font-size:.8rem;color:var(--t2);${isWeekly?'opacity:.55':''}">
+          <input id="qlm-shuffle" type="checkbox" ${isWeekly?'disabled':''} style="width:16px;height:16px;accent-color:var(--amb);cursor:pointer">
           <i class="ph ph-shuffle"></i> Shuffle question order
         </label>
         <div style="display:flex;gap:.4rem">
@@ -1536,25 +1752,54 @@ const QUIZ = {
   },
 
   _doStart(qsArr, mode, chapterName, doShuffle=true, scope=null){
-    const modeLabel = mode==='exam' ? '📝 Exam' : '⚡ Flashcard';
+    // ═══ v1.04 ═══ Review mode + shuffle-lock.
+    //
+    // Review mode: pre-fill S.quiz.ans from the recorded attempt so the
+    // existing answered-option rendering (shc / bad2 classes) lights up
+    // the right options without any rendering changes. Set reviewOnly so
+    // fcAnswer/fcNav/fcFinish refuse to mutate state.
+    //
+    // Shuffle-lock: any quiz with a weeklyId in scope has its shuffle
+    // FORCED OFF regardless of what the picker said. This is the only
+    // way the stored answers[] array (indices into the shuffled order
+    // that was actually taken) can still align with the freshly-fetched
+    // question array on review. Without it, review mode would show
+    // correct-answer highlights against the wrong questions.
+    const isWeekly = !!(scope && scope.weeklyId);
+    const reviewMode = !!(scope && scope.weeklyReviewMode);
+    const effectiveShuffle = isWeekly ? false : doShuffle;
+
+    const presetAnswers = reviewMode && scope.weeklyAttempt
+      ? (scope.weeklyAttempt.answers || []).slice()
+      : null;
+
+    const modeLabel = reviewMode
+      ? '👁️ Review'
+      : (mode==='exam' ? '📝 Exam' : '⚡ Flashcard');
     toast(`${modeLabel} — ${qsArr.length} question${qsArr.length!==1?'s':''} · ${chapterName||'Study'}`, 2500);
-    const examSeconds = mode==='exam' ? qsArr.length*90 : 0;
+
+    const examSeconds = (mode==='exam' && !reviewMode) ? qsArr.length*90 : 0;
     S.quiz = {
-      qs: doShuffle ? shuf(qsArr) : [...qsArr], ans: new Array(qsArr.length).fill(null),
-      mode, idx:0, timer:null, elapsed:0,
+      qs: effectiveShuffle ? shuf(qsArr) : [...qsArr],
+      // If preset answers came from a different question count (the
+      // source file was edited after the attempt), fall back to a fresh
+      // array — review still renders, just without pre-filled state.
+      ans: (presetAnswers && presetAnswers.length === qsArr.length)
+        ? presetAnswers.slice()
+        : new Array(qsArr.length).fill(null),
+      mode: reviewMode ? 'flashcard' : mode,
+      idx:0, timer:null, elapsed:0,
       left: examSeconds,
-      // Absolute end-of-exam timestamp — the ticking countdown recomputes
-      // `left` from this on every tick instead of decrementing a counter,
-      // so a backgrounded tab doesn't pause the exam clock.
       examEndAt: mode==='exam' ? Date.now() + examSeconds*1000 : 0,
       active:true, ch: chapterName||'Study', scope, skipped:new Set(), shown:new Set(),
-      startedAt: Date.now()
+      startedAt: Date.now(),
+      reviewOnly: reviewMode
     };
     document.getElementById('quiz-wrap').style.display='';
     document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
     window.scrollTo(0,0);
     try{
-      if(mode==='exam'){
+      if(mode==='exam' && !reviewMode){
         document.getElementById('fc-wrap').style.display='none';
         document.getElementById('ex-wrap').style.display='';
         document.getElementById('res-wrap').style.display='none';
@@ -1572,8 +1817,8 @@ const QUIZ = {
       toast('❌ Could not display this quiz — one of the questions may be malformed. Try a different set.', 5000);
       return;
     }
-    QUIZ._startTimer();
-    if(mode==='exam') QUIZ._snapshotExam(true);
+    if(!reviewMode) QUIZ._startTimer();
+    if(mode==='exam' && !reviewMode) QUIZ._snapshotExam(true);
   },
 
   daily(){
@@ -1625,8 +1870,6 @@ const QUIZ = {
     const need = TARGET - pool.length;
     const picks = shuf(refs).slice(0, Math.min(8, refs.length));
     let failed = 0;
-    // Stop once we've pulled at least 2× the number of questions we
-    // still needed — named explicitly so the intent survives refactor.
     const stopAt = pool.length + need*2;
     for(const ref of picks){
       if(pool.length >= stopAt) break;
@@ -1648,9 +1891,6 @@ const QUIZ = {
     S.quiz.timer = setInterval(()=>{
       if(!S.quiz.active)return;
       if(S.quiz.mode==='exam'){
-        // Wall-clock based — a backgrounded/suspended tab doesn't pause
-        // the exam clock. First tick after returning immediately
-        // reflects the true remaining time.
         S.quiz.left = Math.max(0, Math.round((S.quiz.examEndAt - Date.now())/1000));
         const tEl=document.getElementById('ex-tmr'); if(tEl) tEl.textContent=fmt(S.quiz.left);
         if(S.quiz.left<=0){ toast('⏰ Time\'s up!'); QUIZ.submitExam(); return; }
@@ -1663,15 +1903,6 @@ const QUIZ = {
   },
   _stopTimer(){ if(S.quiz.timer){ clearInterval(S.quiz.timer); S.quiz.timer=null; } },
 
-  // Snapshot behaviour:
-  //   1. Build the full version (with images). If under ~2MB, save it —
-  //      resume preserves figures too.
-  //   2. Otherwise, fall back to a stripped copy (no img/imgCaption) so
-  //      resume still preserves answer state on image-heavy exams.
-  //   3. Debounced to at most once every 3s — writing the whole array
-  //      on every tap is wasteful even without images. `force=true`
-  //      bypasses the debounce (used on tab-hide/page-hide so a hard
-  //      app-switch doesn't lose the last few answers).
   _lastSnapAt: 0,
   _SNAPSHOT_SIZE_CEILING: 2 * 1024 * 1024,
   _snapshotExam(force){
@@ -1704,6 +1935,14 @@ const QUIZ = {
     const snap = _load(LS.EXAM_SNAP, null);
     if(!snap || !S.user || snap.username !== S.user.username || !snap.qs || !snap.qs.length){
       if(snap) QUIZ._clearExamSnapshot();
+      return;
+    }
+    // ═══ v1.04 ═══ Weekly sets are one-attempt-only. If a snapshot
+    // exists for one, discard it silently — resuming would bypass the
+    // one-shot rule (the student already effectively "left" the exam,
+    // and the exam window is what defines their window to complete it).
+    if(snap.scope && snap.scope.weeklyId){
+      QUIZ._clearExamSnapshot();
       return;
     }
     const elapsedSinceSave = Math.floor((Date.now() - snap.savedAt) / 1000);
@@ -1742,8 +1981,6 @@ const QUIZ = {
     };
   },
   _resumeSnapshot(snap, adjustedLeft){
-    // Reconstruct startedAt from savedAt + (originalTotal - left) so
-    // durationSec in _showResults is meaningful after a resume.
     const originalTotal = (snap.qs.length * 90);
     const spentBeforeSnap = Math.max(0, originalTotal - (snap.left||0));
     const startedAt = snap.startedAt || (snap.savedAt - spentBeforeSnap*1000) || Date.now();
@@ -1752,7 +1989,8 @@ const QUIZ = {
       left: adjustedLeft,
       examEndAt: Date.now() + adjustedLeft*1000,
       active:true, ch: snap.ch, skipped:new Set(), shown:new Set(),
-      scope: snap.scope || null, startedAt
+      scope: snap.scope || null, startedAt,
+      reviewOnly: false
     };
     document.getElementById('quiz-wrap').style.display='';
     document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
@@ -1774,28 +2012,41 @@ const QUIZ = {
     modal.id = 'quiz-exit-modal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:10000;padding:1.5rem;backdrop-filter:blur(4px)';
     const isExam = S.quiz.mode === 'exam';
+    const isReview = !!S.quiz.reviewOnly;
     const answered = S.quiz.ans.filter(a=>a!==null).length;
     const total = S.quiz.qs.length;
+    // ═══ v1.04 ═══ Weekly exams only get one shot, so the "leave the
+    // quiz?" dialog intentionally offers no "resume later" path (there
+    // isn't one) and warns that leaving abandons the single attempt.
+    const isWeekly = !!(S.quiz.scope && S.quiz.scope.weeklyId);
+    const heading = isReview
+      ? 'Exit review?'
+      : (isWeekly && isExam ? 'Leave this weekly exam?' : 'Leave this quiz?');
+    const body = isReview
+      ? `You're viewing your recorded results for ${esc(S.quiz.ch)}.`
+      : isWeekly && isExam
+        ? `You only get ONE attempt at this weekly set. Leaving now abandons your one shot — the exam window keeps running and you won't be able to start over. ${answered} of ${total} answered so far.`
+        : (isExam ? answered+' of '+total+' answered' : 'Question '+(S.quiz.idx+1)+' of '+total);
     modal.innerHTML = `
       <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)" role="dialog" aria-modal="true">
         <div style="font-size:1.3rem;margin-bottom:.4rem"><i class="ph ph-warning"></i></div>
-        <div style="font-family:var(--fd);font-size:.95rem;font-weight:700;color:var(--t1);margin-bottom:.3rem">Leave this quiz?</div>
-        <div style="font-size:.76rem;color:var(--t3);margin-bottom:1.1rem">${isExam ? answered+' of '+total+' answered' : 'Question '+(S.quiz.idx+1)+' of '+total} · ${esc(S.quiz.ch)}</div>
+        <div style="font-family:var(--fd);font-size:.95rem;font-weight:700;color:var(--t1);margin-bottom:.3rem">${heading}</div>
+        <div style="font-size:.76rem;color:var(--t3);margin-bottom:1.1rem">${body}</div>
         <div style="display:flex;flex-direction:column;gap:.45rem">
-          ${isExam ? '<button id="qem-finish" style="padding:.62rem;background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:var(--r2);color:var(--grn);font-weight:700;font-size:.83rem;cursor:pointer;font-family:var(--ff);text-align:left"><i class="ph ph-check-circle"></i> Submit & See Results — grade what I have answered so far</button>' : ''}
-          <button id="qem-quit" style="padding:.62rem;background:var(--bad-bg);border:1px solid var(--bad-bd);border-radius:var(--r2);color:var(--ros);font-weight:700;font-size:.83rem;cursor:pointer;font-family:var(--ff);text-align:left"><i class="ph ph-door"></i> Quit — discard this session</button>
+          ${isExam && !isReview ? '<button id="qem-finish" style="padding:.62rem;background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:var(--r2);color:var(--grn);font-weight:700;font-size:.83rem;cursor:pointer;font-family:var(--ff);text-align:left"><i class="ph ph-check-circle"></i> Submit & See Results — grade what I have answered so far</button>' : ''}
+          <button id="qem-quit" style="padding:.62rem;background:var(--bad-bg);border:1px solid var(--bad-bd);border-radius:var(--r2);color:var(--ros);font-weight:700;font-size:.83rem;cursor:pointer;font-family:var(--ff);text-align:left"><i class="ph ph-door"></i> ${isReview ? 'Exit review' : 'Quit — discard this session'}</button>
           <button id="qem-cancel" style="padding:.62rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r2);color:var(--t2);font-weight:600;font-size:.83rem;cursor:pointer;font-family:var(--ff);text-align:left">↩ Cancel — keep studying</button>
         </div>
       </div>`;
     document.body.appendChild(modal);
     const close = ()=> modal.remove();
-    if(isExam){
+    if(isExam && !isReview){
       document.getElementById('qem-finish').onclick = ()=>{ close(); QUIZ.submitExam(); };
     }
     document.getElementById('qem-quit').onclick = ()=>{
       close();
       QUIZ._stopTimer();
-      if(isExam) QUIZ._clearExamSnapshot();
+      if(isExam && !isReview) QUIZ._clearExamSnapshot();
       S.quiz.active = false;
       document.getElementById('quiz-wrap').style.display = 'none';
       if(afterQuit) afterQuit();
@@ -1820,15 +2071,21 @@ const QUIZ = {
       else if(fcImgWrap){ fcImgWrap.style.display = 'none'; }
 
       const isStarred = REV.has('bk', q.uid), isFlagged = REV.has('fl', q.uid);
-      document.getElementById('fc-acts').innerHTML = `
+      // ═══ v1.04 ═══ In review mode, bookmark/flag/tag controls are
+      // hidden entirely — the student is viewing a locked attempt, not
+      // studying the set for the first time. Search and report stay.
+      const reviewControls = S.quiz.reviewOnly ? '' : `
         <button class="ib ${isStarred?'bk-on':''}" onclick="QUIZ._star()" title="Bookmark" aria-label="Bookmark this question" aria-pressed="${isStarred?'true':'false'}"><i class="ph ph-star"></i></button>
         <button class="ib ${isFlagged?'fl-on':''}" onclick="QUIZ._flag()" title="Flag" aria-label="Flag this question" aria-pressed="${isFlagged?'true':'false'}"><i class="ph ph-flag"></i></button>
+      `;
+      document.getElementById('fc-acts').innerHTML = `
+        ${reviewControls}
         <button class="ib" onclick="QUIZ._reportCurrent()" title="Report an issue with this question" aria-label="Report an issue with this question"><i class="ph ph-warning-circle"></i></button>
         ${qSearchHtml(q)}
-        <select class="sel-c" style="font-size:.68rem;padding:.2rem .35rem;width:auto" onchange="QUIZ._tagCurrent(this.value)">
+        ${S.quiz.reviewOnly ? '' : `<select class="sel-c" style="font-size:.68rem;padding:.2rem .35rem;width:auto" onchange="QUIZ._tagCurrent(this.value)">
           <option value="">🏷 Tag…</option>
           ${BK_TAGS.map(t=>`<option value="${t}" ${REV.getTag(q.uid)===t?'selected':''}>${t}</option>`).join('')}
-        </select>
+        </select>`}
       `;
 
       const ansIdx = S.quiz.ans[S.quiz.idx];
@@ -1843,7 +2100,10 @@ const QUIZ = {
           if(isCorrect) cls += ' shc';
           else if(isSelected) cls += ' bad2';
         }
-        return `<div class="${cls}" role="button" tabindex="${answered?-1:0}" aria-pressed="${isSelected}" aria-label="Option ${String.fromCharCode(65+i)}: ${esc(opt)}${isSelected?', selected':''}" onclick="${answered?'':'QUIZ.fcAnswer('+i+')'}" onkeydown="if((event.key==='Enter'||event.key===' ')&&!${answered}){event.preventDefault();QUIZ.fcAnswer(${i})}" style="${answered?'cursor:default;pointer-events:none':''}">
+        // Review mode: options are never clickable at all — pointer-events
+        // off and tabindex -1 so keyboard nav can't reach them either.
+        const blocked = answered || S.quiz.reviewOnly;
+        return `<div class="${cls}" role="button" tabindex="${blocked?-1:0}" aria-pressed="${isSelected}" aria-label="Option ${String.fromCharCode(65+i)}: ${esc(opt)}${isSelected?', selected':''}" onclick="${blocked?'':'QUIZ.fcAnswer('+i+')'}" onkeydown="if((event.key==='Enter'||event.key===' ')&&!${blocked}){event.preventDefault();QUIZ.fcAnswer(${i})}" style="${blocked?'cursor:default;pointer-events:none':''}">
           <div class="ok">${String.fromCharCode(65+i)}</div><div>${esc(opt)}</div>
         </div>`;
       }).join('');
@@ -1852,9 +2112,16 @@ const QUIZ = {
       if(answered && q.explanation){ expl.textContent = q.explanation; expl.classList.add('show'); }
       else { expl.classList.remove('show'); expl.textContent=''; }
 
-      document.getElementById('fc-hint').textContent = answered ? 'Use Next →' : 'Tap an option to answer';
+      document.getElementById('fc-hint').textContent = S.quiz.reviewOnly
+        ? 'Review mode — answers locked'
+        : (answered ? 'Use Next →' : 'Tap an option to answer');
       document.getElementById('fc-prev').disabled = S.quiz.idx===0;
-      document.getElementById('fc-next').textContent = S.quiz.idx===S.quiz.qs.length-1 ? 'Finish ✔' : 'Next →';
+      // ═══ v1.04 ═══ Review mode's forward button says "Exit Review"
+      // instead of "Finish ✔" so the student doesn't think they're
+      // submitting something.
+      document.getElementById('fc-next').textContent = S.quiz.reviewOnly
+        ? (S.quiz.idx===S.quiz.qs.length-1 ? 'Exit Review' : 'Next →')
+        : (S.quiz.idx===S.quiz.qs.length-1 ? 'Finish ✔' : 'Next →');
 
       QUIZ._updateFcCounts();
       renderMath(document.getElementById('fc-wrap'));
@@ -1876,6 +2143,10 @@ const QUIZ = {
     document.getElementById('fc-skip').textContent=skip;
   },
   fcAnswer(i){
+    // ═══ v1.04 ═══ Review mode is read-only — never overwrite a
+    // recorded answer. This is the primary guard; the click handler
+    // above is a defence-in-depth second layer.
+    if(S.quiz.reviewOnly) return;
     if(S.quiz.ans[S.quiz.idx]!==null)return;
     S.quiz.ans[S.quiz.idx]=i;
     const q=S.quiz.qs[S.quiz.idx];
@@ -1885,8 +2156,13 @@ const QUIZ = {
     QUIZ._renderFlashcard();
   },
   fcNav(dir){
-    if(!S.quiz.shown) S.quiz.shown=new Set();
-    S.quiz.shown.add(S.quiz.idx);
+    // ═══ v1.04 ═══ Review mode: don't track shown state (there's no
+    // "skipped" concept when every answer is pre-filled from the
+    // recorded attempt — showing them as skipped would be wrong).
+    if(!S.quiz.reviewOnly){
+      if(!S.quiz.shown) S.quiz.shown=new Set();
+      S.quiz.shown.add(S.quiz.idx);
+    }
     const next = S.quiz.idx+dir;
     if(next<0)return;
     if(next>=S.quiz.qs.length){ QUIZ.fcFinish(); return; }
@@ -1894,11 +2170,13 @@ const QUIZ = {
     QUIZ._renderFlashcard();
   },
   _star(){
+    if(S.quiz.reviewOnly) return;
     const q=S.quiz.qs[S.quiz.idx];
     REV.toggle('bk', q);
     QUIZ._renderFlashcard();
   },
   _flag(){
+    if(S.quiz.reviewOnly) return;
     const q=S.quiz.qs[S.quiz.idx];
     REV.toggle('fl', q);
     QUIZ._renderFlashcard();
@@ -1941,6 +2219,7 @@ const QUIZ = {
     }
   },
   _tagCurrent(tag){
+    if(S.quiz.reviewOnly) return;
     const q=S.quiz.qs[S.quiz.idx];
     if(!q) return;
     REV.setTag(q.uid, tag, q);
@@ -1949,6 +2228,15 @@ const QUIZ = {
   fcFinish(){
     QUIZ._stopTimer();
     S.quiz.active=false;
+    // ═══ v1.04 ═══ Review mode exits silently — no session recorded,
+    // no streak advanced, no results card. The student is looking at
+    // an already-recorded attempt; making that look like a new
+    // submission would corrupt their stats and (worse) their streak.
+    if(S.quiz.reviewOnly){
+      document.getElementById('quiz-wrap').style.display = 'none';
+      UI._goRaw('home');
+      return;
+    }
     STREAK.markToday();
     QUIZ._showResults();
   },
@@ -2023,7 +2311,16 @@ const QUIZ = {
   submitExam(){
     if(!S.quiz.active)return;
     const unanswered = S.quiz.ans.filter(a=>a===null).length;
-    if(unanswered>0 && S.quiz.left>0 && !confirm(`${unanswered} question(s) unanswered. Submit anyway?`))return;
+    const isWeekly = !!(S.quiz.scope && S.quiz.scope.weeklyId);
+    // ═══ v1.04 ═══ Weekly exams get a much sterner confirmation —
+    // once submitted, the attempt is final and the student can only
+    // review. Standard exams keep the lenient confirm.
+    if(isWeekly && !confirm(
+      `Submit your WEEKLY SET attempt?\n\n` +
+      `You only get one attempt — after this you can only review your answers.\n` +
+      `${unanswered} question${unanswered===1?'':'s'} left unanswered.`
+    )) return;
+    if(!isWeekly && unanswered>0 && S.quiz.left>0 && !confirm(`${unanswered} question(s) unanswered. Submit anyway?`))return;
     QUIZ._stopTimer();
     QUIZ._clearExamSnapshot();
     S.quiz.active=false;
@@ -2044,6 +2341,8 @@ const QUIZ = {
 
   /* ── RETRY ── */
   retryWrong(){
+    // Weekly attempts are one-shot — no retry of any kind.
+    if(S.quiz.scope && S.quiz.scope.weeklyId){ toast('🔒 Weekly sets are one attempt only'); return; }
     const wrongIdx = S.quiz.qs.map((q,i)=>({q,i})).filter(({i})=>!isOk(S.quiz.ans[i], S.quiz.qs[i].correct));
     if(!wrongIdx.length){ toast('🎉 Nothing to retry — all correct!'); UI.go('home'); return; }
     QUIZ.startWith(wrongIdx.map(x=>x.q), 'flashcard', S.quiz.ch + ' (Retry)');
@@ -2100,21 +2399,44 @@ const QUIZ = {
     const durationSec = S.quiz.startedAt
       ? Math.min(3*60*60, Math.round((Date.now()-S.quiz.startedAt)/1000))
       : 0;
+    // ═══ v1.04 ═══ Both chapter and chapterKey are stored now.
+    // chapter = display label ("Structural Engineering — Abhyas"),
+    // chapterKey = canonical key matching admin.html's chapter filter
+    // dropdown ("Structural Engineering"). This is what makes the
+    // admin Most-Missed-Questions chapter filter actually match.
+    // weeklyId / weeklyMode are new — they identify this session as a
+    // Weekly Set attempt for the admin aggregator.
     const sessionObj = {
-      chapter:S.quiz.ch, mode:S.quiz.mode, total, correct, wrong, skipped, pct, at:Date.now(),
+      chapter:S.quiz.ch,
+      chapterKey: scope.ch ? (ChapterData.chapterName(scope.lv, scope.ch) || '') : '',
+      mode:S.quiz.mode,
+      total, correct, wrong, skipped, pct, at:Date.now(),
       durationSec,
       lv:scope.lv||'', ch:scope.ch||'', book:scope.book||'', sub:scope.sub||'', fid:scope.fid||'',
+      weeklyId: scope.weeklyId || '',
+      weeklyTitle: scope.weeklyTitle || '',
       qres
     };
     PROG.recordSession(sessionObj);
-    // Durable per-chapter accuracy — see CHAPSTATS module for why this
-    // is tracked separately from (and backed up ahead of) the rolling
-    // sessions array.
     CHAPSTATS.record(sessionObj);
+
+    // ═══ v1.04 ═══ Weekly set: capture the attempt now that the score
+    // is computed, then lock the retry button so the UI matches the
+    // server-enforced one-attempt rule.
+    const isWeekly = !!(scope.weeklyId);
+    if(isWeekly){
+      WEEKLY._recordAttempt(S.quiz, { total, correct, wrong, skipped, pct });
+      const retryBtn = document.querySelector('#res-wrap .btn-p');
+      if(retryBtn){
+        retryBtn.disabled = true;
+        retryBtn.innerHTML = '<i class="ph ph-lock-simple"></i> One attempt only — see Review from the home card';
+        retryBtn.style.opacity = '.55';
+        retryBtn.style.pointerEvents = 'none';
+      }
+    }
   }
 };
 
-/* keyboard support during quizzes — guarded against modals and form fields */
 document.addEventListener('keydown', e=>{
   if(!S.quiz.active) return;
   if(document.getElementById('quiz-wrap').style.display==='none') return;
@@ -2122,6 +2444,7 @@ document.addEventListener('keydown', e=>{
   const tag = (e.target && e.target.tagName) || '';
   if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
   if(e.key==='Escape'){ if(S.quiz.active) QUIZ.quit(); }
+  if(S.quiz.reviewOnly) return;   // review mode has no keyboard answering
   if(S.quiz.mode!=='exam'){
     if(e.key==='ArrowRight') QUIZ.fcNav(1);
     if(e.key==='ArrowLeft') QUIZ.fcNav(-1);
@@ -2137,18 +2460,7 @@ document.addEventListener('keydown', e=>{
   }
 });
 
-
-
-/* ═══════════════ 10a. PROGRESS TRACKING ═══════════════
-   PROG keeps both faces of the app's progress surface in sync:
-     • The lightweight "at a glance" panel (prog-stats / chap-acc /
-       predict-card) used inside the Dashboard & Progress tabs.
-     • The durable chapter aggregate (chapStats) that survives
-       device switches via the cloud sync — used by the same panel
-       and by ONPROG's scoped lookups.
-   It also exposes both the older `render()` API (prog-overall /
-   prog-chapters / prog-recent) and the newer `renderPredict()` API
-   so nothing that references either one breaks. */
+/* ═══════════════ 10a. PROGRESS TRACKING ═══════════════ */
 const PROG = {
   track(correct){
     S.prog.total = (S.prog.total || 0) + 1;
@@ -2166,11 +2478,6 @@ const PROG = {
     HOME.render();
   },
 
-  /* ── Predicted exam score ───────────────────────────────────
-     Recency-weighted average of the last 20 sessions. Exam-mode
-     sessions weigh 1.5× (they're more representative of the real
-     thing). Returns null until at least 3 sessions exist, so the
-     card can show its "complete at least 3 quizzes" empty state. */
   predict(){
     const sessions = (S.prog.sessions||[]).filter(s=>s.total>0).slice(0,20);
     if(sessions.length < 3) return null;
@@ -2213,13 +2520,7 @@ const PROG = {
     </div>`;
   },
 
-  /* ── Standard progress panel ────────────────────────────────
-     Renders every possible target container that may be present in
-     the DOM (prog-stats / chap-acc from the modern Dashboard and
-     Progress tab, prog-overall / prog-chapters / prog-recent from
-     the older layout) so both markup styles work without changes. */
   render(){
-    // New layout first.
     PROG.renderPredict();
 
     const total = S.prog.total, correct = S.prog.correct, wrong = total - correct;
@@ -2237,9 +2538,6 @@ const PROG = {
 
     const chapEl = document.getElementById('chap-acc');
     if(chapEl){
-      // Prefer the durable CHAPSTATS aggregate (survives device switch
-      // and rolling-window trim); fall back to deriving from sessions
-      // if CHAPSTATS is somehow empty for an old account.
       let entries = CHAPSTATS.entries();
       if(!entries.length){
         const byChap = {};
@@ -2283,8 +2581,6 @@ const PROG = {
       }
     }
 
-    // Older layout fallback — render into prog-overall / prog-chapters /
-    // prog-recent if those IDs exist.
     const overallEl = document.getElementById('prog-overall');
     const sessions = S.prog.sessions||[];
     if(overallEl){
@@ -2348,13 +2644,7 @@ const PROG = {
   }
 };
 
-/* ═══════════════ 10a2. SCOPE HELPERS ═══════════════
-   Everything needed to compute "how much of this level / chapter /
-   book / subtopic / file have I actually practised?" — the durable
-   per-file statistics that power ONPROG. */
-
-// Resolves a lv/ch/book/sub filter down to the concrete file refs in
-// that scope.
+/* ═══════════════ 10a2. SCOPE HELPERS ═══════════════ */
 function scopeLeaves(lv,ch,book,sub){
   let refs;
   if(!lv){ refs = ChapterData.allFileRefs(); }
@@ -2369,11 +2659,9 @@ function scopeLeaves(lv,ch,book,sub){
   return refs;
 }
 
-const CNT_AUTO_LIMIT = 20;   // above this many files, ask before counting
+const CNT_AUTO_LIMIT = 20;
 
 const CNT = {
-  // Returns the (cached) question count for one file, or null if it
-  // couldn't be loaded (e.g. offline & not cached yet).
   async forFile(ref){
     if(!ref.fid) return null;
     if(S.fcount[ref.fid] != null) return S.fcount[ref.fid];
@@ -2413,18 +2701,11 @@ const CNT = {
   }
 };
 
-// uid format is always `${fid}_${index}` (see normQ). Drive fileIds can
-// themselves contain underscores, so split on the LAST underscore.
 function fidFromUid(uid){
   const i = uid.lastIndexOf('_');
   return i > -1 ? uid.slice(0,i) : uid;
 }
 
-// Per-file (fid) practise stats, built from every recorded session's
-// qres — regardless of how that session was started. Session-level
-// lv/ch/book/sub tags are only set by Online Study, so filtering on
-// them would silently drop practice from other modes; matching by the
-// file id embedded in each answer's uid means every screen counts.
 function fileStatsMap(leaves){
   const map = new Map();
   leaves.forEach(ref=>{ if(!map.has(ref.fid)) map.set(ref.fid, {practised:new Set(), attempted:0, correct:0, wrong:0}); });
@@ -2452,16 +2733,11 @@ function scopedStats(leaves){
   return {practised:uids.size, attempted, correct, wrong, fileMap};
 }
 
-/* ═══════════════ 10a3. ONPROG — scoped progress card ═══════════════
-   Renders the ONLINE STUDY progress panel: a scope-aware view that
-   shows how much of the currently-selected level / chapter / book /
-   subtopic / file the student has actually practised, with a per-file
-   breakdown and per-file reset. Also keeps the older single-line
-   `on-progress-preview` element in sync if the markup includes it. */
+/* ═══════════════ 10a3. ONPROG ═══════════════ */
 const ONPROG = {
-  metric: 'practised',       // practised | attempted | correct | wrong
+  metric: 'practised',
   filewiseOpen: false,
-  _seq: 0,                   // race-condition guard for async renders
+  _seq: 0,
   _lastLeaves: [],
 
   setMetric(m){
@@ -2475,10 +2751,6 @@ const ONPROG = {
     ONPROG.render();
   },
 
-  // Clears ONLY the Practised/Attempted/Correct/Wrong counts for one
-  // specific file — never bookmarks/flags/wrong-bank, never anything
-  // on Drive. Edits S.prog.sessions locally; the next background sync
-  // carries the change to the cloud copy via saveProgress.
   resetFile(fid){
     if(!fid) return;
     const ref = ONPROG._lastLeaves.find(l=>l.fid===fid);
@@ -2504,8 +2776,6 @@ const ONPROG = {
         removedCorrectTotal += removedCorrectHere;
       }
     });
-    // Drop sessions fully consumed by the reset so Recent Sessions
-    // doesn't show zeroed ghost entries.
     S.prog.sessions = S.prog.sessions.filter(s => (s.qres && s.qres.length) || (s.total||0) > 0);
     S.prog.total   = Math.max(0,(S.prog.total||0)   - removedTotal);
     S.prog.correct = Math.max(0,(S.prog.correct||0) - removedCorrectTotal);
@@ -2526,7 +2796,6 @@ const ONPROG = {
   },
 
   async render(force=false){
-    // Keep the older one-line preview element in sync if the markup uses it.
     ONPROG._renderOldPreview();
 
     const el      = document.getElementById('on-progress-card');
@@ -2538,7 +2807,6 @@ const ONPROG = {
     const mySeq = ++ONPROG._seq;
 
     if(!lv){
-      // Overall (no scope picked yet).
       titleEl.textContent = '📊 Overall Progress';
       const total = S.prog.total, correct = S.prog.correct, wrong = total - correct;
       const pct = total ? Math.round((correct/total)*100) : 0;
@@ -2566,7 +2834,7 @@ const ONPROG = {
     const known = CNT.knownTotal(leaves);
 
     const paint = (info)=>{
-      if(mySeq !== ONPROG._seq) return;   // a newer render has superseded us
+      if(mySeq !== ONPROG._seq) return;
       const total = info.total;
       const vals = {practised:scoped.practised, attempted:scoped.attempted, correct:scoped.correct, wrong:scoped.wrong};
       const metricVal = vals[ONPROG.metric];
@@ -2582,13 +2850,9 @@ const ONPROG = {
         ? `<button class="btn btn-sm btn-a" style="margin-top:.5rem" onclick="ONPROG.render(true)"><i class="ph ph-list-numbers"></i> Count questions (${info.files} files)</button>`
         : '';
 
-      // Filewise breakdown — one row per file in the current scope.
-      // Skipped for a single-file scope (nothing to break down) and for
-      // very wide scopes (narrow the selection instead of dumping a
-      // huge list).
       let filewiseHtml = '';
       if(leaves.length>1 && leaves.length<=100){
-        const showBook = !book;   // multiple books in scope → show book too
+        const showBook = !book;
         const rows = leaves.map(ref=>{
           const rec = scoped.fileMap.get(ref.fid) || {practised:new Set(), attempted:0, correct:0, wrong:0};
           const fVals = {practised:rec.practised.size, attempted:rec.attempted, correct:rec.correct, wrong:rec.wrong};
@@ -2650,8 +2914,6 @@ const ONPROG = {
     paint(info);
   },
 
-  // Old-layout single-line preview element (`on-progress-preview`),
-  // which only needs the chapter-level accuracy from CHAPSTATS.
   _renderOldPreview(){
     const el = document.getElementById('on-progress-preview');
     if(!el) return;
@@ -2669,29 +2931,18 @@ const ONPROG = {
   }
 };
 
-/* ═══════════════ 10b. STREAK ═══════════════
-   Exposes both the newer `currentStreak()` API (used by the sidebar
-   / Dashboard) and the older `current()` API (used elsewhere). Both
-   correctly count a streak that ENDS yesterday as still alive, so
-   the greeting never lies to someone who just hasn't studied yet
-   today. */
+/* ═══════════════ 10b. STREAK ═══════════════ */
 const STREAK = {
   markToday(){
     const t = today();
     if(!S.stk.days) S.stk.days = [];
     if(!S.stk.days.includes(t)) S.stk.days.push(t);
     S.stk.last = t;
-    // Keep only the most recent 400 days — long enough that neither a
-    // multi-year daily user nor a "current streak" query ever hits the
-    // edge, small enough to never bloat localStorage.
     if(S.stk.days.length>400) S.stk.days = S.stk.days.slice(-400);
     _save(LS.STK, S.stk);
     HOME.render();
   },
 
-  // Streak counts consecutive days ending at TODAY (already practised)
-  // or YESTERDAY (streak intact, just not extended yet). A gap of two
-  // or more days correctly returns 0.
   currentStreak(){
     const set = new Set(S.stk.days||[]);
     if(!set.size) return 0;
@@ -2708,7 +2959,6 @@ const STREAK = {
     return n;
   },
 
-  // Older alias kept for compatibility.
   current(){ return STREAK.currentStreak(); },
 
   longest(){
@@ -2734,10 +2984,6 @@ const STREAK = {
     el.innerHTML = days.map(ds=>{
       const done = S.stk.days.includes(ds);
       const isToday = ds===today();
-      // new Date("YYYY-MM-DD") parses as UTC midnight per spec — for
-      // Nepal (ahead of UTC) this happens to be harmless, but parsing
-      // components explicitly and building a LOCAL Date sidesteps the
-      // pitfall for anyone west of UTC too.
       const [yy,mm,dd] = ds.split('-').map(Number);
       const label = new Date(yy,mm-1,dd).toLocaleDateString(undefined,{weekday:'short'})[0];
       return `<div class="sk-d ${done?'done':''} ${isToday?'today':''}">${label}</div>`;
@@ -2747,7 +2993,7 @@ const STREAK = {
   }
 };
 
-/* ═══════════════ 10c. HOME / DASHBOARD ═══════════════ */
+/* ═══════════════ 10c. HOME ═══════════════ */
 const HOME = {
   render(){
     const h = new Date().getHours();
@@ -2760,13 +3006,11 @@ const HOME = {
     ];
     const g = G.find(x=>h>=x.r[0] && h<x.r[1]) || G[1];
 
-    // Modern Dashboard greeting (greeting-title / greeting-icon).
     const gt = document.getElementById('greeting-title'); if(gt) gt.textContent = g.t;
     const gi = document.getElementById('greeting-icon');  if(gi) gi.textContent = g.i;
     const gEl = document.getElementById('greeting');
     if(gEl) gEl.textContent = `${S.user?.name||S.user?.username||'Student'} — Nepal Engineering & PSC exam prep.`;
 
-    // Older layout greeting (home-greeting / home-streak).
     const oldGreet = document.getElementById('home-greeting');
     if(oldGreet){
       const fullGreet = h<5?'Burning midnight oil? 🌙':h<12?'Good morning ☀️':h<17?'Good afternoon 🌤':h<21?'Good evening 🌆':'Studying late? 🌙';
@@ -2803,10 +3047,6 @@ const HOME = {
     HOME._updateStudyTime();
   },
 
-  // Sums durationSec across the last 7 days' sessions. Older sessions
-  // have no durationSec — treated as 0, not excluded, so they don't
-  // skew anything (they simply don't contribute time that was never
-  // measured).
   _updateStudyTime(){
     const el = document.getElementById('hs-time');
     if(!el) return;
@@ -2825,14 +3065,12 @@ const HOME = {
     set('bkc', S.bk.length); set('flc', S.fl.length); set('wrc', S.wr.length);
     const wrDueEl = document.getElementById('wrc-due');
     if(wrDueEl) wrDueEl.textContent = dueWr;
-    // Combined bottom-nav badge.
     const total = S.bk.length + S.fl.length + dueWr;
     const bnBadge = document.getElementById('bn-badge');
     if(bnBadge){
       if(total>0){ bnBadge.textContent = total>99?'99+':total; bnBadge.style.display=''; }
       else bnBadge.style.display='none';
     }
-    // Sidebar badges (older layout).
     set('nav-bk-badge', S.bk.length);
     set('nav-fl-badge', S.fl.length);
     set('nav-wr-badge', S.wr.length);
@@ -2879,7 +3117,6 @@ const HOME = {
 /* ═══════════════ 10d. TIMETABLE ═══════════════ */
 const TT = {
   add(){
-    // Modern layout: tt-name / tt-s / tt-e.
     const day = Number(document.getElementById('tt-day')?.value);
     const nameEl = document.getElementById('tt-name');
     const startEl = document.getElementById('tt-s');
@@ -2896,7 +3133,6 @@ const TT = {
       toast('✅ Session added');
       return;
     }
-    // Older layout: tt-time / tt-label.
     const timeEl = document.getElementById('tt-time');
     const labelEl = document.getElementById('tt-label');
     if(timeEl && labelEl){
@@ -2906,7 +3142,6 @@ const TT = {
       S.tt.sessions.push({
         id: Date.now()+'_'+Math.random().toString(36).slice(2),
         day, time, label,
-        // Also mirror modern keys so renderers that expect them work.
         name: label || 'Study', start: time, end: ''
       });
       _save(LS.TT, S.tt);
@@ -2922,13 +3157,6 @@ const TT = {
     TT.render();
   },
 
-  /* ── Session reminders ─────────────────────────────────────
-     Fires a browser notification a configurable number of minutes
-     before each scheduled session, while this tab/PWA is open. NOT
-     push notifications — closing the browser/PWA stops reminders.
-     True background delivery needs server-side Web Push (VAPID key
-     + subscription store on the backend), which is a bigger feature
-     than the current Apps Script backend supports. */
   _reminderTimer:null,
   _notifiedToday:null,
   _lastCheckedDay:null,
@@ -2966,7 +3194,7 @@ const TT = {
     if(TT._reminderTimer) clearInterval(TT._reminderTimer);
     if(!S.tt.reminders.enabled) return;
     TT._loadNotifiedToday();
-    TT._checkReminders();   // catch anything due right now, then poll
+    TT._checkReminders();
     TT._reminderTimer = setInterval(TT._checkReminders, 20000);
   },
 
@@ -3002,9 +3230,6 @@ const TT = {
       const [h,m] = start.split(':').map(Number);
       const startMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m).getTime();
       const fireAt = startMs - lead*60000;
-      // Fire once we've reached the trigger time, but skip sessions whose
-      // start already passed more than a few minutes ago — a late reminder
-      // for a session that already ended is just noise.
       if(nowMs >= fireAt && nowMs < startMs + 5*60000){
         TT._fireReminder(s, lead);
         TT._notifiedToday.add(dedupKey);
@@ -3013,7 +3238,6 @@ const TT = {
     }
   },
 
-  // Older alias kept for compatibility with call sites that use _checkDue.
   _checkDue(){ return TT._checkReminders(); },
 
   async _fireReminder(s, lead){
@@ -3027,12 +3251,11 @@ const TT = {
       } else {
         new Notification(title, { body, icon:'./icon-192.png' });
       }
-    }catch(e){ /* notification failures are non-fatal — the app keeps working either way */ }
+    }catch(e){ /* non-fatal */ }
   },
 
   _clockTimer:null,
   render(){
-    // Sync the two possible toggle IDs.
     const t1 = document.getElementById('tt-remind-toggle');   if(t1) t1.checked = !!S.tt.reminders.enabled;
     const t2 = document.getElementById('tt-reminders-toggle'); if(t2) t2.checked = !!S.tt.reminders.enabled;
     const leadEl = document.getElementById('tt-remind-lead');
@@ -3057,7 +3280,6 @@ const TT = {
     const sessionEnd   = s => s.end   || '23:59';
     const sessionName  = s => s.name  || s.label || 'Study';
 
-    // Modern layout — today list + weekly grid.
     const todayEl = document.getElementById('tt-today');
     if(todayEl){
       const todaySessions = (S.tt.sessions||[]).filter(s=>s.day===todayDay).sort((a,b)=>sessionStart(a).localeCompare(sessionStart(b)));
@@ -3107,7 +3329,6 @@ const TT = {
       `;
     }
 
-    // Older layout — tt-list keyed by day name.
     const listEl = document.getElementById('tt-list');
     if(listEl){
       const sessions = S.tt.sessions||[];
@@ -3186,14 +3407,13 @@ const TT = {
   }
 };
 
-/* ═══════════════ 10e. OFFLINE CACHE MANAGEMENT ═══════════════ */
+/* ═══════════════ 10e. OFFLINE CACHE ═══════════════ */
 const CACHE = {
   async render(){
     const refs = ChapterData.allFileRefs();
     const cachedKeys = new Set(await QDB.keys());
     const _isCached = key => cachedKeys.has(key);
 
-    // Modern cache-summary UI.
     const tag = document.getElementById('cache-tag');
     const txt = document.getElementById('cache-txt');
     const grid = document.getElementById('cache-grid');
@@ -3214,7 +3434,6 @@ const CACHE = {
       }).join('');
     }
 
-    // Older per-file list.
     const el = document.getElementById('cache-list');
     if(el){
       const keys = await QDB.keys();
@@ -3226,7 +3445,7 @@ const CACHE = {
           const label = parts.length>=4 ? `${parts[0]} · Ch${parts[1]} · ${parts[2]} · ${parts[3]}` : k;
           return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .6rem;background:var(--b0);border-radius:8px;margin-bottom:.3rem;font-size:.78rem">
             <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><i class="ph ph-package"></i> ${esc(label)}</div>
-            <button class="ib cache-rm-btn" data-key="${esc(k)}" title="Remove from cache" aria-label="Remove from cache"><i class="ph ph-trash"></i></button>
+            <button class="ib cache-rm-btn" data-key="${escAttrJs(k)}" title="Remove from cache" aria-label="Remove from cache"><i class="ph ph-trash"></i></button>
           </div>`;
         }).join('');
         el.querySelectorAll('.cache-rm-btn').forEach(btn=>{
@@ -3248,10 +3467,8 @@ const CACHE = {
     CACHE.render();
     toast('🗑 Offline cache cleared');
   },
-  // Older name for the same action.
   async clr(){ return CACHE.clearAll(); },
 
-  // Full download with a progress bar for the modern layout.
   async dl(){
     const refs = ChapterData.allFileRefs();
     if(!refs.length){ toast('No content configured to cache'); return; }
@@ -3284,7 +3501,6 @@ const CACHE = {
     CACHE.render();
   },
 
-  // Simple "cache all" with a loader overlay — the older flow.
   async cacheAll(){
     if(!S.online){ toast('❌ Connect to the internet first'); return; }
     const refs = ChapterData.allFileRefs();
@@ -3303,8 +3519,6 @@ const CACHE = {
     CACHE.render();
   },
 
-  // Removes stale "success:false" entries that a previous network error
-  // may have left in the IndexedDB cache.
   async purgeStale(){
     let purged = 0;
     const keys = await QDB.keys();
@@ -3319,12 +3533,27 @@ const CACHE = {
     else toast('✅ No stale cache entries found');
   },
 
-  // Background top-up of anything not yet cached (called by APP.init()).
+  // ═══ v1.04 ═══ Background top-up now gates on connection type.
+  // First launch on cellular no longer silently downloads every
+  // question set (potentially tens of MB) — a one-time toast offers
+  // the Offline Cache tab instead. Reconnects on WiFi proceed as
+  // before. The intent is that the app respects data plans, not that
+  // it stops caching content the user actually wants.
   async autoSync(){
     if(!S.online || S.forcedOffline) return;
     const cachedKeys = new Set(await QDB.keys());
     const missing = ChapterData.allFileRefs().filter(r=>!cachedKeys.has(r.key));
     if(!missing.length) return;
+
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    const isCellular = conn && /cellular|2g|3g|slow-2g/i.test(conn.effectiveType || conn.type || '');
+    const seen = _load('abhyas_autosync_offered', false);
+    if (isCellular && !seen && missing.length > 5) {
+      _save('abhyas_autosync_offered', true);
+      toast('📦 New question sets available — tap Offline Cache to download when on WiFi.', 6000);
+      return;
+    }
+
     CACHE._badge(`📦 Downloading 0/${missing.length}…`);
     let done = 0;
     for(const ref of missing){
@@ -3352,17 +3581,16 @@ const CACHE = {
 
 /* ═══════════════ 10f. DATA MANAGEMENT ═══════════════ */
 const DATA = {
-  // Local JSON export — carries everything durable (chapStats and prog
-  // first, then bookmarks/flags/wrong-bank in full, plus timetable and
-  // streak). A manual "download my data" file isn't constrained by the
-  // 45,000-char Sheets cell cap, so nothing has to be trimmed here.
   exportAll(){
     const payload = {
       exportedAt: new Date().toISOString(),
       version: (typeof APP_VERSION!=='undefined' ? APP_VERSION : 1),
       prog: S.prog,
       chapStats: S.chapStats,
-      bk: S.bk, fl: S.fl, wr: S.wr, stk: S.stk, tt: S.tt
+      bk: S.bk, fl: S.fl, wr: S.wr, stk: S.stk, tt: S.tt,
+      // ═══ v1.04 ═══ Weekly attempts included in export so a device
+      // switch preserves the record of any one-shot weekly submission.
+      weeklyAttempts: S.weeklyAttempts
     };
     const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -3373,10 +3601,8 @@ const DATA = {
     URL.revokeObjectURL(url);
     toast('📥 Backup downloaded');
   },
-  // Older name for the same action.
   exp(){ return DATA.exportAll(); },
 
-  // Explicit file-picker import (modern layout uses a hidden <input id="data-import-file">).
   importFile(){
     const input = document.getElementById('data-import-file');
     const file = input?.files?.[0];
@@ -3393,7 +3619,6 @@ const DATA = {
     r.readAsText(file);
   },
 
-  // Older flow — creates its own file picker on the fly.
   imp(){
     const inp = document.createElement('input');
     inp.type = 'file';
@@ -3412,9 +3637,6 @@ const DATA = {
     inp.click();
   },
 
-  // Shared import merge — chapStats takes the higher attempted count
-  // per chapter, so re-importing an older backup can never roll a
-  // chapter's lifetime accuracy backwards.
   _applyImport(data){
     if(data.prog){ S.prog = data.prog; if(typeof migrateSessionScopes==='function') migrateSessionScopes(); _save(LS.PROG,S.prog); }
     if(data.chapStats){
@@ -3429,19 +3651,27 @@ const DATA = {
     if(data.wr){ S.wr = data.wr; _save(LS.WR, S.wr); }
     if(data.stk){ S.stk = data.stk; _save(LS.STK, S.stk); }
     if(data.tt){ S.tt = data.tt; if(!S.tt.reminders) S.tt.reminders = {enabled:false,leadMinutes:5}; _save(LS.TT, S.tt); }
+    // ═══ v1.04 ═══ Weekly attempts merge: never overwrite an existing
+    // local attempt — the local copy is the more recent submission.
+    if(data.weeklyAttempts && typeof data.weeklyAttempts === 'object'){
+      Object.entries(data.weeklyAttempts).forEach(([wid, a])=>{
+        if(!S.weeklyAttempts[wid]) S.weeklyAttempts[wid] = a;
+      });
+      WEEKLY.attempts = S.weeklyAttempts;
+      _save(LS.WK_ATTEMPTS, S.weeklyAttempts);
+    }
     toast('✅ Backup imported');
     HOME.render();
     PROG.render();
+    if(typeof WEEKLY !== 'undefined') WEEKLY._renderHomeCard();
   },
 
-  // Explicit cloud push (Progress tab button).
   async syncNow(){
     if(!S.online){ toast('❌ Need internet to back up'); return; }
     PSYNC._setStatus('Backing up…');
     await PSYNC.pushNow();
   },
 
-  // Explicit cloud restore, with confirmation.
   async restoreCloud(){
     if(!S.online){ toast('❌ Need internet to restore'); return; }
     if(!confirm('Replace progress, bookmarks, flags, and wrong-answer bank on THIS device with your last cloud backup? This cannot be undone.')) return;
@@ -3455,9 +3685,6 @@ const DATA = {
     toast('🧹 Question cache cleared');
   },
 
-  // Full local reset — same as wiping user-scoped keys. Clears the
-  // session too so the caller can't accidentally carry state forward
-  // after the page reload below.
   reset(){
     if(!confirm('⚠️ This deletes ALL progress, bookmarks, flags, wrong answers, and timetable on this device. Continue?')) return;
     if(!confirm('Are you absolutely sure? This cannot be undone.')) return;
@@ -3466,8 +3693,6 @@ const DATA = {
     location.reload();
   },
 
-  // The older wipeDevice — same effect as reset() but also clears the
-  // IndexedDB cache and preserves the current session.
   async wipeDevice(){
     if(!confirm('Erase ALL local data on this device (progress, bookmarks, flags, wrong-bank, cached question sets)? This cannot be undone. Anything already backed up to the cloud will still be there next time you log in online.')) return;
     [LS.PROG, LS.BK, LS.FL, LS.WR, LS.STK, LS.CHAPSTATS, LS.TT, LS.EXAM_SNAP, LS.TT_NOTIFIED, LS.CLOUD, LS.PROFILE, LS.LAST_USER].forEach(k=>localStorage.removeItem(k));
@@ -3477,10 +3702,7 @@ const DATA = {
   }
 };
 
-/* ═══════════════ 10g. TUTORIAL ═══════════════
-   Multi-step walkthrough. Idempotent per user (keyed by username in
-   abhyas_tut_seen). Also exposes the older single-modal `open()` /
-   `dismiss()` API so any HTML that calls either flow still works. */
+/* ═══════════════ 10g. TUTORIAL ═══════════════ */
 const TUTORIAL = {
   _seenKey: 'abhyas_tut_seen',
   _idx: 0,
@@ -3535,6 +3757,13 @@ const TUTORIAL = {
           <li><b><i class="ph ph-flag"></i> Flagged</b> — a quick "come back to this" marker.</li>
           <li><b><i class="ph ph-x-circle"></i> Wrong Bank</b> — anything you get wrong lands here automatically, and needs two correct answers in a row, spaced a few days apart, before it's considered mastered.</li>
         </ul>`
+    },
+    {
+      icon: '<i class="ph ph-calendar-check"></i>',
+      title: 'Weekly Sets',
+      body: `
+        <p>Every so often a fresh question set unlocks on the Dashboard. You get <b>exactly one attempt</b> — it's a graded exam, timed, and once you submit you can only review your answers.</p>
+        <p style="margin-top:.5rem">The home card shows a live countdown while the exam window is open. After it closes without you taking it, you can still review the questions and correct answers, but no score is recorded.</p>`
     },
     {
       icon: '<i class="ph ph-calendar-blank"></i>',
@@ -3616,28 +3845,6 @@ const TUTORIAL = {
       seen[S.user.username] = true;
       _save(TUTORIAL._seenKey, seen);
     }
-  },
-
-  // Older single-modal API — kept for compatibility with HTML that
-  // calls it directly. Shows the same first-step body as the multi-
-  // step version's intro card.
-  _legacyOpen(){
-    openMod('Welcome to Abhyas 👋', `
-      <p style="font-size:.85rem;line-height:1.6;margin-bottom:.7rem">Quick tour:</p>
-      <ul style="font-size:.8rem;line-height:1.9;padding-left:1.2rem;color:var(--t2)">
-        <li><strong>Online Study</strong> — pick a level/chapter/book to practice or take a timed exam.</li>
-        <li><strong>Flashcard mode</strong> — answer at your own pace, see the explanation immediately.</li>
-        <li><strong>Exam mode</strong> — timed, graded, review answers at the end.</li>
-        <li>Bookmark <i class="ph ph-star"></i>, flag <i class="ph ph-flag"></i>, or report <i class="ph ph-warning-circle"></i> any question while studying.</li>
-        <li>Wrong answers go into your <strong>Wrong Bank</strong> automatically, with spaced repetition to bring them back at the right time.</li>
-        <li>Everything works <strong>offline</strong> once you've opened a chapter while online — cache it in advance from the Offline Cache tab.</li>
-      </ul>
-      <button class="btn" onclick="TUTORIAL.dismiss()" style="margin-top:1rem">Got it, let's go →</button>
-    `);
-  },
-  dismiss(){
-    _save(TUTORIAL._seenKey, true);
-    closeMod();
   }
 };
 
@@ -3648,23 +3855,14 @@ const APP = {
     if(APP._booted) return;
     APP._booted = true;
 
-    // Theme (light is default; .dark is opt-in).
     if(_load('abhyas_theme','light')==='dark') document.body.classList.add('dark');
     const verEl = document.getElementById('sb-version');
     if(verEl) verEl.textContent = `${APP_NAME} (v${typeof APP_VERSION!=='undefined'?APP_VERSION:'—'})`;
 
-    // Migrate any old localStorage-based cache entries into IndexedDB.
     await QDB.migrateFromLocalStorage();
-
-    // Run the session-scope migrator from cloud-sync.js if present.
     if(typeof migrateSessionScopes === 'function') migrateSessionScopes();
-
-    // One-time backfill for any account whose chapter history predates
-    // CHAPSTATS — only fills gaps, never overwrites.
     if(!Object.keys(S.chapStats).length && S.prog.sessions?.length) CHAPSTATS.rebuildFromSessions();
 
-    // Purge any stale QDB entries left behind by a previous session's
-    // network error (a success:false blob stored as if it were data).
     const qKeys = await QDB.keys();
     for(const k of qKeys){
       try{
@@ -3673,14 +3871,11 @@ const APP = {
       }catch{}
     }
 
-    // Generate the persistent device-user id if missing (used by some
-    // backend features to attribute anonymous reports).
     if(!S.profile.id){
       S.profile.id = 'ha-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2,9);
       _save(LS.PROFILE, S.profile);
     }
 
-    // Initial renders + background jobs.
     UI.go('home');
     CACHE.render();
     _updateNetBtn();
@@ -3693,12 +3888,9 @@ const APP = {
 };
 
 /* ═══════════════ 12. NETWORK STATE BINDING ═══════════════ */
-
-// Modern offline warning element.
 function _updateOfflineWarn(){
   const modern = document.getElementById('on-offline-warn');
   if(modern) modern.style.display = (S.online && !S.forcedOffline) ? 'none' : 'flex';
-  // Older top-of-app bar.
   const bar = document.getElementById('offbar');
   if(bar){
     if(!S.online){
@@ -3713,13 +3905,9 @@ function _updateOfflineWarn(){
   }
 }
 
-// Modern network-mode button (icon + colored state) AND the older
-// net-dot / net-txt indicators.
 function _updateNetBtn(){
   const effectivelyOnline = S.online && !S.forcedOffline;
 
-  // Modern: single button toggles forced-offline; icon shape (wifi vs
-  // wifi-slash) distinguishes state by more than just color.
   const btn = document.getElementById('net-mode-btn');
   if(btn){
     btn.innerHTML = `<i class="ph ${effectivelyOnline ? 'ph-wifi-high' : 'ph-wifi-slash'}"></i>`;
@@ -3731,9 +3919,13 @@ function _updateNetBtn(){
     btn.style.borderColor = effectivelyOnline ? 'rgba(34,197,94,.35)' : 'var(--bad-bd)';
     btn.style.background = effectivelyOnline ? 'rgba(34,197,94,.08)' : 'var(--bad-bg)';
     btn.classList.toggle('forced', S.forcedOffline);
+    // ═══ v1.04 ═══ aria-pressed — the button is a toggle, and screen
+    // readers should hear its state. Convention here is inverted from
+    // the visual label (aria-pressed=true means "forced offline mode
+    // is on", which is the toggle state, not the network state).
+    btn.setAttribute('aria-pressed', String(!!S.forcedOffline));
   }
 
-  // Older inline indicator.
   const dot = document.getElementById('net-dot');
   const txt = document.getElementById('net-txt');
   if(dot) dot.className = 'net-dot' + (effectivelyOnline ? '' : ' off');
@@ -3745,8 +3937,9 @@ window.addEventListener('online', async ()=>{
   if(!reallyOnline) return;
   if(!S.forcedOffline){
     toast('🌐 Back online');
-    // Flush any pending progress backup that was deferred while offline.
     if(PSYNC._timer) PSYNC.pushNow();
+    // ═══ v1.04 ═══ Push any weekly attempt that was captured offline.
+    if(typeof WEEKLY !== 'undefined') WEEKLY.retryUnsynced();
   } else {
     toast('🌐 Network restored — still in forced offline mode');
   }
@@ -3774,16 +3967,14 @@ const NET = {
       toast('🔴 Offline mode on — all network requests blocked');
     } else {
       toast('🟢 Online mode restored — network requests allowed');
-      // Also try to flush a pending sync that accumulated during the
-      // offline period.
       if(PSYNC._timer) PSYNC.pushNow();
+      if(typeof WEEKLY !== 'undefined') WEEKLY.retryUnsynced();
     }
     _updateNetBtn();
     _updateOfflineWarn();
   }
 };
 
-// Legacy global helper — still used by some HTML markup.
 function toggleForcedOffline(){
   S.forcedOffline = !S.forcedOffline;
   _save(LS.FORCED_OFFLINE, S.forcedOffline);
@@ -3793,6 +3984,7 @@ function toggleForcedOffline(){
   if(!S.forcedOffline){
     NETCHECK.ping();
     if(PSYNC._timer) PSYNC.pushNow();
+    if(typeof WEEKLY !== 'undefined') WEEKLY.retryUnsynced();
   }
 }
 
@@ -3801,7 +3993,6 @@ function pluralize(n, word){ return `${n} ${word}${n===1?'':'s'}`; }
 
 /* ═══════════════ 14. BOOT SEQUENCE ═══════════════ */
 document.addEventListener('DOMContentLoaded', ()=>{
-  // Theme first (so first-paint matches what the user chose).
   if(_load('abhyas_theme','light')==='dark') document.body.classList.add('dark');
 
   PWA.init();
@@ -3812,11 +4003,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   NETCHECK.ping();
   AUTH.restore();
 
-  // Force-save an in-progress exam snapshot when the tab hides or is
-  // about to unload — the debounced 3s save could otherwise lose the
-  // last few answers on a hard app-switch / phone-lock. Independent of
-  // PSYNC's own flush-on-hide, which handles progress/bookmarks but
-  // not the exam snapshot.
   document.addEventListener('visibilitychange', ()=>{
     if(document.visibilityState === 'hidden' && S.quiz && S.quiz.active && S.quiz.mode === 'exam'){
       QUIZ._snapshotExam(true);
@@ -3829,10 +4015,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 });
 
-/* ═══════════════ EXPLICIT GLOBAL EXPOSURE ═══════════════
-   Everything referenced by inline onclick/onchange handlers in the
-   HTML must be attached to window — otherwise they'd be undefined
-   inside inline handler scope (which only sees global). */
+/* ═══════════════ EXPLICIT GLOBAL EXPOSURE ═══════════════ */
 window.AUTH = AUTH;
 window.NET = NET;
 window.UI = UI;
@@ -3864,4 +4047,6 @@ window.fidFromUid = fidFromUid;
 window.scopeLeaves = scopeLeaves;
 window.scopedStats = scopedStats;
 window.fileStatsMap = fileStatsMap;
-// CLOUD is exposed from cloud-sync.js
+// CLOUD is exposed from cloud-sync.js (unused by v1.04 app code — kept
+// for backward compat with any external callers, will be pruned once
+// cloud-sync.js is removed entirely).

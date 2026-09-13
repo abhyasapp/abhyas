@@ -2,18 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<!-- v1.04 — maximum-scale=1 removed. Blocking pinch-zoom fails WCAG
+     1.4.4 and, on iOS Safari, doesn't stop the auto-zoom-on-focus it
+     was usually added to prevent — that's a font-size issue and it's
+     already handled in design-system.css. -->
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#F2F4F3">
-<!-- Clickjacking mitigation: break out of any iframe immediately.
-     GitHub Pages doesn't support custom HTTP response headers, so
-     X-Frame-Options and CSP's frame-ancestors (header-only per spec —
-     never settable via a <meta> tag) aren't available here. This
-     client-side check is the best mitigation possible under that
-     hosting constraint — placed first, before anything else runs, so
-     the admin UI never renders inside someone else's page even
-     momentarily. Not as airtight as a real header, but meaningfully
-     better than nothing for a page with one-click destructive actions
-     (delete user, grant access, review payment). -->
 <script>if(window.top!==window.self){window.top.location=window.self.location;}</script>
 <title>Abhyas — Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -29,25 +23,14 @@
   --sky:#2B6CB0;--sky-glow:rgba(43,108,176,.20);
   --grn:#2E7D4F;--grn-glow:rgba(46,125,79,.20);
   --ros:#C1433C;--ros-glow:rgba(193,67,60,.20);
-  /* RGB triplets for the .tg/.ta/.tr status-tag family below — values
-     match the hex above exactly (confirmed against the pre-existing
-     --amb-glow/--grn-glow/--ros-glow rgba() lines, which already
-     encoded the same decimal RGB). Without these, rgba(var(--x-rgb),n)
-     is invalid CSS (empty value) and silently drops the background. */
   --amb-rgb:46,139,87;--grn-rgb:46,125,79;--ros-rgb:193,67,60;
   --ok:var(--grn);--ok-bg:rgba(46,125,79,.09);--ok-bd:rgba(46,125,79,.28);
   --bad:var(--ros);--bad-bg:rgba(193,67,60,.08);--bad-bd:rgba(193,67,60,.26);
   --warn:var(--amb);--warn-bg:rgba(46,139,87,.09);--warn-bd:rgba(46,139,87,.26);
-  /* Same variable, same value as user.html's --on-accent — text color
-     for buttons using the accent gradient as background. Kept in sync
-     across both files by using this shared name/value rather than each
-     file inventing its own near-black hex (previously #0F1410 here vs
-     #0F0A00 in user.html — same intent, two different literals). */
   --on-accent:#0F0A00;
   --t1:var(--c-text);--t2:var(--c-text-soft);--t3:var(--c-text-faint);
   --ff:'Inter',system-ui,sans-serif;--fd:'Inter',system-ui,sans-serif;--fm:'JetBrains Mono',monospace;
   --r1:12px;--r2:16px;--r3:20px;--r4:22px;
-  /* Neumorphic dual-tone elevation -- same system as index.html/user.html */
   --ne-light:#FFFFFF;--ne-dark:rgba(74,106,85,.16);
   --ne-sm:-3px -3px 8px var(--ne-light),3px 3px 8px var(--ne-dark);
   --ne-md:-5px -5px 14px var(--ne-light),6px 6px 16px var(--ne-dark);
@@ -61,6 +44,11 @@ html{height:100%}
 body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:4px}
 ::selection{background:rgba(54,139,79,.22);color:var(--t1)}
+
+/* v1.04 — shared focus ring, matching the rule in design-system.css
+   but scoped to admin.html's elements so it isn't accidentally
+   overridden by any of this file's own outline:none rules below. */
+:focus-visible{outline:2px solid var(--amb);outline-offset:2px;border-radius:4px}
 
 /* LOGIN GATE */
 #gate{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--c0);flex-direction:column}
@@ -79,8 +67,6 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
 .btn{width:100%;padding:.82rem;background:linear-gradient(150deg,var(--amb),var(--amb2));border:none;border-radius:var(--r2);color:var(--on-accent);font-size:.92rem;font-weight:700;font-family:var(--fd);cursor:pointer;transition:all var(--ease);box-shadow:var(--ne-sm);letter-spacing:.3px}
 .btn:hover:not(:disabled){box-shadow:var(--ne-md)}
 .btn:active:not(:disabled),.btn-s:active:not(:disabled),.tb-btn:active,.sb-item:active{transform:scale(.97)}
-:focus-visible{outline:2px solid var(--amb);outline-offset:2px;border-radius:4px}
-@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,0,0,.25);border-top-color:#000;border-radius:50%;animation:spin .65s linear infinite;vertical-align:middle;margin-right:.4rem}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -183,8 +169,6 @@ tr:last-child td{border-bottom:none}
 .badge-trial{background:rgba(43,108,176,.12);color:var(--sky);border:1px solid rgba(43,108,176,.25)}
 .badge-active{background:rgba(46,125,79,.12);color:var(--grn);border:1px solid rgba(46,125,79,.3)}
 .badge-expired{background:rgba(193,67,60,.12);color:var(--ros);border:1px solid rgba(193,67,60,.3)}
-/* Small inline status tag family — same definitions as user.html's
-   .ctag/.tg/.ta/.tr. */
 .ctag{font-size:.59rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;padding:.14rem .5rem;border-radius:20px;display:inline-flex;align-items:center;gap:.22rem}
 .tg{background:rgba(var(--grn-rgb),.11);color:var(--grn)}.ta{background:rgba(var(--amb-rgb),.13);color:var(--amb)}.tr{background:rgba(var(--ros-rgb),.11);color:var(--ros)}
 .badge-pending{background:rgba(54,139,79,.12);color:var(--amb);border:1px solid rgba(54,139,79,.3)}
@@ -207,13 +191,6 @@ tr:last-child td{border-bottom:none}
 .sf input:focus,.sf textarea:focus,.sf select:focus{border-color:var(--amb);box-shadow:0 0 0 3px rgba(54,139,79,.12)}
 .sf textarea{resize:vertical;min-height:80px}
 .sf .hint{font-size:.68rem;color:var(--t3);margin-top:.25rem}
-/* Custom file-upload control — the raw native <input type=file> renders
-   in the browser's OS-native style (a plain "Choose File" button with
-   system font/colors), which visually clashes with every other themed
-   input on this page. This hides the native control (still fully
-   functional — clicks/keyboard/drag-drop all still work, it's just
-   invisible and stretched over the styled label) and shows a themed
-   button + filename in its place instead. */
 .file-up{position:relative;display:flex;align-items:center;gap:.6rem;background:var(--c1);border:1.5px dashed var(--b2);border-radius:var(--r1);padding:.6rem .75rem;cursor:pointer;transition:border-color var(--ease),background var(--ease)}
 .file-up:hover{border-color:var(--amb)}
 .file-up input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
@@ -250,6 +227,11 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 .pg button:disabled{opacity:.4;cursor:not-allowed}
 .pg button.on{background:var(--amb);color:#000;border-color:var(--amb)}
 .pg-info{font-size:.68rem;color:var(--t3);margin-left:.5rem}
+
+/* v1.04 — truncation banner. Shown above a list when the server
+   returned a capped response (see MAX_LIST_* in CODE.gs). Without it,
+   the admin sees "3000 users" and has no idea there are more. */
+.trunc-warn{display:flex;align-items:center;gap:.5rem;background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--amb);border-radius:var(--r1);padding:.5rem .75rem;margin-bottom:.6rem;font-size:.72rem;font-weight:600}
 
 /* Loading overlay */
 .ld-overlay{position:fixed;inset:0;z-index:8000;background:rgba(17,19,21,.45);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;flex-direction:column;gap:.6rem}
@@ -292,10 +274,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 .import-errs div{padding:.15rem 0;border-bottom:1px dashed var(--b1)}
 .import-errs div:last-child{border-bottom:none}
 
-/* Data Maintenance — same visual language as the import module, but
-   distinct enough (dashed border + a maintenance icon) that an admin
-   scanning Settings doesn't confuse "delete all backups" with the
-   surrounding normal-configuration controls. */
+/* Data Maintenance */
 .maint-row{display:flex;align-items:flex-end;gap:.5rem;flex-wrap:wrap;padding:.6rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:8px;margin-bottom:.5rem}
 .maint-row .maint-info{flex:1;min-width:180px}
 .maint-row .maint-title{font-size:.78rem;font-weight:600;color:var(--t1);margin-bottom:.15rem}
@@ -310,7 +289,11 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
   .maint-row button{width:100%}
 }
 
-/* Responsive */
+/* Weekly Set results modal — histogram bars, per-question rows */
+.ws-bar-row{display:grid;grid-template-columns:56px 1fr 44px;gap:.4rem;align-items:center;font-size:.72rem;margin-bottom:.15rem}
+.ws-bar-track{height:6px;background:var(--b0);border-radius:4px;overflow:hidden}
+.ws-bar-fill{height:100%;border-radius:4px;background:var(--amb)}
+
 @media(max-width:600px){
   .gate-card{padding:1.5rem 1.1rem;margin:.8rem}
   .stats-grid{grid-template-columns:1fr 1fr}
@@ -318,15 +301,23 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 }
 </style>
 <!-- ═══════════════════════════════════════════════════════════════
-     v1.02 changelog (admin.html):
-       - Backend version indicator in topbar (silent, non-blocking).
-       - New "Trials Ending Soon" dashboard card.
-       - Focus trap on every modal — Tab no longer escapes to the page
-         underneath.
-       - New "Revoke public sharing on old screenshots" maintenance
-         action.
-       - Mobile layout for the Data Maintenance rows.
-       - Escape now closes the weekly-set preview modal (was missing).
+     v1.04 changelog (admin.html):
+       - Weekly Set RESULTS: new "Results" button per set opens a modal
+         with aggregated attempts, distribution histogram, per-question
+         hardness, and recent submissions. Reuses the preview modal.
+       - Bulk-select Set now clears whenever the filter or search
+         changes. Previously: filter to All → select 200 → narrow to
+         Trial → bulk action still applied to all 200, silently.
+       - Admin session expiry checked before every request, and any
+         "Admin auth failed" response triggers auto-logout with a
+         clear toast — no more broken tab pretending to still work.
+       - Auto-refresh scoped to the currently-visible view. Previously
+         refreshed all 8 endpoints every minute regardless of tab.
+       - Truncation banners on Users/Payments/Weekly Sets/Q-Reports when
+         the server returned a capped list (see MAX_LIST_* in CODE.gs).
+       - maximum-scale=1 removed from the viewport.
+       - aria-modal="true" on every modal container.
+       - escAttrJs now used inside aria-labels that interpolate usernames.
      ═══════════════════════════════════════════════════════════════ -->
 <base target="_blank">
 </head>
@@ -473,6 +464,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           </select>
           <button class="btn-s btn-c" onclick="ADMIN.exportUsers()"><i class="ph ph-download-simple"></i> CSV</button>
         </div>
+        <div id="u-trunc"></div>
         <div class="bulk-bar" id="u-bulk">
           <span id="u-bulk-count">0 selected</span>
           <button class="btn-s btn-g btn-sm" onclick="USERS.bulkGrantAccess('permanent')"><i class="ph ph-check"></i> Grant Permanent</button>
@@ -499,6 +491,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           </select>
           <button class="btn-s btn-c" onclick="ADMIN.exportPayments()"><i class="ph ph-download-simple"></i> CSV</button>
         </div>
+        <div id="p-trunc"></div>
         <div class="bulk-bar" id="p-bulk">
           <span id="p-bulk-count">0 selected</span>
           <button class="btn-s btn-g btn-sm" onclick="PAYMENTS.bulkVerify()"><i class="ph ph-check"></i> Verify All</button>
@@ -546,6 +539,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 
         <div class="card">
           <div class="card-hd"><h3>Scheduled &amp; Live Sets</h3></div>
+          <div id="ws-trunc"></div>
           <div id="weeklysets-list" style="display:flex;flex-direction:column;gap:.5rem"><p style="font-size:.8rem;opacity:.6">No weekly sets yet — add one above.</p></div>
         </div>
       </div>
@@ -578,6 +572,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             </select>
             <button class="btn-s btn-c" onclick="QREPORTS.exportCSV()"><i class="ph ph-download-simple"></i> CSV</button>
           </div>
+          <div id="qr-trunc"></div>
           <div id="qreports-list" style="display:flex;flex-direction:column;gap:.5rem"><p style="font-size:.8rem;opacity:.6">Click Refresh to load reports.</p></div>
           <div class="pg" id="qr-pg"></div>
         </div>
@@ -601,6 +596,9 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
             <option value="prune progress backups">Prune Backups</option>
             <option value="trim logs">Trim Logs</option>
             <option value="revoke screenshot sharing">Revoke Screenshot Sharing</option>
+            <!-- v1.04 -->
+            <option value="weekly set attempt">Weekly Set Attempts</option>
+            <option value="weekly set unlock notification">Weekly Set Notifications</option>
           </select>
         </div>
         <div class="card" id="logs-card">
@@ -677,14 +675,6 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           <div id="imp-result"></div>
         </div>
 
-        <!-- ═══════════════════════════════════════════════════════
-             DATA MAINTENANCE — housekeeping for the sheets that grow
-             forever (ProgressBackups, Logs), plus the one-time
-             screenshot-sharing fixup. Every action here is logged to
-             Activity Logs, and the destructive ones ask for
-             confirmation with an exact count of what's about to be
-             removed.
-             ═══════════════════════════════════════════════════════ -->
         <div class="card">
           <div class="card-hd"><h3><i class="ph ph-broom"></i> Data Maintenance</h3></div>
           <p style="font-size:.8rem;opacity:.7;margin:0 0 .8rem">Housekeeping for the two sheets that grow forever — ProgressBackups (created by "replace"-mode progress imports) and Activity Logs. All actions are logged with the acting admin's name.</p>
@@ -735,7 +725,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 </div>
 
 <!-- REVIEW MODAL -->
-<div class="mbg" id="mbg-review" onclick="MODAL.close('review')">
+<div class="mbg" id="mbg-review" role="dialog" aria-modal="true" aria-labelledby="mtitle-review" onclick="MODAL.close('review')">
   <div class="mbox" onclick="event.stopPropagation()">
     <div class="mhd"><h3 id="mtitle-review">Review Payment</h3><button class="mcl" onclick="MODAL.close('review')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
     <div class="mbody" id="mbody-review"></div>
@@ -743,15 +733,15 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 </div>
 
 <!-- USER DETAIL MODAL -->
-<div class="mbg" id="mbg-user" onclick="MODAL.close('user')">
+<div class="mbg" id="mbg-user" role="dialog" aria-modal="true" aria-labelledby="mtitle-user" onclick="MODAL.close('user')">
   <div class="mbox wide" onclick="event.stopPropagation()">
     <div class="mhd"><h3 id="mtitle-user">User Details</h3><button class="mcl" onclick="MODAL.close('user')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
     <div class="mbody" id="mbody-user"></div>
   </div>
 </div>
 
-<!-- WEEKLY SET PREVIEW MODAL -->
-<div class="mbg" id="mbg-wspreview" onclick="MODAL.close('wspreview')">
+<!-- WEEKLY SET PREVIEW / RESULTS MODAL — the same modal serves both. -->
+<div class="mbg" id="mbg-wspreview" role="dialog" aria-modal="true" aria-labelledby="mtitle-wspreview" onclick="MODAL.close('wspreview')">
   <div class="mbox wide" onclick="event.stopPropagation()">
     <div class="mhd"><h3 id="mtitle-wspreview">Preview</h3><button class="mcl" onclick="MODAL.close('wspreview')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
     <div class="mbody" id="mbody-wspreview"></div>
@@ -759,9 +749,9 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 </div>
 
 <!-- CHANGE PASSWORD MODAL -->
-<div class="mbg" id="mbg-pwd" onclick="MODAL.close('pwd')">
+<div class="mbg" id="mbg-pwd" role="dialog" aria-modal="true" aria-labelledby="mtitle-pwd" onclick="MODAL.close('pwd')">
   <div class="mbox" onclick="event.stopPropagation()">
-    <div class="mhd"><h3>Change Admin Password</h3><button class="mcl" onclick="MODAL.close('pwd')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
+    <div class="mhd"><h3 id="mtitle-pwd">Change Admin Password</h3><button class="mcl" onclick="MODAL.close('pwd')" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
     <div class="mbody">
       <div class="sf"><label for="pwd-current">Current Password</label><input type="password" id="pwd-current" placeholder="••••••••" autocomplete="current-password"></div>
       <div class="sf"><label for="pwd-new">New Password</label><input type="password" id="pwd-new" placeholder="Min 6 characters" autocomplete="new-password"></div>
@@ -778,48 +768,36 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 
 <script src="version.js"></script>
 <script src="shared.js"></script>
-<!-- Needed for QREPORTS.chapterFor()/MISSED's chapter list — the same
-     fileId → chapter mapping user.html already uses, reused here rather
-     than duplicated so the mapping can never drift between what
-     students see and what the admin filters show. Read-only use here:
-     nothing in this file writes to ChapterData/DRIVE. -->
 <script src="chapters-data.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
-// CONFIGURATION — Replace with your GAS Web App URL
+// CONFIGURATION
 // ═══════════════════════════════════════════════════════════════
 const GAS_URL = "https://script.google.com/macros/s/AKfycbyZLZxf6VKNiMfhY6memPTKj-dGW7jxyX1c-9GI0OPG8TqazSZi_P-7Y-8DlpT0ZlrjHg/exec";
 
 // ═══════════════════════════════════════════════════════════════
-// ADMIN CORE — esc() and pingBackend() now come from shared.js
+// ADMIN CORE
 // ═══════════════════════════════════════════════════════════════
 
 const ADMIN = {
   creds: null,
-  data: {users:[], payments:[], settings:{}, logs:[]},
+  data: {
+    users: [], payments: [], settings: {}, logs: [],
+    // v1.04 — mirror of the server's list caps. When true, the
+    // corresponding view renders a truncation banner.
+    usersTotalCount: 0, usersTruncated: false,
+    paymentsTotalCount: 0, paymentsTruncated: false,
+    weeklysetsTotalCount: 0, weeklysetsTruncated: false,
+    qreportsTotalCount: 0, qreportsTruncated: false
+  },
   state: {uPage:1, pPage:1, lPage:1, qrPage:1, uPerPage:15, pPerPage:15, lPerPage:20, qrPerPage:10},
 
-  // Leaving admin mode (main Logout, 'Back to User Login', 'User
-  // Portal') always clears the admin's own credentials. It also
-  // clears abhyas_session, but ONLY if that key currently holds
-  // {type:'admin'} — the routing marker index.html writes when
-  // someone logs in as an admin through its own shared login form
-  // (as opposed to logging into admin.html directly). That marker is
-  // never real student progress data, so clearing it is always safe,
-  // and it's exactly what was causing 'Back to User Login' to bounce
-  // straight back into admin.html: index.html's own boot logic sees
-  // a stale type:'admin' entry and auto-redirects into admin mode
-  // again. If abhyas_session instead holds a real {type:'user'}
-  // session — e.g. an unrelated student's saved login on a shared
-  // device — this deliberately leaves it untouched, which is the
-  // fix for the OTHER bug this code used to have (admin logout
-  // silently destroying a different student's session).
   _leaveAdminMode() {
     localStorage.removeItem('abhyas_admin');
     try {
       const raw = localStorage.getItem('abhyas_session');
       if (raw && JSON.parse(raw).type === 'admin') localStorage.removeItem('abhyas_session');
-    } catch(e) { /* malformed abhyas_session is index.html's concern, not this cleanup's */ }
+    } catch(e) { /* malformed abhyas_session is index.html's concern */ }
     location.href = 'index.html';
   },
 
@@ -828,6 +806,16 @@ const ADMIN = {
     if (saved) {
       try {
         this.creds = JSON.parse(saved);
+        // v1.04 — bail out if the cached token is already past its
+        // client-side expiry. Previously unlock() ran unconditionally
+        // and the first network request failed with a confusing
+        // "Admin auth failed" toast while the login gate had already
+        // been hidden behind the (broken) app shell.
+        if (this.creds.expires && Date.now() > this.creds.expires) {
+          localStorage.removeItem('abhyas_admin');
+          this.creds = null;
+          return;
+        }
         this.unlock();
         return;
       } catch(e) { localStorage.removeItem('abhyas_admin'); }
@@ -841,7 +829,7 @@ const ADMIN = {
     if (p.length < 4) return this.showErr('Password too short.');
     this.setLoading(true);
     try {
-      const res = await this.post('adminLogin', {username:u, password:p});
+      const res = await this.post('adminLogin', {username:u, password:p}, {skipTokenCheck:true});
       if (!res.success) throw new Error(res.error || 'Invalid credentials');
       this.creds = {user: u, token: res.adminToken, expires: Date.now() + 86400000};
       localStorage.setItem('abhyas_admin', JSON.stringify(this.creds));
@@ -864,11 +852,6 @@ const ADMIN = {
     this.refresh();
   },
 
-  // Read-only version probe. Cheap (one GET, one tiny JSON), non-blocking,
-  // silent on failure — if the network's flaky the admin just doesn't see
-  // the version string, which is fine. Exists so a support conversation
-  // can start with "what version are you on" without either side having
-  // to guess. Backend surfaces this via its own `ping` action.
   async fetchVersion() {
     try {
       const r = await fetch(GAS_URL + "?action=ping");
@@ -894,7 +877,20 @@ const ADMIN = {
     setTimeout(() => e.classList.remove('show'), 4000);
   },
 
-  async post(action, params={}) {
+  // v1.04 — every request now checks:
+  //   1. That we still have credentials at all (login flow skips this).
+  //   2. That the client-side expires timestamp hasn't already passed.
+  //   3. That the response isn't an "Admin auth failed" — if it is, we
+  //      auto-logout so the admin isn't stuck on a broken page.
+  async post(action, params={}, opts={}) {
+    if (!opts.skipTokenCheck) {
+      if (!this.creds?.token) throw new Error('Not logged in.');
+      if (this.creds.expires && Date.now() > this.creds.expires) {
+        this.toast('🔒 Admin session expired — please log in again.');
+        setTimeout(() => this.logout(), 800);
+        throw new Error('Admin session expired');
+      }
+    }
     const body = {action, ...params, adminToken: this.creds?.token};
     const r = await fetch(GAS_URL, {
       method: 'POST',
@@ -902,18 +898,18 @@ const ADMIN = {
       body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error('Network error: ' + r.status);
-    return await r.json();
+    const data = await r.json();
+    // Central auth-failure detection — every admin action goes through
+    // post(), so hooking the check here catches them all without
+    // sprinkling the check into each caller.
+    if (data && data.success === false && /admin auth failed/i.test(data.error || '')) {
+      this.toast('🔒 Admin session invalid — please log in again.');
+      setTimeout(() => this.logout(), 800);
+      throw new Error('Admin session invalid');
+    }
+    return data;
   },
 
-  // Payment screenshots used to be a plain <a target="_blank"> straight to
-  // Drive's download URL — for an image, that just opens the file inline
-  // in a new tab instead of downloading it, since Drive's response has no
-  // Content-Disposition: attachment header. This routes through the
-  // adminDownloadScreenshot backend action instead (same DriveApp-proxy
-  // pattern already used for question files), turns the returned base64
-  // into a real blob:, and clicks a synthetic <a download> on THAT — same-
-  // origin blob: URLs are what browsers actually respect a download
-  // attribute on, so this reliably saves the file instead of just viewing it.
   async downloadScreenshot(url, suggestedName) {
     this.toast('⬇️ Preparing download…');
     try {
@@ -930,9 +926,6 @@ const ADMIN = {
       document.body.appendChild(a);
       a.click();
       a.remove();
-      // Revoke on a delay, not immediately — some browsers (Safari in
-      // particular) start the save asynchronously and revoking the blob:
-      // URL right after .click() can cancel the download before it starts.
       setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
       this.toast('✅ Screenshot downloaded');
     } catch(e) {
@@ -942,11 +935,6 @@ const ADMIN = {
 
   ALL_SCOPES: ['stats','users','payments','settings','logs','admins','weeklysets','qreports'],
 
-  // scope: optional array of which pieces to reload, e.g. ['stats','users']
-  // after granting one user access. Omit it (or pass nothing) for the full
-  // six-endpoint reload — that's still what the manual refresh button and
-  // the 'r' shortcut use, since at that point the person genuinely wants
-  // everything re-synced.
   async refresh(scope) {
     const want = (scope && scope.length) ? scope : this.ALL_SCOPES;
     const isFull = want === this.ALL_SCOPES;
@@ -969,32 +957,58 @@ const ADMIN = {
         if (k === 'stats') {
           if (r.success) {
             this.renderStats(r.stats);
-            // Only fetch expiring-trials when the dashboard is the
-            // current view — no point hitting the endpoint for an admin
-            // who's sitting on the Payments tab, where the result would
-            // just render into a hidden card anyway.
             if (document.getElementById('view-dashboard')?.classList.contains('on')) EXPIRING.load();
           } else failures.push('stats: ' + (r.error || 'unknown'));
         }
-        else if (k === 'users') { if (r.success) { this.data.users = r.users; USERS.render(); } else failures.push('users: '+(r.error||'unknown')); }
-        else if (k === 'payments') { if (r.success) { this.data.payments = r.payments; PAYMENTS.render(); } else failures.push('payments: '+(r.error||'unknown')); }
+        else if (k === 'users') {
+          if (r.success) {
+            this.data.users = r.users;
+            this.data.usersTotalCount = r.totalCount ?? r.users.length;
+            this.data.usersTruncated = !!r.truncated;
+            USERS.render();
+          } else failures.push('users: '+(r.error||'unknown'));
+        }
+        else if (k === 'payments') {
+          if (r.success) {
+            this.data.payments = r.payments;
+            this.data.paymentsTotalCount = r.totalCount ?? r.payments.length;
+            this.data.paymentsTruncated = !!r.truncated;
+            PAYMENTS.render();
+          } else failures.push('payments: '+(r.error||'unknown'));
+        }
         else if (k === 'settings') { if (r.success) { this.data.settings = r.settings; SETTINGS.load(); } }
         else if (k === 'logs') { if (r.success) { this.data.logs = r.logs; LOGS.render(); } }
         else if (k === 'admins') { if (r.success) ADMINS.render(r.admins); }
-        else if (k === 'weeklysets') { if (r.success) WEEKLYSETS.render(r.sets); }
-        else if (k === 'qreports') { if (r.success) QREPORTS.render(r.reports); }
+        else if (k === 'weeklysets') {
+          if (r.success) {
+            this.data.weeklysetsTotalCount = r.totalCount ?? (r.sets?.length || 0);
+            this.data.weeklysetsTruncated = !!r.truncated;
+            WEEKLYSETS.render(r.sets);
+          }
+        }
+        else if (k === 'qreports') {
+          if (r.success) {
+            this.data.qreportsTotalCount = r.totalCount ?? (r.reports?.length || 0);
+            this.data.qreportsTruncated = !!r.truncated;
+            QREPORTS.render(r.reports);
+          }
+        }
       });
       if (failures.length) {
+        // Note: /admin auth failed/i is already handled inside post()
+        // which auto-logs-out — anything that reaches here is a
+        // different failure class, so no double handling needed.
         this.toast('❌ Some data failed to load — ' + failures[0] + (failures.length>1 ? ` (+${failures.length-1} more)` : ''));
-        if (failures.some(f => /auth failed/i.test(f))) {
-          this.toast('🔒 Admin session invalid — please log out and back in.');
-        }
       } else if (isFull) {
-        // Single-scope refreshes follow a mutating action that already
-        // toasted its own success message — no need to double up.
         this.toast('✅ Data refreshed');
       }
-    } catch(e) { this.toast('❌ Refresh failed: ' + e.message); }
+    } catch(e) {
+      // post() may have thrown because of the auth-failure auto-logout.
+      // Don't double-toast in that case.
+      if (!/session (invalid|expired)/i.test(e.message)) {
+        this.toast('❌ Refresh failed: ' + e.message);
+      }
+    }
     this.hideLoading();
   },
 
@@ -1024,19 +1038,12 @@ const ADMIN = {
     box.appendChild(t); setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),220)},duration);
   },
 
-  // Shared by every module's "Export CSV" — one escaping rule so a
-  // stray comma/quote in a name or note can never silently shift columns.
   toCSV(headers, rows) {
     const esc = v => `"${String(v == null ? '' : v).replace(/"/g,'""')}"`;
     return [headers.map(esc).join(','), ...rows.map(r => r.map(esc).join(','))].join('\n');
   },
 
   exportUsers() {
-    // Exports whatever the Users tab's search box + status filter are
-    // currently showing, not the full account list — an admin who
-    // filtered down to e.g. "trial" users almost certainly wants a CSV of
-    // exactly that, not everyone. Falls back to the full list when called
-    // from the dashboard's own Export button (no filter UI on that page).
     const rows = (typeof USERS !== 'undefined' && document.getElementById('u-search')) ? USERS._visibleRows() : ADMIN.data.users;
     if (!rows.length) return this.toast('No users to export');
     const headers = ['Username','Name','Email','Mobile','Status','Created','Access'];
@@ -1087,12 +1094,10 @@ const ADMIN = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// CHAPTER LOOKUP — shared by MISSED and QREPORTS so both filter UIs
-// use the exact same fileId → level/chapter mapping as the student
-// app (chapters-data.js), instead of each maintaining its own.
+// CHAPTERS — shared lookup so MISSED and QREPORTS agree
 // ═══════════════════════════════════════════════════════════════
 const CHAPTERS = {
-  _map: null, // fid -> {level, chapter, label}
+  _map: null,
   _levels: null,
   _chaptersByLevel: null,
 
@@ -1100,7 +1105,7 @@ const CHAPTERS = {
     if (this._map) return;
     this._map = new Map();
     this._levels = new Set();
-    this._chaptersByLevel = new Map(); // level -> Set(chapter)
+    this._chaptersByLevel = new Map();
     if (typeof ChapterData !== 'undefined') {
       ChapterData.allFileRefs().forEach(ref => {
         const level = ChapterData.levelLabel(ref.lv);
@@ -1124,6 +1129,10 @@ const CHAPTERS = {
     this._build();
     return [...this._levels].sort();
   },
+  // v1.04 — returns CANONICAL chapter names only (no "— Book" suffix).
+  // This is exactly what app.js's session.chapterKey produces, so
+  // admin filtering by chapter now matches sessions recorded by the
+  // updated client. See reportMetadataForQuestion_ in CODE.gs.
   allChapters() {
     this._build();
     return [...new Set([...this._map.values()].map(v => v.chapter))].sort();
@@ -1131,12 +1140,7 @@ const CHAPTERS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// EXPIRING TRIALS — read-only dashboard card. Lists users whose
-// trial expires within the selected window (backend adminExpiringTrials),
-// sorted soonest-first. Purely informational — the automatic T-2h push
-// notification is fired by checkTrialExpiryWarnings on its own 30-minute
-// trigger; this card is for an admin who wants to eyeball who's about
-// to lapse before that fires, or to message them directly.
+// EXPIRING TRIALS
 // ═══════════════════════════════════════════════════════════════
 const EXPIRING = {
   async load() {
@@ -1164,7 +1168,7 @@ const EXPIRING = {
             </div>
             <div style="display:flex;gap:.35rem;align-items:center;flex-shrink:0">
               <span class="ctag ta">${label} left</span>
-              <button class="btn-s btn-c btn-sm" onclick="USERS.view('${escAttrJs(u.username)}')" title="View details" aria-label="View details for ${esc(u.username)}"><i class="ph ph-eye"></i></button>
+              <button class="btn-s btn-c btn-sm" onclick="USERS.view('${escAttrJs(u.username)}')" title="View details" aria-label="View details for ${escAttrJs(u.username)}"><i class="ph ph-eye"></i></button>
             </div>
           </div>`;
         }).join('');
@@ -1175,14 +1179,7 @@ const EXPIRING = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// DATA MAINTENANCE — Settings tab. Thin clients for the three
-// admin-only cleanup actions added to the backend in v1.01
-// (adminPruneOldBackups, adminClearProgressBackups, adminTrimLogs),
-// plus the one-time screenshot-sharing fixup added in v1.02. All of
-// them are admin-gated server-side and all of them write an entry to
-// the Activity Logs sheet with the acting admin's name. The
-// destructive ones confirm here client-side with the exact number
-// that will be removed so a fat-finger can't wipe a year of backups.
+// DATA MAINTENANCE
 // ═══════════════════════════════════════════════════════════════
 const MAINTENANCE = {
   async pruneOldBackups() {
@@ -1200,9 +1197,6 @@ const MAINTENANCE = {
   },
 
   async clearAllBackups() {
-    // Deliberately loud: this one is irreversible and removes the ONLY
-    // undo path for a replace-mode progress import, so the confirm
-    // requires typing the word DELETE rather than just clicking OK.
     const typed = prompt(
       'This will permanently delete EVERY progress-backup row.\n\n' +
       'After this, a bad "replace"-mode progress import can no longer be undone.\n\n' +
@@ -1260,7 +1254,7 @@ const MAINTENANCE = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ADMIN ACCOUNTS — multi-admin management (Settings tab)
+// ADMIN ACCOUNTS
 // ═══════════════════════════════════════════════════════════════
 const ADMINS = {
   list: [],
@@ -1315,11 +1309,7 @@ const ADMINS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// MOST MISSED QUESTIONS — aggregate wrong-rate across all students,
-// resolved to readable text on-demand (only for the top results
-// actually shown, never server-side for the whole question bank),
-// with level/chapter/date/min-attempts filters wired to the backend's
-// filtered adminMostMissedQuestions.
+// MOST MISSED QUESTIONS
 // ═══════════════════════════════════════════════════════════════
 const MISSED = {
   lastResults: [],
@@ -1362,13 +1352,18 @@ const MISSED = {
       const res = await ADMIN.post('adminMostMissedQuestions', params);
       if (!res.success) throw new Error(res.error || 'Failed to load');
       this.lastResults = res.results;
+
+      // v1.04 — server-side truncation banner, when the Progress scan
+      // hit its row cap before finishing every user.
+      const truncHtml = res.truncated
+        ? `<div class="trunc-warn"><i class="ph ph-warning"></i> Partial results — scanned ${res.totalRowsScanned} of ${res.totalRowsAvailable} progress rows. Refine by date range to narrow the scan.</div>`
+        : '';
+
       if (!res.results.length) {
-        box.innerHTML = `<p style="font-size:.8rem;opacity:.6">No questions with ${res.minAttempts}+ recent attempts match these filters yet. If you set a Level/Chapter filter, remember it only matches attempts whose data already carries that metadata — try clearing filters if you expect more.</p>`;
+        box.innerHTML = truncHtml + `<p style="font-size:.8rem;opacity:.6">No questions with ${res.minAttempts}+ recent attempts match these filters yet. If you set a Level/Chapter filter, remember it only matches attempts whose data already carries that metadata — try clearing filters if you expect more.</p>`;
         return;
       }
 
-      // Resolve each UNIQUE fileId once, not once per result — several
-      // top-missed questions often come from the same file.
       const fileCache = {};
       const uniqueFileIds = [...new Set(res.results.map(r => r.fileId))];
       await Promise.all(uniqueFileIds.map(async fid => {
@@ -1378,10 +1373,10 @@ const MISSED = {
             const raw = fres.result;
             fileCache[fid] = Array.isArray(raw) ? raw : (raw?.questions || raw?.data || raw?.quiz || raw?.items || []);
           }
-        } catch (e) { /* leave uncached — that result falls back to showing the raw uid below */ }
+        } catch (e) { /* leave uncached — result falls back to showing the uid */ }
       }));
 
-      box.innerHTML = res.results.map(r => {
+      box.innerHTML = truncHtml + res.results.map(r => {
         const qs = fileCache[r.fileId];
         const q = (qs && r.index != null) ? qs[r.index] : null;
         const text = q ? (q.q || q.question || q.Question || q.stem || q.ques || q.text) : null;
@@ -1421,34 +1416,27 @@ const MISSED = {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════
+// WEEKLY SETS
+// ═══════════════════════════════════════════════════════════════
 const WEEKLYSETS = {
   list: [],
-  uploadedFileId: '', // set by onFilePicked() once a Drive upload succeeds
+  uploadedFileId: '',
+  // v1.04 — cached results of the last showResults() call, so exportCSV
+  // doesn't need to re-request them.
+  _lastResults: null,
 
-  // Pre-fills the release-date input with next Wednesday at 8:00 AM —
-  // a convenience default matching the "upload over the weekend, unlock
-  // Wednesday" workflow this feature was built for. Still just a
-  // starting point in a normal datetime-local input, so an admin can
-  // freely pick any other date/time instead.
   fillNextWednesday() {
     const now = new Date();
-    const day = now.getDay(); // 0=Sun..6=Sat
-    let daysUntilWed = (3 - day + 7) % 7; // 3 = Wednesday
-    if (daysUntilWed === 0) daysUntilWed = 7; // if today IS Wednesday, jump to next week's, not "in 0 days"
+    const day = now.getDay();
+    let daysUntilWed = (3 - day + 7) % 7;
+    if (daysUntilWed === 0) daysUntilWed = 7;
     const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilWed, 8, 0, 0);
     const pad = n => String(n).padStart(2, '0');
     const local = `${target.getFullYear()}-${pad(target.getMonth()+1)}-${pad(target.getDate())}T${pad(target.getHours())}:${pad(target.getMinutes())}`;
     document.getElementById('ws-release').value = local;
   },
 
-  // Reads the picked .json file client-side, uploads it to Drive via
-  // adminUploadWeeklySetFile (which validates it's real JSON and stores
-  // it in a dedicated "WeeklySets" Drive folder — same pattern as
-  // payment-screenshot uploads), then writes the resulting fileId into
-  // the (now fallback/advanced) ws-fileid field so create() below picks
-  // it up the exact same way whether it came from an upload or a pasted
-  // id. This is what makes "upload a file" the normal path instead of
-  // requiring an admin to separately manage Drive and copy fileIds.
   async onFilePicked() {
     const input = document.getElementById('ws-file');
     const status = document.getElementById('ws-upload-status');
@@ -1457,12 +1445,6 @@ const WEEKLYSETS = {
     if (!file) return;
     if (nameEl) nameEl.textContent = file.name;
 
-    // v1.01: backend now refuses uploads over 5MB — this catches the
-    // same case client-side so a fat-fingered wrong file (a PDF, a
-    // screenshot, a video) is rejected instantly instead of after a
-    // slow round-trip. The 2MB soft-warn is unchanged: not blocked,
-    // just flagged, since a genuinely image-heavy question set at that
-    // size is possible and intentional.
     const HARD_LIMIT_BYTES = 5 * 1024 * 1024;
     const LARGE_FILE_WARN_BYTES = 2 * 1024 * 1024;
     if (file.size > HARD_LIMIT_BYTES) {
@@ -1504,17 +1486,21 @@ const WEEKLYSETS = {
     this.list = sets || [];
     const box = document.getElementById('weeklysets-list');
     if (!box) return;
+
+    // v1.04 — truncation banner for the list itself.
+    const truncEl = document.getElementById('ws-trunc');
+    if (truncEl) {
+      truncEl.innerHTML = ADMIN.data.weeklysetsTruncated
+        ? `<div class="trunc-warn"><i class="ph ph-warning"></i> Showing ${this.list.length} of ${ADMIN.data.weeklysetsTotalCount} weekly sets. Archive or delete old sets to see the rest.</div>`
+        : '';
+    }
+
     if (!this.list.length) { box.innerHTML = '<p style="font-size:.8rem;opacity:.6">No weekly sets yet — add one above.</p>'; return; }
     const now = Date.now();
     box.innerHTML = this.list.map(s => {
       const releaseTime = new Date(s.releaseAt).getTime();
       const released = !isNaN(releaseTime) && now >= releaseTime;
       const isArchived = s.status === 'archived';
-      // An archived set that's already released stays permanently in
-      // students' Online Study library (see listWeeklySets' comment on
-      // the backend) — "Archived" here means "no longer featured as
-      // this week's set", not "no longer accessible", so the badge says
-      // so explicitly rather than implying it's been taken away.
       const statusBadge = isArchived
         ? (released
             ? '<span class="ctag" style="background:var(--b0);color:var(--t3)">Archived · still in library</span>'
@@ -1528,6 +1514,7 @@ const WEEKLYSETS = {
           <div style="font-size:.68rem;opacity:.6">${s.chapterLabel ? esc(s.chapterLabel) + ' · ' : ''}${released ? 'Released' : 'Unlocks'} ${s.releaseAt ? new Date(s.releaseAt).toLocaleString() : '—'} · fileId: ${esc(s.fileId)}</div>
         </div>
         <div style="display:flex;gap:.35rem;flex-shrink:0">
+          <button class="btn-s btn-p btn-sm" onclick="WEEKLYSETS.showResults('${escAttrJs(s.id)}','${escAttrJs(s.title)}')" title="View student results" aria-label="View results"><i class="ph ph-chart-bar"></i></button>
           <button class="btn-s btn-c btn-sm" onclick="WEEKLYSETS.preview('${escAttrJs(s.fileId)}','${escAttrJs(s.title)}')" title="Preview questions" aria-label="Preview questions"><i class="ph ph-eye"></i></button>
           ${isArchived
             ? `<button class="btn-s btn-g btn-sm" onclick="WEEKLYSETS.setStatus('${escAttrJs(s.id)}','active')" title="Reactivate as this week's featured set" aria-label="Reactivate"><i class="ph ph-arrow-counter-clockwise"></i></button>`
@@ -1538,13 +1525,6 @@ const WEEKLYSETS = {
     }).join('');
   },
 
-  // Fetches the raw question JSON (same read-only handleGetFile proxy
-  // every chapter file already goes through — public, rate-limited, no
-  // admin auth required) and shows a quick sanity-check view: total
-  // question count plus the first few questions with their options, so
-  // an admin can catch a wrong file, a bad format, or missing options
-  // BEFORE students ever see it — rather than finding out from a
-  // support message after the set is already live.
   async preview(fileId, title) {
     if (!fileId) return ADMIN.toast('❌ No fileId to preview yet — upload a file or paste one first');
     document.getElementById('mtitle-wspreview').textContent = 'Preview: ' + (title || fileId);
@@ -1578,6 +1558,83 @@ const WEEKLYSETS = {
     }
   },
 
+  // v1.04 — aggregated results for one set. Reuses the same modal as
+  // preview; the two are never open simultaneously, so no conflict.
+  async showResults(id, title) {
+    document.getElementById('mtitle-wspreview').textContent = 'Results: ' + (title || id);
+    document.getElementById('mbody-wspreview').innerHTML =
+      '<p style="font-size:.8rem;opacity:.7"><i class="ph ph-circle-notch" style="animation:spin 1s linear infinite"></i> Aggregating…</p>';
+    document.getElementById('mbg-wspreview').classList.add('show');
+    FOCUS_TRAP.open('mbg-wspreview');
+    try {
+      const res = await ADMIN.post('adminWeeklySetResults', { weeklyId: id });
+      if (!res.success) throw new Error(res.error || 'Failed to load results');
+
+      this._lastResults = res;
+
+      if (!res.attempts) {
+        document.getElementById('mbody-wspreview').innerHTML = `
+          <p style="font-size:.82rem;color:var(--t2);margin-bottom:.5rem">No attempts recorded for this set yet.</p>
+          <p style="font-size:.72rem;color:var(--t3)">Students who take it will appear here once they submit — one attempt per student, then review-only.</p>`;
+        return;
+      }
+
+      const maxBucket = Math.max(...res.distribution.map(b => b.count), 1);
+      const distHtml = res.distribution.map(b => `
+        <div class="ws-bar-row">
+          <span style="color:var(--t3);font-family:var(--fm)">${b.range}%</span>
+          <div class="ws-bar-track"><div class="ws-bar-fill" style="width:${(b.count / maxBucket) * 100}%"></div></div>
+          <span style="text-align:right;font-family:var(--fm)">${b.count}</span>
+        </div>`).join('');
+
+      document.getElementById('mbody-wspreview').innerHTML = `
+        ${res.rescored ? '' : '<div class="trunc-warn"><i class="ph ph-warning"></i> Source question file could not be read — scores shown are as reported by the client.</div>'}
+        <div class="dgrid" style="margin-bottom:.9rem">
+          <div class="ditem"><label>Attempts</label><val>${res.attempts}</val></div>
+          <div class="ditem"><label>Unique Students</label><val>${res.uniqueStudents}</val></div>
+          <div class="ditem"><label>Average Score</label><val style="color:var(--amb);font-size:1rem">${res.avgPct}%</val></div>
+          <div class="ditem"><label>Range</label><val>${res.minPct}% – ${res.maxPct}% (σ ${res.stdDev})</val></div>
+        </div>
+
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);margin-bottom:.4rem">Score Distribution</div>
+        <div style="margin-bottom:1rem">${distHtml}</div>
+
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);margin-bottom:.4rem">Recent Attempts</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Student</th><th>Score</th><th>Duration</th><th>Submitted</th></tr></thead>
+            <tbody>
+              ${res.recent.map(r => `
+                <tr>
+                  <td class="mono" style="font-size:.7rem">${esc(r.username)}</td>
+                  <td>
+                    <span class="badge ${r.pct >= 70 ? 'badge-active' : r.pct >= 40 ? 'badge-trial' : 'badge-expired'}">${r.pct}%</span>
+                    <span style="font-size:.62rem;color:var(--t3);margin-left:.35rem">${r.correct}/${r.total}${r.skipped ? ` · ${r.skipped} skipped` : ''}</span>
+                  </td>
+                  <td style="font-size:.68rem;color:var(--t3)">${r.durationSec ? Math.round(r.durationSec/60) + 'm' : '—'}</td>
+                  <td style="font-size:.68rem;color:var(--t3)">${r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '—'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:.85rem">
+          <button class="btn-s btn-c" onclick="WEEKLYSETS.exportResults()"><i class="ph ph-download-simple"></i> Export CSV</button>
+        </div>
+      `;
+    } catch(e) {
+      document.getElementById('mbody-wspreview').innerHTML = `<p style="font-size:.8rem;color:var(--ros)">❌ ${esc(e.message)}</p>`;
+    }
+  },
+
+  exportResults() {
+    const r = this._lastResults;
+    if (!r || !r.recent || !r.recent.length) return ADMIN.toast('No results to export');
+    const headers = ['Username','Score %','Correct','Total','Skipped','Wrong','Duration (s)','Submitted'];
+    const rows = r.recent.map(a => [a.username, a.pct, a.correct, a.total, a.skipped, a.wrong, a.durationSec, a.submittedAt ? new Date(a.submittedAt).toISOString() : '']);
+    ADMIN.downloadCSV(ADMIN.toCSV(headers, rows), `weekly_${r.weeklyId}_results.csv`);
+  },
+
   async create() {
     const title = document.getElementById('ws-title').value.trim();
     const fileId = document.getElementById('ws-fileid').value.trim();
@@ -1586,11 +1643,6 @@ const WEEKLYSETS = {
     if (!title) return ADMIN.toast('❌ Title is required');
     if (!fileId) return ADMIN.toast('❌ Upload a question-bank file, or paste an existing Drive fileId');
     if (!releaseLocal) return ADMIN.toast('❌ Pick a release date & time');
-    // datetime-local gives a value with no timezone — new Date() parses
-    // that as the ADMIN'S OWN local time, which is what we want here
-    // (an admin scheduling "Wednesday 8am" means their own morning, not
-    // UTC 8am) — then .toISOString() below converts it to a real instant
-    // before this ever leaves the browser.
     const releaseAt = new Date(releaseLocal);
     if (isNaN(releaseAt)) return ADMIN.toast('❌ Invalid release date/time');
 
@@ -1644,10 +1696,7 @@ const WEEKLYSETS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// QUESTION REPORTS — content-quality issues students flag on
-// specific questions, separate from their personal bookmarks/flags.
-// Filters: status, chapter (via CHAPTERS), reason, and free-text
-// search — plus pagination and CSV export.
+// QUESTION REPORTS
 // ═══════════════════════════════════════════════════════════════
 const QREPORTS = {
   all: [],
@@ -1680,16 +1729,8 @@ const QREPORTS = {
     ADMIN.hideLoading();
   },
 
-  // fileId -> "Level — Chapter" label, via the shared CHAPTERS lookup
-  // (built once from chapters-data.js, same mapping user.html itself
-  // uses — never duplicated/maintained separately here).
   chapterFor(fileId) { return CHAPTERS.labelFor(fileId); },
 
-  // Rebuilds the chapter <select> options from whatever chapters are
-  // actually represented in the currently loaded reports — not the
-  // full chapters-data.js list — so an admin never sees 80 chapters
-  // with zero reports cluttering the dropdown. Preserves the current
-  // selection across reloads when that chapter is still present.
   _renderChapterOptions() {
     const sel = document.getElementById('qreports-chapter-filter');
     if (!sel) return;
@@ -1697,9 +1738,6 @@ const QREPORTS = {
     const current = this.chapterFilter;
     sel.innerHTML = '<option value="all">All Chapters</option>' +
       chapters.map(c => `<option value="${escAttrJs(c)}" ${c===current?'selected':''}>${esc(c)}</option>`).join('');
-    // If the previously selected chapter no longer appears in the
-    // current report set (e.g. after a delete), fall back to "all"
-    // rather than silently filtering to an option that's gone.
     if (current !== 'all' && !chapters.includes(current)) {
       this.chapterFilter = 'all';
       sel.value = 'all';
@@ -1724,6 +1762,15 @@ const QREPORTS = {
   render(reports) {
     this.all = reports || [];
     this._renderChapterOptions();
+
+    // v1.04 — truncation banner.
+    const truncEl = document.getElementById('qr-trunc');
+    if (truncEl) {
+      truncEl.innerHTML = ADMIN.data.qreportsTruncated
+        ? `<div class="trunc-warn"><i class="ph ph-warning"></i> Showing ${this.all.length} of ${ADMIN.data.qreportsTotalCount} reports. Filter by status/chapter to see more.</div>`
+        : '';
+    }
+
     const box = document.getElementById('qreports-list');
     if (!box) return;
     const shown = this._visibleRows();
@@ -1804,10 +1851,7 @@ const QREPORTS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// DEVICE PROGRESS IMPORT — preview/merge/replace a student's
-// exported progress against adminImportProgress/adminImportStatus.
-// Always defaults to "preview" so an admin sees exactly what a merge
-// or replace WOULD do before committing to it.
+// DEVICE PROGRESS IMPORT
 // ═══════════════════════════════════════════════════════════════
 const IMPORT = {
   lastPayload: null,
@@ -1883,24 +1927,21 @@ const UI = {
     document.getElementById('view-' + id).classList.add('on');
     document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('active'));
     const el = document.getElementById('nav-' + id); if(el) el.classList.add('active');
-    // Refresh the trials-expiring card every time the dashboard becomes
-    // the active view — the number moves on its own (trials lapse while
-    // the admin is on another tab), so a stale card would be misleading.
     if (id === 'dashboard' && typeof EXPIRING !== 'undefined') EXPIRING.load();
     this.sidebarClose();
   },
-  sidebarOpen() { 
-    document.getElementById('sb').classList.add('open'); 
-    document.getElementById('ov').classList.add('show'); 
+  sidebarOpen() {
+    document.getElementById('sb').classList.add('open');
+    document.getElementById('ov').classList.add('show');
   },
-  sidebarClose() { 
-    document.getElementById('sb').classList.remove('open'); 
-    document.getElementById('ov').classList.remove('show'); 
+  sidebarClose() {
+    document.getElementById('sb').classList.remove('open');
+    document.getElementById('ov').classList.remove('show');
   }
 };
 
 // ═══════════════════════════════════════════════════════════════
-// PAGINATION HELPER
+// PAGINATION
 // ═══════════════════════════════════════════════════════════════
 const PAGINATION = {
   render(containerId, current, total, callback) {
@@ -1922,17 +1963,10 @@ const PAGINATION = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// FOCUS TRAP — keeps Tab navigation inside an open modal. Without
-// this, tabbing past the last control in a modal lands focus back on
-// the page underneath, which is both an accessibility gap (WCAG 2.4.3
-// Focus Order) and a mild footgun: on a fast Tab-Enter a keyboard user
-// can trigger a button on the hidden page behind the modal backdrop.
-// Save-and-restore of the previously-focused element means keyboard
-// users land back where they were after Close, rather than at the top
-// of the document.
+// FOCUS TRAP
 // ═══════════════════════════════════════════════════════════════
 const FOCUS_TRAP = {
-  _state: {}, // modalId -> { previous, handler }
+  _state: {},
 
   open(modalId) {
     const modal = document.getElementById(modalId);
@@ -1953,9 +1987,6 @@ const FOCUS_TRAP = {
     };
     this._state[modalId] = { previous: document.activeElement, handler };
     modal.addEventListener('keydown', handler);
-    // Focus the first real control once the modal is visible — the
-    // classList.add('show') call happens on the next line at every call
-    // site, so a microtask delay is enough for visibility to settle.
     setTimeout(() => focusables[0].focus(), 0);
   },
 
@@ -1998,7 +2029,15 @@ const USERS = {
     });
   },
 
+  // v1.04 — CRITICAL FIX: the selection Set is now cleared on every
+  // filter/search change. Previously: select 200 via header checkbox →
+  // change filter → bulk action still applied to all 200 hidden rows,
+  // because the Set persisted. Users could grant access or delete
+  // accounts they couldn't see.
   filter() {
+    this.selected.clear();
+    const allBox = document.getElementById('u-chk-all');
+    if (allBox) allBox.checked = false;
     this.renderPage(this._visibleRows());
     this.updateBulkBar();
   },
@@ -2012,26 +2051,34 @@ const USERS = {
   render() { this.filter(); },
 
   renderPage(rows) {
+    // v1.04 — truncation banner.
+    const truncEl = document.getElementById('u-trunc');
+    if (truncEl) {
+      truncEl.innerHTML = ADMIN.data.usersTruncated
+        ? `<div class="trunc-warn"><i class="ph ph-warning"></i> Showing ${ADMIN.data.users.length} of ${ADMIN.data.usersTotalCount} users. Use search to narrow down — the server caps list responses to keep the admin panel fast.</div>`
+        : '';
+    }
+
     const perPage = ADMIN.state.uPerPage;
     const totalPages = Math.ceil(rows.length / perPage) || 1;
     if (ADMIN.state.uPage > totalPages) ADMIN.state.uPage = totalPages;
     const start = (ADMIN.state.uPage - 1) * perPage;
     const pageRows = rows.slice(start, start + perPage);
     const tb = document.getElementById('users-body');
-    if (!pageRows.length) { 
+    if (!pageRows.length) {
       const isFiltered = ADMIN.data.users.length > 0;
       tb.innerHTML = isFiltered
         ? '<tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-magnifying-glass"></i></div><p>No users match your search/filter</p><button class="btn-s btn-a btn-sm" onclick="USERS.clearFilters()">Clear filters</button></td></tr>'
-        : '<tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-tray"></i></div><p>No users yet</p></td></tr>'; 
+        : '<tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-tray"></i></div><p>No users yet</p></td></tr>';
       document.getElementById('u-pg').innerHTML = '';
-      return; 
+      return;
     }
     tb.innerHTML = pageRows.map(u => {
       const badge = u.status==='trial'?'badge-trial':u.status==='active'?'badge-active':u.status==='expired'?'badge-expired':u.status==='payment_pending'?'badge-pending':'badge-rejected';
       const access = USERS.accessLabel(u);
       const checked = this.selected.has(u.username) ? 'checked' : '';
       return `<tr>
-        <td><input type="checkbox" class="chk" ${checked} onchange="USERS.toggle('${u.username}')" aria-label="Select user ${esc(u.username)}"></td>
+        <td><input type="checkbox" class="chk" ${checked} onchange="USERS.toggle('${escAttrJs(u.username)}')" aria-label="Select user ${escAttrJs(u.username)}"></td>
         <td><div style="font-weight:600;color:var(--t1);cursor:pointer" onclick="USERS.view('${escAttrJs(u.username)}')">${esc(u.name)||esc(u.username)}</div><div class="mono" style="font-size:.68rem;color:var(--t3)">${esc(u.username)}</div></td>
         <td><div style="font-size:.72rem">${esc(u.email)||'—'}</div><div style="font-size:.68rem;color:var(--t3)">${esc(u.mobile)||'—'}</div></td>
         <td><span class="badge ${badge}">${u.status}</span></td>
@@ -2116,15 +2163,11 @@ const USERS = {
 
   async bulkDelete() {
     if (!this.selected.size) return;
-    // v1.01 note: the backend now also purges each deleted user's
-    // Progress, PushTokens, Payments, and ProgressBackups rows — the
-    // confirm text says so explicitly rather than the old, misleading
-    // "(payments, progress)" parenthetical, which undersold what goes.
     if (!confirm(
       `Permanently delete ${this.selected.size} user account(s)?\n\n` +
       `This also removes each user's synced progress, push tokens, ` +
-      `payment record, and any progress backups — the whole account, ` +
-      `not just the Users row. Cannot be undone.`
+      `payment record, weekly-set attempts, and any progress backups — ` +
+      `the whole account, not just the Users row. Cannot be undone.`
     )) return;
     const usernames = [...this.selected];
     ADMIN.showLoading('Deleting ' + usernames.length + ' user(s)…');
@@ -2151,7 +2194,7 @@ const USERS = {
     document.getElementById('mtitle-user').textContent = 'User: ' + (u.name || u.username);
     document.getElementById('mbody-user').innerHTML = `
       <div class="dgrid" style="margin-bottom:.8rem">
-        <div class="ditem"><label>Username</label><val class="mono">${u.username}</val></div>
+        <div class="ditem"><label>Username</label><val class="mono">${esc(u.username)}</val></div>
         <div class="ditem"><label>Full Name</label><val>${esc(u.name) || '—'}</val></div>
         <div class="ditem"><label>Email</label><val>${esc(u.email) || '—'}</val></div>
         <div class="ditem"><label>Mobile</label><val>${esc(u.mobile) || '—'}</val></div>
@@ -2188,10 +2231,6 @@ const USERS = {
     const u = ADMIN.data.users.find(x => x.username === username);
     if (!u) return;
     document.getElementById('mtitle-user').textContent = 'Edit User: ' + username;
-    // v1.01 note: the backend now validates email and mobile against the
-    // same regexes handleSignup enforces, and refuses the save with a
-    // specific error otherwise — the toast below will surface exactly
-    // what was wrong rather than silently writing a malformed value.
     document.getElementById('mbody-user').innerHTML = `
       <div class="sf"><label for="edit-name">Full Name</label><input type="text" id="edit-name" value="${esc(u.name)}"></div>
       <div class="sf"><label for="edit-email">Email</label><input type="email" id="edit-email" value="${esc(u.email)}" placeholder="user@example.com"></div>
@@ -2227,22 +2266,19 @@ const USERS = {
     };
     try {
       const res = await ADMIN.post('adminUpdateUser', {username, ...updates});
-      if (res.success) { 
-        ADMIN.toast('✅ User updated'); 
+      if (res.success) {
+        ADMIN.toast('✅ User updated');
         MODAL.close('user');
-        ADMIN.refresh(['stats','users']); 
+        ADMIN.refresh(['stats','users']);
       } else throw new Error(res.error);
     } catch(e) { ADMIN.toast('❌ ' + e.message); }
   },
 
   async del(username) {
-    // v1.01 note: the backend purge now removes Progress, PushTokens,
-    // Payments, and ProgressBackups too — same message used for bulk
-    // delete, so the confirm wording matches what actually happens.
     if (!confirm(
       `Delete user "${username}"?\n\n` +
       `This also removes their synced progress, push tokens, payment ` +
-      `record, and any progress backups. Cannot be undone.`
+      `record, weekly-set attempts, and any progress backups. Cannot be undone.`
     )) return;
     ADMIN.showLoading('Deleting user…');
     try {
@@ -2282,7 +2318,12 @@ const PAYMENTS = {
     });
   },
 
+  // v1.04 — CRITICAL FIX: selection cleared on filter change. Same
+  // rationale as USERS.filter — see that comment for the scenario.
   filter() {
+    this.selected.clear();
+    const allBox = document.getElementById('p-chk-all');
+    if (allBox) allBox.checked = false;
     this.renderPage(this._visibleRows());
     this.updateBulkBar();
   },
@@ -2296,27 +2337,35 @@ const PAYMENTS = {
   render() { this.filter(); },
 
   renderPage(rows) {
+    // v1.04 — truncation banner.
+    const truncEl = document.getElementById('p-trunc');
+    if (truncEl) {
+      truncEl.innerHTML = ADMIN.data.paymentsTruncated
+        ? `<div class="trunc-warn"><i class="ph ph-warning"></i> Showing ${ADMIN.data.payments.length} of ${ADMIN.data.paymentsTotalCount} payment records. Use search/filter to narrow down.</div>`
+        : '';
+    }
+
     const perPage = ADMIN.state.pPerPage;
     const totalPages = Math.ceil(rows.length / perPage) || 1;
     if (ADMIN.state.pPage > totalPages) ADMIN.state.pPage = totalPages;
     const start = (ADMIN.state.pPage - 1) * perPage;
     const pageRows = rows.slice(start, start + perPage);
     const tb = document.getElementById('payments-body');
-    if (!pageRows.length) { 
+    if (!pageRows.length) {
       const isFiltered = ADMIN.data.payments.length > 0;
       tb.innerHTML = isFiltered
         ? '<tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-magnifying-glass"></i></div><p>No payments match your search/filter</p><button class="btn-s btn-a btn-sm" onclick="PAYMENTS.clearFilters()">Clear filters</button></td></tr>'
-        : '<tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-tray"></i></div><p>No payments yet</p></td></tr>'; 
+        : '<tr><td colspan="7" class="empty"><div class="empty-i"><i class="ph ph-tray"></i></div><p>No payments yet</p></td></tr>';
       document.getElementById('p-pg').innerHTML = '';
-      return; 
+      return;
     }
     tb.innerHTML = pageRows.map(p => {
       const badge = p.status==='pending'?'badge-pending':p.status==='verified'?'badge-verified':'badge-rejected';
       const checked = this.selected.has(p.username) ? 'checked' : '';
       return `<tr>
-        <td><input type="checkbox" class="chk" ${checked} onchange="PAYMENTS.toggle('${p.username}')" aria-label="Select payment from ${esc(p.username)}"></td>
-        <td><div style="font-weight:600;color:var(--t1)">${esc(p.name)||p.username}</div><div class="mono" style="font-size:.68rem;color:var(--t3)">${p.username}</div></td>
-        <td class="mono">${esc(p.txId)}${p.duplicateTxId ? ` <span title="Also submitted by: ${esc(p.duplicateTxIdUsers.join(', '))}" style="color:var(--warn);cursor:help"><i class="ph ph-warning"></i></span>` : ''}</td>
+        <td><input type="checkbox" class="chk" ${checked} onchange="PAYMENTS.toggle('${escAttrJs(p.username)}')" aria-label="Select payment from ${escAttrJs(p.username)}"></td>
+        <td><div style="font-weight:600;color:var(--t1)">${esc(p.name)||esc(p.username)}</div><div class="mono" style="font-size:.68rem;color:var(--t3)">${esc(p.username)}</div></td>
+        <td class="mono">${esc(p.txId)}${p.duplicateTxId ? ` <span title="Also submitted by: ${escAttrJs(p.duplicateTxIdUsers.join(', '))}" style="color:var(--warn);cursor:help"><i class="ph ph-warning"></i></span>` : ''}</td>
         <td style="font-size:.72rem">Rs ${ADMIN.data.settings.paymentAmount||'100'}</td>
         <td><span class="badge ${badge}">${p.status}</span></td>
         <td class="mono" style="font-size:.68rem">${p.submittedAt ? new Date(p.submittedAt).toLocaleDateString() : '—'}</td>
@@ -2371,8 +2420,6 @@ const PAYMENTS = {
     await this._bulkReview('rejected', reason);
   },
 
-  // Single request for the whole selection instead of one adminReviewPayment
-  // call per row — see adminReviewPaymentsBatch in CODE.gs.
   async _bulkReview(status, rejectionReason) {
     const usernames = [...this.selected];
     ADMIN.showLoading((status==='verified'?'Verifying ':'Rejecting ') + usernames.length + ' payment(s)…');
@@ -2422,7 +2469,7 @@ const MODAL = {
       ${p.duplicateTxId ? `<div style="background:rgba(54,139,79,.12);border:1px solid rgba(54,139,79,.4);border-radius:var(--r1);padding:.6rem;margin-bottom:.8rem;font-size:.78rem;color:var(--warn)"><i class="ph ph-warning"></i> This transaction ID was also submitted by: <strong>${esc(p.duplicateTxIdUsers.join(', '))}</strong>. Double-check the screenshot before approving.</div>` : ''}
       <div style="margin-bottom:.8rem">
         <div style="font-size:.78rem;color:var(--t3);margin-bottom:.15rem">User</div>
-        <div style="font-weight:600">${esc(p.name)||p.username} <span class="mono" style="font-size:.72rem;color:var(--t3)">(${p.username})</span></div>
+        <div style="font-weight:600">${esc(p.name)||esc(p.username)} <span class="mono" style="font-size:.72rem;color:var(--t3)">(${esc(p.username)})</span></div>
       </div>
       <div style="margin-bottom:.8rem">
         <div style="font-size:.78rem;color:var(--t3);margin-bottom:.15rem">Transaction ID</div>
@@ -2454,9 +2501,6 @@ const MODAL = {
     const duration = document.getElementById('grant-duration')?.value || 'permanent';
     if (status === 'verified') {
       const p = ADMIN.data.payments.find(x => x.username === username);
-      // The duplicate-TXN-ID warning badge was previously cosmetic — approving
-      // still went through identically either way. Now it actually stops
-      // the one-click path and makes the admin confirm they've checked it.
       if (p && p.duplicateTxId && !confirm(
         `This transaction ID was also submitted by: ${p.duplicateTxIdUsers.join(', ')}.\n\n` +
         `Verify anyway?`
@@ -2469,9 +2513,9 @@ const MODAL = {
         if (status==='verified' && duration==='year') {
           await ADMIN.post('adminGrantAccess', {username, duration:'year'});
         }
-        ADMIN.toast(status==='verified'?`✅ Verified! User now has ${duration==='year'?'1-year':'permanent'} access.`:'✅ Rejected.'); 
-        MODAL.close('review'); 
-        ADMIN.refresh(['stats','payments','users']); 
+        ADMIN.toast(status==='verified'?`✅ Verified! User now has ${duration==='year'?'1-year':'permanent'} access.`:'✅ Rejected.');
+        MODAL.close('review');
+        ADMIN.refresh(['stats','payments','users']);
       }
       else throw new Error(res.error);
     } catch(e) { ADMIN.toast('❌ ' + e.message); }
@@ -2622,11 +2666,11 @@ const LOGS = {
     const pageRows = rows.slice(start, start + perPage);
     const el = document.getElementById('logs-list');
     const empty = document.getElementById('logs-empty');
-    if (!pageRows.length) { 
-      el.innerHTML = ''; 
+    if (!pageRows.length) {
+      el.innerHTML = '';
       empty.style.display = 'block';
       document.getElementById('l-pg').innerHTML = '';
-      return; 
+      return;
     }
     empty.style.display = 'none';
     el.innerHTML = pageRows.map(l => {
@@ -2649,10 +2693,26 @@ const LOGS = {
 // ═══════════════════════════════════════════════════════════════
 ADMIN.init();
 
+// v1.04 — scoped auto-refresh. Previously refreshed all 8 endpoints
+// every 60 seconds regardless of which tab was open, burning Apps
+// Script quota for anyone who just left the admin panel on the
+// dashboard. Now only the currently-visible view is refreshed, and
+// only when no modal is open (a modal could be mid-edit).
 setInterval(() => {
-  if (!document.hidden && ADMIN.creds) {
-    ADMIN.refresh();
-  }
+  if (document.hidden || !ADMIN.creds) return;
+  if (document.querySelector('.mbg.show')) return;   // a modal is open — don't risk clobbering form state
+
+  const visible = document.querySelector('.view.on')?.id;
+  const scope = ({
+    'view-dashboard':  ['stats'],
+    'view-users':      ['users'],
+    'view-payments':   ['payments'],
+    'view-weeklysets': ['weeklysets'],
+    'view-qreports':   ['qreports'],
+    'view-logs':       ['logs'],
+    'view-settings':   ['settings']
+  })[visible];
+  if (scope) ADMIN.refresh(scope);
 }, 60000);
 
 document.addEventListener('keydown', e => {

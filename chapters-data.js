@@ -40,6 +40,19 @@
    in-repo history/chat for full detail (book-name normalization, the
    3-book Construction Management chapter in Level 7, excluded stub files,
    etc.)
+
+   ── v1.04 change (helpers only, DRIVE data untouched) ──
+   The ChapterData helper methods at the bottom of this file now skip any
+   BOOK key whose name begins with an underscore. Those keys hold metadata
+   about a chapter, not question sets — specifically DRIVE.level7.10._meta
+   (a subtopics.json fileId that describes the chapter, not a solvable
+   question bank). Without the skip, that key was:
+     • showing up as a fake "book" in the Online Study picker, and
+     • being counted in fileCount() / totalFilesInLevel(), and
+     • being downloaded by CACHE.autoSync() on first install.
+   Filtering in ONE place (the helpers) means every consumer — the picker,
+   Psycho Mode, the offline cache manager, the progress-scope resolver —
+   is protected without any of them having to know about the convention.
    ══════════════════════════════════════════════════════════════════════ */
 
 
@@ -779,6 +792,14 @@ const DRIVE = {
    CHAPTER DATA HELPERS
    ======================================================================== */
 
+/* v1.04 — any book whose name starts with an underscore is metadata, not
+   questions: e.g. DRIVE.level7.10._meta describes the chapter's subtopic
+   file(s) and is not itself a solvable set. Every consumer (the Online
+   Study picker, Psycho Mode, CACHE.autoSync, file counts) walks the same
+   helper methods below, so filtering here in ONE place means none of them
+   can be tricked into showing or downloading it. */
+const _SKIP_BOOK_PREFIX = '_';
+
 const ChapterData = {
   levels() {
     return Object.keys(CH_NAMES);
@@ -797,7 +818,13 @@ const ChapterData = {
   },
 
   books(lv, ch) {
-    return (DRIVE[lv] && DRIVE[lv][ch]) || {};
+    const raw = (DRIVE[lv] && DRIVE[lv][ch]) || {};
+    const cleaned = {};
+    for (const name of Object.keys(raw)) {
+      if (name.startsWith(_SKIP_BOOK_PREFIX)) continue;
+      cleaned[name] = raw[name];
+    }
+    return cleaned;
   },
 
   bookNames(lv, ch) {
@@ -805,12 +832,18 @@ const ChapterData = {
   },
 
   files(lv, ch, book) {
+    // Guard the direct-lookup path too — a caller that has the raw
+    // book name from elsewhere (e.g. an old cached session, a URL
+    // parameter) shouldn't be able to fetch a metadata file through
+    // this function even if books() would have hidden it.
+    if (String(book).startsWith(_SKIP_BOOK_PREFIX)) return {};
     const books = ChapterData.books(lv, ch);
     return books[book] || {};
   },
 
   fileCount(lv, ch, book) {
     if (book !== undefined) {
+      if (String(book).startsWith(_SKIP_BOOK_PREFIX)) return 0;
       return Object.values(ChapterData.files(lv, ch, book)).filter(Boolean).length;
     }
     let count = 0;

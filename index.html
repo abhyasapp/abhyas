@@ -2,7 +2,7 @@
 <html lang="en-NP">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#F2F4F3">
 <!-- Clickjacking mitigation — see admin.html for the full rationale.
      GitHub Pages doesn't support custom HTTP headers, so this
@@ -227,7 +227,6 @@ body{font-family:var(--ff);background:var(--c-bg);color:var(--t1);display:block;
 @keyframes tin{from{opacity:0;transform:translateY(10px) scale(.95)}to{opacity:1;transform:none}}
 @keyframes tout{from{opacity:1}to{opacity:0;transform:translateY(-6px)}}
 
-/* Google Sign-In block */
 /* Google Sign-In block. IMPORTANT: hidden via visibility+height, never
    display:none — Google's renderButton() measures its container at
    render time, and a display:none parent gives it 0×0 to measure,
@@ -712,15 +711,7 @@ const APP = {
     btn.textContent = this.online ? 'Submit Payment →' : 'Offline — reconnect to pay';
   },
 
-  /* ── TikTok-style paging (login / about / faq) ──
-     Page-dots reflect whichever post is CURRENTLY snapped, via
-     IntersectionObserver rather than manual scroll-position math — that
-     keeps the active dot correct however the person got there: a
-     mouse-wheel/trackpad scroll, a touch swipe, or clicking a dot
-     directly. The bottom-of-login scroll hint just needs to disappear
-     the first time post-login is no longer the one in view, and never
-     needs to come back (once someone's found the other two posts, the
-     nudge has done its job). */
+  /* ── TikTok-style paging (login / about / faq) ── */
   initPaging() {
     const container = document.getElementById('snap-container');
     const dots = Array.from(document.querySelectorAll('#page-dots button'));

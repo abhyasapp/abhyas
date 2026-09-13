@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#FAFAFA">
 <script>if(window.top!==window.self){window.top.location=window.self.location;}</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -74,6 +74,7 @@
   --ok-bg:rgba(70,196,110,.12);--ok-bd:rgba(70,196,110,.35);
   --warn-bg:rgba(70,196,110,.11);--warn-bd:rgba(70,196,110,.35);
   --amb-rgb:70,196,110;--vio-rgb:139,92,246;--sky-rgb:56,189,248;--grn-rgb:70,196,110;--ros-rgb:244,63,94;
+  --on-accent:#0F0A00;
 }
 .dark #tb{background:rgba(8,11,20,.92)}
 .dark #bnav{background:rgba(8,11,20,.96)}
@@ -86,15 +87,12 @@
 .dark .sb-item.active .sb-ic{border-color:rgba(70,196,110,.4)}
 .dark .bn-ic{background:var(--c2);border:1px solid var(--b1)}
 .dark .bn-item.active .bn-ic{border-color:transparent}
-/* Native form controls behave better with an explicit color-scheme */
 .dark{color-scheme:dark}
 :root{color-scheme:light}
 
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth;height:100%}
 body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;transition:background .2s,color .2s}
-/* Softer, more consistent focus ring on every focusable element —
-   :focus-visible only (mouse users don't get the ring). */
 :focus-visible{outline:2px solid var(--amb);outline-offset:2px;border-radius:6px;box-shadow:0 0 0 4px rgba(var(--amb-rgb),.16)}
 .btn:active:not(:disabled),.ib:active,.sb-item:active,.daily-btn:active,.eo:active{transform:scale(.97)}
 ::-webkit-scrollbar{width:4px;height:4px}
@@ -103,6 +101,7 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
 ::-webkit-scrollbar-thumb:hover{background:var(--b3)}
 ::selection{background:rgba(var(--amb-rgb),.22);color:var(--t1)}
 button{font-family:var(--ff)}
+.ch-item:focus-visible{outline:2px solid var(--amb);outline-offset:2px;border-radius:var(--r1)}
 
 /* ═══ APP SHELL ═══ */
 #app{display:none;flex-direction:column;min-height:100vh}
@@ -120,7 +119,7 @@ button{font-family:var(--ff)}
 /* ═══ TOPBAR ═══ */
 #tb{height:var(--tb-h);background:rgba(242,244,243,.9);backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;padding:0 .9rem 0 1rem;position:sticky;top:0;z-index:500;flex-shrink:0}
 .dark #tb{background:rgba(8,11,20,.92)}
-.tb-brand{display:flex;align-items:center;gap:.55rem;font-family:var(--fd);font-size:.95rem;font-weight:700;letter-spacing:-.2px;cursor:pointer;color:var(--t1);user-select:none;transition:opacity var(--ease)}
+.tb-brand{display:flex;align-items:center;gap:.55rem;font-family:var(--fd);font-size:.95rem;font-weight:700;letter-spacing:-.2px;cursor:pointer;color:var(--t1);user-select:none;transition:opacity var(--ease);background:transparent;border:none;padding:0;text-align:left}
 .tb-brand:hover{opacity:.8}
 .bd-mark{width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .bd-mark img{width:100%;height:100%;object-fit:contain;display:block}
@@ -136,6 +135,11 @@ button{font-family:var(--ff)}
 .tb-btn.danger:hover{background:var(--bad-bg)}
 .tb-btn.amber{color:var(--amb);border-color:var(--warn-bd)}
 .tb-btn.amber:hover{background:var(--warn-bg)}
+@media(max-width:360px){
+  .tb-btn{height:28px;padding:.22rem .32rem;font-size:.62rem}
+  .tb-r{gap:.2rem}
+  .tb-brand{gap:.4rem}
+}
 .uchip{background:var(--b0);border:1px solid var(--b1);border-radius:30px;padding:.26rem .68rem;font-size:.68rem;font-weight:600;color:var(--t2);display:flex;align-items:center;gap:.26rem}
 @media(max-width:600px){.uchip{display:none}}
 
@@ -153,7 +157,7 @@ button{font-family:var(--ff)}
 @media(max-width:960px){.sb-close{display:flex}}
 .sb-sec{margin-bottom:.35rem}
 .sb-lbl{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:var(--t3);padding:.3rem .48rem .15rem;margin-bottom:.1rem}
-.sb-item{display:flex;align-items:center;gap:.55rem;padding:.42rem .5rem;border-radius:var(--r1);font-size:.78rem;font-weight:500;color:var(--t2);cursor:pointer;transition:all var(--ease);margin-bottom:.3rem;border:1px solid transparent}
+.sb-item{display:flex;align-items:center;gap:.55rem;padding:.42rem .5rem;border-radius:var(--r1);font-size:.78rem;font-weight:500;color:var(--t2);cursor:pointer;transition:all var(--ease);margin-bottom:.3rem;border:1px solid transparent;background:transparent;width:100%;text-align:left;font-family:var(--ff)}
 .sb-item:hover{background:var(--c2);color:var(--t1);box-shadow:var(--ne-sm)}
 .sb-item.active{background:var(--c2);color:var(--amb);font-weight:600;box-shadow:var(--ne-in-sm)}
 .sb-item.active .sb-ic{background:var(--c4);color:var(--amb)}
@@ -200,7 +204,7 @@ button{font-family:var(--ff)}
 .btn-a:hover:not(:disabled){background:var(--amb);color:#000;box-shadow:var(--gamb)}
 .btn-r{background:var(--bad-bg);color:var(--ros);border-color:var(--bad-bd)}
 .btn-r:hover:not(:disabled){background:var(--ros);color:#fff;box-shadow:var(--gros)}
-.btn-solid{background:linear-gradient(150deg,var(--amb),var(--amb2));color:#0F1410;border-color:transparent;box-shadow:var(--ne-sm)}
+.btn-solid{background:linear-gradient(150deg,var(--amb),var(--amb2));color:var(--on-accent);border-color:transparent;box-shadow:var(--ne-sm)}
 .btn-solid:hover:not(:disabled){box-shadow:var(--ne-md)}
 .btn-solid:active:not(:disabled){box-shadow:var(--ne-in-md)}
 .btn-sm{padding:.26rem .58rem;font-size:.68rem}
@@ -208,7 +212,7 @@ button{font-family:var(--ff)}
 .btn-blk{width:100%;display:flex}
 .bg{display:flex;gap:.38rem;flex-wrap:wrap}
 
-/* ═══ SETTINGS FORM (report modal + tutorial etc.) ═══ */
+/* ═══ SETTINGS FORM ═══ */
 .sf{margin-bottom:.65rem}
 .sf label{display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t3);margin-bottom:.28rem}
 .sf input,.sf textarea,.sf select{width:100%;background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r1);padding:.55rem .75rem;color:var(--t1);font-size:.8rem;font-family:var(--ff);outline:none;transition:border-color var(--ease),box-shadow var(--ease)}
@@ -245,6 +249,7 @@ button{font-family:var(--ff)}
 .sv{font-family:var(--fm);font-size:1.45rem;font-weight:700;line-height:1}
 .stat-lbl{font-size:.58rem;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);margin-top:.24rem}
 .tcy{color:var(--sky)}.tc2{color:var(--grn)}.tb2{color:var(--ros)}.ta2{color:var(--amb)}
+.tvi{color:var(--vio)}.tsk{color:var(--sky)}
 
 /* Quick tiles */
 .qa-row{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-bottom:.85rem}
@@ -268,7 +273,7 @@ button{font-family:var(--ff)}
 .sk-d{flex:1;height:24px;border-radius:6px;background:var(--b0);border:1px solid var(--b1);display:flex;align-items:center;justify-content:center;font-size:.57rem;font-weight:700;color:var(--t3);transition:all var(--ease)}
 .sk-d.done{background:rgba(var(--grn-rgb),.14);border-color:rgba(var(--grn-rgb),.4);color:var(--grn)}.sk-d.today{background:rgba(var(--amb-rgb),.1);border-color:rgba(var(--amb-rgb),.32);color:var(--amb)}.sk-d.done.today{background:rgba(var(--grn-rgb),.22);border-color:var(--ok);color:var(--grn)}
 .daily-desc{font-size:.72rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55;position:relative}
-.daily-btn{width:100%;padding:.72rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:#0F0A00;font-family:var(--fd);font-size:.9rem;font-weight:700;cursor:pointer;transition:all var(--ease);box-shadow:0 4px 18px rgba(var(--amb-rgb),.28),inset 0 1px 0 rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;gap:.4rem;position:relative}
+.daily-btn{width:100%;padding:.72rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:var(--on-accent);font-family:var(--fd);font-size:.9rem;font-weight:700;cursor:pointer;transition:all var(--ease);box-shadow:0 4px 18px rgba(var(--amb-rgb),.28),inset 0 1px 0 rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;gap:.4rem;position:relative}
 .daily-btn:hover{transform:translateY(-1px);box-shadow:0 6px 26px rgba(var(--amb-rgb),.42)}.daily-btn:active{transform:none}
 
 .dash-lower{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
@@ -308,7 +313,6 @@ button{font-family:var(--ff)}
 .qb-btn:active{transform:translateY(0)}
 .qb-btn.ok{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--grn)}.qb-btn.ok:hover{background:var(--grn);color:#fff;box-shadow:var(--ggrn)}
 .qb-btn.quit{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--ros)}.qb-btn.quit:hover{background:var(--ros);color:#fff;box-shadow:var(--gros)}
-/* Skip-to-unanswered — only visible when the exam has empty slots */
 .qb-btn.skip{background:var(--warn-bg);border-color:var(--warn-bd);color:var(--amb);animation:skipPulse 2s ease-in-out infinite}
 .qb-btn.skip:hover{background:var(--amb);color:#000;box-shadow:var(--gamb);animation:none}
 @keyframes skipPulse{0%,100%{box-shadow:0 0 0 0 rgba(var(--amb-rgb),0)}50%{box-shadow:0 0 0 3px rgba(var(--amb-rgb),.18)}}
@@ -339,24 +343,8 @@ button{font-family:var(--ff)}
 .ib:active{transform:translateY(0) scale(.97)}
 .ib.bk-on{color:var(--amb);border-color:rgba(var(--amb-rgb),.35);background:rgba(var(--amb-rgb),.1)}
 .ib.fl-on{color:var(--ros);border-color:var(--bad-bd);background:var(--bad-bg)}
-/* ── Search icon accent ──
-   qSearchHtml() in app.js renders `<a class="ib" href="...google.com/search...">`.
-   Rather than touching app.js, this attribute selector targets just those
-   anchors: sky-blue tint so the "search on Google" action is visually
-   distinct from bookmark/flag/report and never confused for another
-   in-page action. Every question that has a `q.q` gets one. */
-.ib[href*="google.com/search"]{
-  color:var(--sky);
-  border-color:rgba(var(--sky-rgb),.28);
-  background:rgba(var(--sky-rgb),.06);
-}
-.ib[href*="google.com/search"]:hover{
-  color:#fff;
-  background:var(--sky);
-  border-color:var(--sky);
-  box-shadow:0 0 0 3px rgba(var(--sky-rgb),.22),0 4px 12px rgba(var(--sky-rgb),.28);
-  transform:translateY(-1px);
-}
+.ib[href*="google.com/search"]{color:var(--sky);border-color:rgba(var(--sky-rgb),.28);background:rgba(var(--sky-rgb),.06)}
+.ib[href*="google.com/search"]:hover{color:#fff;background:var(--sky);border-color:var(--sky);box-shadow:0 0 0 3px rgba(var(--sky-rgb),.22),0 4px 12px rgba(var(--sky-rgb),.28);transform:translateY(-1px)}
 .ib[href*="google.com/search"]:active{transform:translateY(0)}
 .fc-nav{display:flex;align-items:center;justify-content:space-between;padding:.7rem 0;gap:.5rem}
 .fc-hint{font-size:.7rem;color:var(--t3);font-weight:500;text-align:center;flex:1}
@@ -483,16 +471,16 @@ input[type=file]:hover{border-color:var(--amb)}
 
   <!-- TOPBAR -->
   <div id="tb">
-    <div class="tb-brand" onclick="UI.go('home')">
+    <button class="tb-brand" type="button" onclick="UI.go('home')">
       <div class="bd-mark"><img src="icon-192.png" alt="Abhyas"></div>
       <div class="tb-name">
         <span class="tb-name-main">Abhyas</span>
         <span class="tb-name-sub">Your path to mastery</span>
       </div>
-    </div>
+    </button>
     <div class="tb-r">
       <div class="uchip" id="uchip">👤 —</div>
-      <button class="tb-btn" id="net-mode-btn" onclick="NET.toggle()" title="Online mode — click to force offline" aria-label="Online mode — click to force offline" style="font-size:.8rem;min-width:32px;justify-content:center;color:var(--grn);border-color:rgba(var(--grn-rgb),.35);background:rgba(var(--grn-rgb),.08)"><i class="ph ph-wifi-high"></i></button>
+      <button class="tb-btn" id="net-mode-btn" onclick="NET.toggle()" title="Online mode — click to force offline" aria-label="Online mode — click to force offline" aria-pressed="false" style="font-size:.8rem;min-width:32px;justify-content:center;color:var(--grn);border-color:rgba(var(--grn-rgb),.35);background:rgba(var(--grn-rgb),.08)"><i class="ph ph-wifi-high"></i></button>
       <button class="tb-btn" id="tb-sync-btn" onclick="UI.go('progress')" title="Not synced yet this session" aria-label="Sync status — not synced yet this session" style="min-width:32px;justify-content:center;padding:.28rem;position:relative"><i class="ph ph-cloud-check"></i><span id="tb-sync-dot" style="position:absolute;bottom:5px;right:5px;display:block;width:7px;height:7px;border-radius:50%;background:var(--t3);border:1.5px solid var(--c0);transition:background .3s"></span></button>
       <button class="tb-btn" onclick="UI.theme()" title="Toggle theme" aria-label="Toggle theme"><i class="ph ph-circle-half"></i></button>
       <button class="tb-btn" onclick="PWA.toggleFullscreen()" title="Fullscreen" aria-label="Toggle fullscreen"><i class="ph ph-corners-out"></i></button>
@@ -516,25 +504,25 @@ input[type=file]:hover{border-color:var(--amb)}
       </div>
       <div class="sb-sec">
         <div class="sb-lbl">Study</div>
-        <div class="sb-item active" id="nav-home"    onclick="UI.go('home')"><div class="sb-ic"><i class="ph ph-house"></i></div>Dashboard</div>
-        <div class="sb-item"        id="nav-online"  onclick="UI.go('online')"><div class="sb-ic"><i class="ph ph-cloud"></i></div>Online Study</div>
-        <div class="sb-item"        id="nav-local"   onclick="UI.go('local')"><div class="sb-ic"><i class="ph ph-folder-open"></i></div>Local File</div>
-        <div class="sb-item"        id="nav-psycho"  onclick="UI.go('psycho')"><div class="sb-ic"><i class="ph ph-lightning"></i></div>Psycho Mode<span class="sb-badge amb">HOT</span></div>
+        <button type="button" class="sb-item active" id="nav-home"    onclick="UI.go('home')"><div class="sb-ic"><i class="ph ph-house"></i></div>Dashboard</button>
+        <button type="button" class="sb-item"        id="nav-online"  onclick="UI.go('online')"><div class="sb-ic"><i class="ph ph-cloud"></i></div>Online Study</button>
+        <button type="button" class="sb-item"        id="nav-local"   onclick="UI.go('local')"><div class="sb-ic"><i class="ph ph-folder-open"></i></div>Local File</button>
+        <button type="button" class="sb-item"        id="nav-psycho"  onclick="UI.go('psycho')"><div class="sb-ic"><i class="ph ph-lightning"></i></div>Psycho Mode<span class="sb-badge amb">HOT</span></button>
       </div>
       <div class="sb-div"></div>
       <div class="sb-sec">
         <div class="sb-lbl">Review</div>
-        <div class="sb-item" id="nav-bookmarks" onclick="UI.go('bookmarks')"><div class="sb-ic"><i class="ph ph-star"></i></div>Bookmarks<span class="sb-badge ok" id="bkc">0</span></div>
-        <div class="sb-item" id="nav-flagged"   onclick="UI.go('flagged')"><div class="sb-ic"><i class="ph ph-flag"></i></div>Flagged<span class="sb-badge" id="flc">0</span></div>
-        <div class="sb-item" id="nav-wrong"     onclick="UI.go('wrong')"><div class="sb-ic"><i class="ph ph-x-circle"></i></div>Wrong Bank<span class="sb-badge" id="wrc">0</span></div>
+        <button type="button" class="sb-item" id="nav-bookmarks" onclick="UI.go('bookmarks')"><div class="sb-ic"><i class="ph ph-star"></i></div>Bookmarks<span class="sb-badge ok" id="bkc">0</span></button>
+        <button type="button" class="sb-item" id="nav-flagged"   onclick="UI.go('flagged')"><div class="sb-ic"><i class="ph ph-flag"></i></div>Flagged<span class="sb-badge" id="flc">0</span></button>
+        <button type="button" class="sb-item" id="nav-wrong"     onclick="UI.go('wrong')"><div class="sb-ic"><i class="ph ph-x-circle"></i></div>Wrong Bank<span class="sb-badge" id="wrc">0</span></button>
       </div>
       <div class="sb-div"></div>
       <div class="sb-sec">
         <div class="sb-lbl">Tools</div>
-        <div class="sb-item" id="nav-timetable" onclick="UI.go('timetable')"><div class="sb-ic"><i class="ph ph-calendar-blank"></i></div>Timetable</div>
-        <div class="sb-item" id="nav-progress"  onclick="UI.go('progress')"><div class="sb-ic"><i class="ph ph-chart-bar"></i></div>Progress</div>
-        <div class="sb-item" id="nav-offline"   onclick="UI.go('offline')"><div class="sb-ic"><i class="ph ph-package"></i></div>Offline Cache</div>
-        <div class="sb-item" id="nav-tutorial"  onclick="TUTORIAL.open()"><div class="sb-ic"><i class="ph ph-question"></i></div>Tutorial</div>
+        <button type="button" class="sb-item" id="nav-timetable" onclick="UI.go('timetable')"><div class="sb-ic"><i class="ph ph-calendar-blank"></i></div>Timetable</button>
+        <button type="button" class="sb-item" id="nav-progress"  onclick="UI.go('progress')"><div class="sb-ic"><i class="ph ph-chart-bar"></i></div>Progress</button>
+        <button type="button" class="sb-item" id="nav-offline"   onclick="UI.go('offline')"><div class="sb-ic"><i class="ph ph-package"></i></div>Offline Cache</button>
+        <button type="button" class="sb-item" id="nav-tutorial"  onclick="TUTORIAL.open()"><div class="sb-ic"><i class="ph ph-question"></i></div>Tutorial</button>
       </div>
       <div style="text-align:center;font-size:.62rem;color:var(--t3);opacity:.6;padding:.6rem 0 .2rem" id="sb-version"><!-- set from app.js --></div>
     </div>
@@ -558,7 +546,7 @@ input[type=file]:hover{border-color:var(--amb)}
           <p class="daily-desc">30 mixed questions every day — keep the streak alive!</p>
           <button class="daily-btn" onclick="QUIZ.daily()"><i class="ph ph-rocket-launch"></i> Start Today's Challenge</button>
         </div>
-        <div class="card" id="weekly-sets-outer" style="margin-bottom:1rem;display:none" data-show-if-sets>
+        <div class="card" id="weekly-sets-outer" style="margin-bottom:1rem;display:none">
           <div class="card-hd"><h3><i class="ph ph-calendar-check"></i> Weekly Sets</h3><span class="ctag ta">New content, on schedule</span></div>
           <div id="weekly-sets-card" style="display:flex;flex-direction:column;gap:.4rem"></div>
         </div>
@@ -630,8 +618,8 @@ input[type=file]:hover{border-color:var(--amb)}
           </div>
           <div id="on-prog-body"></div>
           <div style="margin-top:8px">
-            <button class="btn btn-a" onclick="CLOUD.backup()" style="width:100%">
-              <i class="ph ph-cloud-arrow-up"></i> Sync Progress to Cloud
+            <button class="btn btn-a" onclick="DATA.syncNow()" style="width:100%">
+              <i class="ph ph-cloud-arrow-up"></i> Back Up Progress Now
             </button>
           </div>
         </div>
@@ -749,12 +737,22 @@ input[type=file]:hover{border-color:var(--amb)}
             <button class="btn btn-r" onclick="DATA.reset()"><i class="ph ph-warning"></i> Reset All</button>
           </div>
         </div>
-        <div class="card"><div class="card-hd"><h3>Cloud Backup</h3><span class="ctag tg">Auto</span></div>
-          <p style="font-size:.78rem;color:var(--t3);margin:0 0 .6rem">Your progress, bookmarks, flags, and wrong-answer bank are backed up to your account automatically while you're online — useful if you switch devices or clear your browser. This never overwrites what's on this device; it only fills in a brand new one.</p>
+        <div class="card"><div class="card-hd"><h3>Server Backup</h3><span class="ctag tg">Automatic</span></div>
+          <p style="font-size:.78rem;color:var(--t3);margin:0 0 .6rem">Your progress, bookmarks, flags, and wrong-answer bank are backed up to your Abhyas account automatically while you're online — useful if you switch devices or clear your browser. This never overwrites what's on this device; it only fills in a brand new one.</p>
           <div id="psync-status" style="font-size:.75rem;color:var(--t3);margin-bottom:.6rem">Not synced yet this session.</div>
           <div class="bg">
             <button class="btn btn-a" onclick="DATA.syncNow()"><i class="ph ph-cloud-arrow-up"></i> Back Up Now</button>
             <button class="btn btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="DATA.restoreCloud()"><i class="ph ph-cloud-arrow-down"></i> Restore From Cloud</button>
+          </div>
+        </div>
+        <div class="card"><div class="card-hd"><h3>Personal Drive Backup</h3><span class="ctag tp">Optional</span></div>
+          <p style="font-size:.78rem;color:var(--t3);margin:0 0 .6rem">Keep your own snapshot in your Google Drive — independent of the Abhyas server. Useful if you want a copy you fully control, or to move progress between accounts. Only this app can read or write it; it doesn't appear in your normal Drive.</p>
+          <div id="cloud-status" style="font-size:.75rem;color:var(--t3);margin-bottom:.6rem">Sign in with Google to enable.</div>
+          <div class="bg" id="cloud-btn-row">
+            <button class="btn btn-p" id="cloud-signin-btn" onclick="CLOUD_UI.signIn()"><i class="ph ph-google-logo"></i> Sign in with Google</button>
+            <button class="btn btn-a" id="cloud-backup-btn" style="display:none" onclick="CLOUD_UI.backup()"><i class="ph ph-cloud-arrow-up"></i> Back Up to Drive</button>
+            <button class="btn btn-sm" style="display:none;background:var(--b0);border:1px solid var(--b1);color:var(--t2)" id="cloud-restore-btn" onclick="CLOUD_UI.restore()"><i class="ph ph-cloud-arrow-down"></i> Restore</button>
+            <button class="btn btn-r btn-sm" id="cloud-signout-btn" style="display:none" onclick="CLOUD_UI.signOut()">Sign Out</button>
           </div>
         </div>
         <div class="card"><div class="card-hd"><h3>Notifications</h3></div>
@@ -809,7 +807,6 @@ input[type=file]:hover{border-color:var(--amb)}
             <div id="fc-img-wrap" style="display:none;margin:.5rem 0"><img id="fc-img" alt="Question figure" style="max-width:100%;border-radius:8px;border:1px solid var(--b1);display:block" loading="lazy" onerror="this.parentElement.style.display='none'"></div>
             <div id="fc-opts"></div>
             <div class="expl" id="fc-expl"></div>
-            <!-- Keyboard-shortcut hint — bindings live in app.js -->
             <div style="font-size:.66rem;color:var(--t3);text-align:center;margin-top:.6rem;opacity:.75">
               <kbd style="background:var(--b0);border:1px solid var(--b1);border-radius:4px;padding:.05rem .35rem;font-family:var(--fm);font-size:.9em">A</kbd>–
               <kbd style="background:var(--b0);border:1px solid var(--b1);border-radius:4px;padding:.05rem .35rem;font-family:var(--fm);font-size:.9em">D</kbd> or
@@ -820,10 +817,6 @@ input[type=file]:hover{border-color:var(--amb)}
               <kbd style="background:var(--b0);border:1px solid var(--b1);border-radius:4px;padding:.05rem .35rem;font-family:var(--fm);font-size:.9em">Ctrl</kbd>+
               <kbd style="background:var(--b0);border:1px solid var(--b1);border-radius:4px;padding:.05rem .35rem;font-family:var(--fm);font-size:.9em">F</kbd> to search
             </div>
-            <!-- NOTE: the old in-page #fc-srch panel has been removed.
-                 Clicking the search icon (rendered by qSearchHtml in
-                 app.js) or pressing Ctrl+F opens a NEW TAB directly
-                 with the current question + options as the query. -->
           </div>
           <div class="fc-nav">
             <button class="btn btn-a" id="fc-prev" onclick="QUIZ.fcNav(-1)">← Prev</button>
@@ -879,10 +872,10 @@ input[type=file]:hover{border-color:var(--amb)}
 
   <!-- MOBILE BOTTOM NAV -->
   <nav id="bnav">
-    <button class="bn-item active" id="bn-home"     onclick="UI.go('home');_bnav('home')"><div class="bn-ic"><i class="ph ph-house"></i></div>Home</button>
-    <button class="bn-item"        id="bn-online"   onclick="UI.go('online');_bnav('online')"><div class="bn-ic"><i class="ph ph-cloud"></i></div>Study</button>
-    <button class="bn-item"        id="bn-psycho"   onclick="UI.go('psycho');_bnav('psycho')"><div class="bn-ic"><i class="ph ph-lightning"></i></div>Psycho</button>
-    <button class="bn-item"        id="bn-progress" onclick="UI.go('progress');_bnav('progress')"><div class="bn-ic"><i class="ph ph-chart-bar"></i></div>Progress</button>
+    <button class="bn-item active" id="bn-home"     onclick="UI.go('home')"><div class="bn-ic"><i class="ph ph-house"></i></div>Home</button>
+    <button class="bn-item"        id="bn-online"   onclick="UI.go('online')"><div class="bn-ic"><i class="ph ph-cloud"></i></div>Study</button>
+    <button class="bn-item"        id="bn-psycho"   onclick="UI.go('psycho')"><div class="bn-ic"><i class="ph ph-lightning"></i></div>Psycho</button>
+    <button class="bn-item"        id="bn-progress" onclick="UI.go('progress')"><div class="bn-ic"><i class="ph ph-chart-bar"></i></div>Progress</button>
     <button class="bn-item bn-more" onclick="_bnavMore()" aria-label="More options"><div class="bn-ic"><i class="ph ph-list"></i></div>More<div class="bn-badge" id="bn-badge" style="display:none"></div></button>
   </nav>
 
@@ -890,7 +883,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
 <div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
-<div class="mbg" id="mbg" onclick="closeMod()">
+<div class="mbg" id="mbg" role="dialog" aria-modal="true" aria-labelledby="mtitle" onclick="closeMod()">
   <div class="mbox" onclick="event.stopPropagation()">
     <div class="mhd"><h3 id="mtitle">—</h3><button class="mcl" onclick="closeMod()" aria-label="Close dialog"><i class="ph ph-x"></i></button></div>
     <div class="mbody" id="mbody"></div>
@@ -905,15 +898,16 @@ input[type=file]:hover{border-color:var(--amb)}
 <script src="shared.js"></script>
 <script src="chapters-data.js"></script>
 <script src="app.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="cloud-sync.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════
-   PATCH LAYER v2 — ABHYAS V1
+   PATCH LAYER v4 — ABHYAS V1.04
    Contracts with app.js (IDs must NOT change):
      fc-chip, fc-ctr, fc-ok, fc-bad, fc-skip, fc-pf, fc-tmr
      ex-chip, ex-ctr, ex-ans, ex-pf, ex-tmr, ex-skip-nav, ex-skip-count
      qlm-shuffle, qlm-inp, qlm-start, qlm-cancel
-════════════════════════════════════════════════════════════ */
+   ════════════════════════════════════════════════════════════ */
 (function(){
 'use strict';
 const $   = id => document.getElementById(id);
@@ -943,23 +937,20 @@ QUIZ._updateFcCounts = function(){
   if(S.quiz.qs){ const pf=$('fc-pf'); if(pf) pf.style.width=((S.quiz.idx/S.quiz.qs.length)*100)+'%'; }
 };
 
-/* 6. Patch startWith */
+/* 6. Patch startWith — forwards `scope` (4th arg) unchanged. */
 const _sw = QUIZ.startWith.bind(QUIZ);
-QUIZ.startWith = function(qs,mode,ch){
-  _sw(qs,mode,ch);
-  const nm=(ch||'Quiz').replace(/^[⚡📝🌟❌⭐🚩🎯]\s*/,'').trim();
-  set('fc-chip',nm); set('ex-chip',nm);
-  set('fc-mode-pill', mode==='exam'?'📝 Exam':'⚡ Flash');
+QUIZ.startWith = function(qs, mode, ch, scope){
+  _sw(qs, mode, ch, scope);
+  const nm = (ch||'Quiz').replace(/^[⚡📝🌟❌⭐🚩🎯👁️]\s*/,'').trim();
+  set('fc-chip', nm); set('ex-chip', nm);
+  const isReview = !!(scope && scope.weeklyReviewMode);
+  set('fc-mode-pill', isReview ? '👁️ Review' : (mode==='exam' ? '📝 Exam' : '⚡ Flash'));
   set('ex-mode-pill','📝 Exam');
-  _ctr('fc-ctr',1,qs.length); _ctr('ex-ctr',0,qs.length);
+  _ctr('fc-ctr', 1, qs.length); _ctr('ex-ctr', 0, qs.length);
   _watchTiles();
 };
 
-/* 6b. ── Shuffle checkbox defaults to UNCHECKED ──
-   app.js's _showLimitPicker hardcodes `checked` on #qlm-shuffle. We
-   override the method so it unchecks the box immediately after the
-   modal is built. Users who want to shuffle tick it explicitly; the
-   default for want-it-in-order is preserved. */
+/* 6b. Shuffle checkbox defaults to UNCHECKED */
 const _origShowLimit = QUIZ._showLimitPicker.bind(QUIZ);
 QUIZ._showLimitPicker = function(qsArr, mode, chapterName, scope){
   _origShowLimit(qsArr, mode, chapterName, scope);
@@ -982,8 +973,7 @@ QUIZ.exAnswer = function(qi,oi){
   _syncSkip();
 };
 
-/* 8b. Keep the "Skip to unanswered" button in sync — including on a
-   resumed exam that starts with null slots already present. */
+/* 8b. Keep the "Skip to unanswered" button in sync */
 function _syncSkip(){
   const btn = $('ex-skip-nav'); if(!btn) return;
   if(!S.quiz || !S.quiz.ans) return;
@@ -1002,16 +992,7 @@ QUIZ._startTimer = function(){
   },1000);
 };
 
-/* 10. ── SEARCH ENGINE — new-tab only, no in-page panel ──
-   Every question already renders a search icon via qSearchHtml() in
-   app.js — an <a target="_blank"> pointing at google.com/search with
-   the question + lettered options pre-filled. That's the direct-in-
-   new-tab path for a manual click.
-
-   This SRCH object is the one used by Ctrl+F and by any programmatic
-   search trigger. Previously it opened the (now-removed) #fc-srch
-   panel first; it now compiles the same query and opens the tab
-   immediately, with no intermediate UI. */
+/* 10. SEARCH ENGINE — new-tab only, no in-page panel */
 function _buildSearchQuery(){
   const q = S.quiz?.qs?.[S.quiz.idx]; if(!q) return '';
   const opts = (q.options||[]).map((o,i)=>String.fromCharCode(65+i)+') '+o).join('  ');
@@ -1024,7 +1005,6 @@ window.SRCH = {
     if(!text){ toast('No question to search'); return; }
     SRCH._openGoogle(text);
   },
-  // Kept for any legacy callers — both now do the same thing.
   go(){ SRCH.quickSearch(); },
   toggle(){ SRCH.quickSearch(); },
   _openGoogle(text){
@@ -1032,8 +1012,6 @@ window.SRCH = {
     const url = `https://www.google.com/search?q=${q}`;
     const win = window.open(url, '_blank', 'noopener');
     if(!win){
-      // Popup blocked — fall back to a same-tab navigation so the user
-      // is never left wondering why nothing happened.
       window.location.href = url;
     }
   }
@@ -1048,8 +1026,7 @@ document.addEventListener('touchstart',e=>{_tx=e.touches[0].clientX;_ty=e.touche
 document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-_tx,dy=Math.abs(e.changedTouches[0].clientY-_ty);if(_tx<22&&dx>60&&dy<70)UI.sidebarToggle();},{passive:true});
 
 /* 14. Keyboard shortcuts — Escape closes overlays; Ctrl+F opens a new
-   tab with the current question. Note: nothing to close for the panel
-   anymore since the panel is gone. */
+   tab with the current question. */
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     UI.sidebarClose();
@@ -1062,19 +1039,27 @@ document.addEventListener('keydown',e=>{
   }
 });
 
-/* 15. Bottom nav helpers */
-window._bnav=function(id){
+/* 15. Bottom nav helpers + Progress-view hook for CLOUD_UI. */
+function _updateBottomNav(v){
   document.querySelectorAll('.bn-item').forEach(e=>e.classList.remove('active'));
-  const b=$('bn-'+id); if(b) b.classList.add('active');
+  const ids=['home','online','psycho','progress'];
+  if(ids.includes(v)){ const b=$('bn-'+v); if(b) b.classList.add('active'); }
+}
+
+const _uigoraw = UI._goRaw.bind(UI);
+UI._goRaw = function(v){
+  _uigoraw(v);
+  _updateBottomNav(v);
+  // Give CLOUD_UI a chance to update its button state every time the
+  // Progress view is entered — covers "token silently expired while
+  // the user was on another tab" and any status change that happened
+  // while they were elsewhere.
+  if(v === 'progress' && typeof CLOUD_UI !== 'undefined' && CLOUD_UI.render){
+    setTimeout(CLOUD_UI.render, 0);
+  }
 };
 
-const _uigo=UI.go.bind(UI);
-UI.go=function(v){
-  _uigo(v);
-  const ids=['home','online','psycho','progress'];
-  document.querySelectorAll('.bn-item').forEach(e=>e.classList.remove('active'));
-  if(ids.includes(v)){ const b=$('bn-'+v); if(b) b.classList.add('active'); }
-};
+window._bnav=function(id){ _updateBottomNav(id); };
 
 window._bnavMore=function(){
   openMod('More', `
@@ -1137,6 +1122,107 @@ window._bnavMore=function(){
     }
   }catch(e){ /* non-critical */ }
 })();
+
+/* 18. CLOUD_UI — button-state manager for the Personal Drive Backup
+   card. The CLOUD module has no UI concerns; this thin layer reflects
+   CLOUD.status() and toasts the results of CLOUD's async actions. The
+   split means CLOUD stays unit-testable and the UI stays a dumb
+   renderer. */
+window.CLOUD_UI = (function(){
+  function $(id){ return document.getElementById(id); }
+
+  function render(){
+    var statusEl = $('cloud-status');
+    if(!statusEl) return;
+
+    // CLOUD may not have loaded (GSI script blocked, older cached
+    // user.html, etc.) — hide the buttons rather than showing actions
+    // that can't work.
+    if(typeof CLOUD === 'undefined'){
+      statusEl.textContent = 'Personal Drive backup is unavailable in this deployment.';
+      var row = $('cloud-btn-row');
+      if(row) row.style.display = 'none';
+      return;
+    }
+
+    var st = CLOUD.status();
+    var signInBtn = $('cloud-signin-btn');
+    var backupBtn = $('cloud-backup-btn');
+    var restoreBtn = $('cloud-restore-btn');
+    var signOutBtn = $('cloud-signout-btn');
+
+    if(st.signedIn){
+      statusEl.textContent = st.email
+        ? 'Signed in as ' + st.email + '.'
+        : 'Signed in to Google.';
+      if(signInBtn) signInBtn.style.display = 'none';
+      if(backupBtn) backupBtn.style.display = '';
+      if(restoreBtn) restoreBtn.style.display = '';
+      if(signOutBtn) signOutBtn.style.display = '';
+    } else {
+      statusEl.textContent = 'Sign in with Google to back up your progress to your own Drive.';
+      if(signInBtn) signInBtn.style.display = '';
+      if(backupBtn) backupBtn.style.display = 'none';
+      if(restoreBtn) restoreBtn.style.display = 'none';
+      if(signOutBtn) signOutBtn.style.display = 'none';
+    }
+  }
+
+  function signIn(){
+    toast('Opening Google sign-in…');
+    CLOUD.signIn().then(function(r){
+      if(!r.success){ toast('❌ ' + r.error); return; }
+      toast('✅ Signed in' + (r.email ? ' as ' + r.email : ''));
+      render();
+    });
+  }
+
+  function signOut(){
+    CLOUD.signOut().then(function(){
+      toast('Signed out of Google Drive backup.');
+      render();
+    });
+  }
+
+  function backup(){
+    toast('⏳ Backing up to your Drive…');
+    CLOUD.backup().then(function(r){
+      if(!r.success){ toast('❌ ' + r.error, 5000); return; }
+      toast('✅ Backed up to Drive (' + Math.round(r.bytes/1024) + ' KB)');
+      render();
+    });
+  }
+
+  function restore(){
+    if(!confirm('Replace local progress, bookmarks, and wrong-answer bank with the snapshot in your Google Drive?\n\nThis cannot be undone on this device. (Your Abhyas server backup is unaffected.)')) return;
+    toast('⏳ Restoring from your Drive…');
+    CLOUD.restore().then(function(r){
+      if(!r.success){ toast('❌ ' + r.error, 5000); return; }
+      var when = r.ts ? new Date(r.ts).toLocaleString() : 'just now';
+      toast('✅ Restored from Drive (backed up ' + when + ')');
+      render();
+    });
+  }
+
+  // The OAuth token has a ~1h lifetime. If the tab was suspended long
+  // enough for it to expire, we want the button state to reflect that
+  // when the user comes back to the Progress tab.
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible' && UI.cur === 'progress') render();
+  });
+
+  return { render: render, signIn: signIn, signOut: signOut, backup: backup, restore: restore };
+})();
+
+// Lazy-warm the token client when the Progress tab is first opened —
+// avoids paying GSI's load cost on every page boot.
+document.addEventListener('click', function warm(e){
+  if(e.target.closest && e.target.closest('#nav-progress')){
+    if(typeof CLOUD !== 'undefined') CLOUD.init().catch(function(){});
+    document.removeEventListener('click', warm);
+    setTimeout(CLOUD_UI.render, 50);
+  }
+});
 
 })();
 </script>

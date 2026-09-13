@@ -4,8 +4,8 @@
   "description": "Loksewa Civil Engineering exam prep for Nepal — practice Level 7 Engineering, General Knowledge, and IQ questions online or fully offline.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#FAFAFA",
-  "theme_color": "#FAFAFA",
+  "background_color": "#F2F4F3",
+  "theme_color": "#F2F4F3",
   "orientation": "portrait-primary",
   "scope": "./",
   "icons": [
